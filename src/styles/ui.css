@@ -184,8 +184,8 @@
   width: 56vw;
   max-width: 270px;
   aspect-ratio: 0.7;
-  transition: transform 0.35s var(--ease), opacity 0.35s, filter 0.35s;
-  will-change: transform;
+  transition: transform 0.25s var(--ease), opacity 0.25s;
+  will-change: transform, opacity;
 }
 .pocket-wrap .cover {
   position: absolute;
@@ -211,9 +211,7 @@
   bottom: 0;
   height: 62%;
   border-radius: 12px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.28));
-  -webkit-backdrop-filter: blur(9px) saturate(1.05);
-  backdrop-filter: blur(9px) saturate(1.05);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.46), rgba(255, 255, 255, 0.3));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.95),
     inset 0 0 0 1px rgba(255, 255, 255, 0.6),
@@ -221,12 +219,29 @@
     0 18px 40px -12px rgba(0, 0, 0, 0.25);
   overflow: hidden;
 }
+/* a pre-blurred copy of the cover sits exactly where the cover shows through the acrylic */
+.pocket .pk-blur {
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  top: -61.3%;
+  height: 141.9%;
+  overflow: hidden;
+  opacity: 0.9;
+}
+.pocket .pk-blur img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 .pocket::before {
   content: '';
   position: absolute;
   inset: 0;
   background: linear-gradient(115deg, rgba(255, 255, 255, 0.55) 0%, transparent 32%, transparent 70%, rgba(255, 255, 255, 0.25) 100%);
   pointer-events: none;
+  z-index: 1;
 }
 .pocket .pocket-label {
   position: absolute;
@@ -255,7 +270,7 @@
   background: rgba(0, 0, 0, 0.55);
 }
 :root[data-app-theme='dark'] .pocket {
-  background: linear-gradient(180deg, rgba(60, 60, 60, 0.5), rgba(30, 30, 30, 0.35));
+  background: linear-gradient(180deg, rgba(60, 60, 60, 0.42), rgba(30, 30, 30, 0.3));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 18px 40px -12px rgba(0, 0, 0, 0.6);
 }
 :root[data-app-theme='dark'] .pocket::before {

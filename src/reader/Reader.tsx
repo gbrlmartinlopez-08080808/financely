@@ -13,8 +13,10 @@ import { LookupCard, SelectionMenu, ZoomViewer } from './Lookup';
 import { ListenBar } from './ListenBar';
 import { ContentsSheet, MoreSheet, THEMES, TypeSheet, type MoreAction } from './sheets';
 import { BinaryView, CodeView, ImageView, MediaView, SheetView } from './OtherViews';
-import { anchorFromSelection, applyHighlights, clearMarks, findAll, wrapSentences } from './dom';
+import { anchorFromSelection, applyHighlights, clearMarks, findAll, wordAt, wrapSentences } from './dom';
+import { AskSheet } from './Ask';
 import { KIND_LABEL } from '../lib/formats/detect';
+import { fontById } from '../lib/fonts';
 
 const LQ_VERSION = 'lq8';
 
@@ -28,7 +30,9 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   const [listen, setListen] = useState(false);
   const [listening, setListening] = useState(false);
   const [chrome, setChrome] = useState(true);
-  const [sheet, setSheet] = useState<null | 'type' | 'contents' | 'more' | 'info' | 'ocr'>(null);
+  const [sheet, setSheet] = useState<null | 'type' | 'contents' | 'more' | 'info' | 'ocr' | 'ask'>(null);
+  const [askSel, setAskSel] = useState<string | undefined>();
+  const [imgLayer, setImgLayer] = useState<{ words: { t: string; x0: number; y0: number; x1: number; y1: number }[]; w: number; h: number } | null>(null);
   const [find, setFind] = useState<string | null>(null);
   const [findHits, setFindHits] = useState<{ n: number; cur: number; pages?: number[] }>({ n: 0, cur: 0 });
   const [lookup, setLookup] = useState<string | null>(null);
@@ -230,59 +234,128 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   }, [scroller, id]);
 
   // ---------------------------------------------------------------- progress + chrome on scroll
+  // One rAF-throttled listener; the progress bar is moved directly so scrolling never re-renders the reader.
   const saveT = useRef(0);
   const lastY = useRef(0);
+  const barRef = useRef<HTMLDivElement>(null);
+  const progRef = useRef(doc.progress);
+  const progT = useRef(0);
+  const setProg = useCallback((p: number) => {
+    progRef.current = p;
+    if (barRef.current) barRef.current.style.width = `${(p * 100).toFixed(1)}%`;
+    clearTimeout(progT.current);
+    progT.current = window.setTimeout(() => setProgress(p), 400);
+  }, []);
+  const live = useRef({ page, liquifying: !!liquifying, finished: !!doc.finished, liquid, isPdf });
+  live.current = { page, liquifying: !!liquifying, finished: !!doc.finished, liquid, isPdf };
+
   const onPdfPage = useCallback(
-    (p: number, prog: number) => {
+    (p: number) => {
       setPage(p);
-      setProgress(prog);
       clearTimeout(saveT.current);
-      saveT.current = window.setTimeout(() => patchDoc(id, { progress: Math.max(prog, 0), position: { mode: 'page', value: p } }), 600);
+      saveT.current = window.setTimeout(() => patchDoc(id, { progress: progRef.current, position: { mode: 'page', value: p } }), 700);
     },
     [id],
   );
+
   useEffect(() => {
     const el = scroller;
     if (!el) return;
-    const on = () => {
+    let raf = 0;
+    let markers: HTMLElement[] = [];
+    let markersAt = 0;
+    const frame = () => {
+      raf = 0;
       const y = el.scrollTop;
       const dy = y - lastY.current;
       lastY.current = y;
       if (y > 120 && dy > 10 && !listeningRef.current) setChrome(false);
       else if (dy < -14) setChrome(true);
-      if (!liquid) return;
+      const st = live.current;
+      if (!st.liquid) return;
       const max = el.scrollHeight - el.clientHeight;
       const prog = max > 0 ? y / max : 0;
-      setProgress(prog);
-      let p = page;
-      if (isPdf) {
-        // current pdf page from the nearest page marker above the viewport top
-        const marks = flowRef.current?.querySelectorAll<HTMLElement>('.pg');
-        if (marks?.length) {
+      setProg(prog);
+      let p = st.page;
+      if (st.isPdf) {
+        const now = performance.now();
+        if (!markers.length || now - markersAt > 2500) {
+          markers = Array.from(flowRef.current?.querySelectorAll<HTMLElement>('.pg') ?? []);
+          markersAt = now;
+        }
+        if (markers.length) {
           let lo = 0;
-          let hi = marks.length - 1;
+          let hi = markers.length - 1;
           while (lo < hi) {
             const mid = (lo + hi + 1) >> 1;
-            if (marks[mid].offsetTop <= y + 120) lo = mid;
+            if (markers[mid].offsetTop <= y + 120) lo = mid;
             else hi = mid - 1;
           }
-          p = Number(marks[lo].dataset.page) || 1;
-          setPage(p);
+          p = Number(markers[lo].dataset.page) || 1;
+          if (p !== st.page) setPage(p);
         }
       }
       clearTimeout(saveT.current);
       saveT.current = window.setTimeout(() => {
-        const done = !liquifying || !isPdf;
+        const s2 = live.current;
         patchDoc(id, {
-          progress: isPdf ? (doc.pages ? p / doc.pages : prog) : prog,
-          position: isPdf ? { mode: 'liquid', value: p } : { mode: 'liquid', value: prog },
-          ...(done && prog > 0.985 && !doc.finished ? { finished: true } : {}),
+          progress: s2.isPdf ? (doc.pages ? p / doc.pages : prog) : prog,
+          position: s2.isPdf ? { mode: 'liquid', value: p } : { mode: 'liquid', value: prog },
+          ...(!s2.liquifying && prog > 0.985 && !s2.finished ? { finished: true } : {}),
         });
-      }, 700);
+      }, 800);
+    };
+    const on = () => {
+      if (!raf) raf = requestAnimationFrame(frame);
     };
     el.addEventListener('scroll', on, { passive: true });
-    return () => el.removeEventListener('scroll', on);
-  }, [scroller, liquid, isPdf, page, liquifying, id, doc.pages, doc.finished]);
+    return () => {
+      el.removeEventListener('scroll', on);
+      cancelAnimationFrame(raf);
+    };
+  }, [scroller, id, doc.pages, setProg]);
+
+  // ---------------------------------------------------------------- long-press a word (PDF pages, OCR'd photos)
+  useEffect(() => {
+    const el = scroller;
+    if (!el) return;
+    let t = 0;
+    let sx = 0;
+    let sy = 0;
+    const down = (e: TouchEvent) => {
+      clearTimeout(t);
+      const tg = e.target as HTMLElement;
+      if (e.touches.length !== 1 || !tg.closest?.('.textLayer span, .ocr-layer span')) return;
+      sx = e.touches[0].clientX;
+      sy = e.touches[0].clientY;
+      t = window.setTimeout(() => {
+        const sel = window.getSelection();
+        // if the platform already selected something, leave it alone
+        if (sel && !sel.isCollapsed && sel.toString().trim()) return;
+        const w = wordAt(sx, sy);
+        if (!w || !sel) return;
+        sel.removeAllRanges();
+        sel.addRange(w.range);
+        setSelRect(w.rect);
+        tap('medium');
+      }, 480);
+    };
+    const move = (e: TouchEvent) => {
+      if (Math.hypot(e.touches[0].clientX - sx, e.touches[0].clientY - sy) > 10) clearTimeout(t);
+    };
+    const up = () => clearTimeout(t);
+    el.addEventListener('touchstart', down, { passive: true });
+    el.addEventListener('touchmove', move, { passive: true });
+    el.addEventListener('touchend', up);
+    el.addEventListener('touchcancel', up);
+    return () => {
+      clearTimeout(t);
+      el.removeEventListener('touchstart', down);
+      el.removeEventListener('touchmove', move);
+      el.removeEventListener('touchend', up);
+      el.removeEventListener('touchcancel', up);
+    };
+  }, [scroller]);
 
   // ---------------------------------------------------------------- selection
   useEffect(() => {
@@ -531,6 +604,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
       if (content?.type === 'image') {
         const img = await prepareScan(content.blob);
         const r = await recognize(img, (p) => setOcrText((o) => (o ? { ...o, p } : o)));
+        setImgLayer({ words: r.words, w: r.w, h: r.h });
         setOcrText({ text: r.text, busy: false, p: 1 });
       } else if (isPdf && flowRef.current) {
         const key = `${id}:${LQ_VERSION}`;
@@ -560,6 +634,33 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     }
   };
 
+  // ---------------------------------------------------------------- ask (free AI) helpers
+  const docText = useRef<string | null>(null);
+  const getDocText = async (): Promise<string> => {
+    if (docText.current) return docText.current;
+    let text = '';
+    const root = flowRef.current;
+    if (liquid && root && (root.textContent ?? '').length > 200) {
+      text = Array.from(root.querySelectorAll('h1,h2,h3,h4,p,li,td,figcaption,blockquote'))
+        .map((el) => (el.textContent ?? '').replace(/\s+/g, ' ').trim())
+        .filter(Boolean)
+        .join('\n\n');
+    } else if (pdf) {
+      const parts: string[] = [];
+      for (let i = 1; i <= Math.min(pdf.numPages, 400); i++) {
+        const tc = await (await pdf.getPage(i)).getTextContent();
+        parts.push(tc.items.map((it) => ('str' in it ? it.str + (it.hasEOL ? '\n' : ' ') : '')).join('').replace(/[ \t]+/g, ' '));
+      }
+      text = parts.join('\n\n');
+    } else if (content?.type === 'code') text = content.text;
+    else if (content?.type === 'sheet') text = content.sheets.map((s) => s.name + '\n' + s.rows.slice(0, 400).map((r) => r.join(' | ')).join('\n')).join('\n\n');
+    else if (ocrText?.text) text = ocrText.text;
+    text = text.slice(0, 600_000);
+    if (text.trim().length < 40) throw new Error('There is no readable text to ask about yet. For photos, run OCR first.');
+    docText.current = text;
+    return text;
+  };
+
   // ---------------------------------------------------------------- derived
   const words = useMemo(() => {
     if (!flowReady || !flowRef.current) return 0;
@@ -568,6 +669,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   const minutesLeft = liquid ? Math.max(1, Math.round((words * (1 - progress)) / 230)) : Math.max(1, Math.round(((doc.pages ?? 1) - page + 1) * 1.8));
 
   const moreActions: MoreAction[] = [
+    { id: 'ask', label: 'Ask this document', icon: 'ask', right: 'free ai' },
     { id: 'find', label: 'Search in document', icon: 'search' },
     { id: 'contents', label: 'Contents & marks', icon: 'list' },
     { id: 'bookmark', label: 'Bookmark this spot', icon: 'bookmark' },
@@ -580,7 +682,10 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   ];
 
   const onMore = async (a: string) => {
-    if (a === 'find') setFind('');
+    if (a === 'ask') {
+      setAskSel(undefined);
+      setSheet('ask');
+    } else if (a === 'find') setFind('');
     else if (a === 'contents') setSheet('contents');
     else if (a === 'bookmark') addBookmark();
     else if (a === 'mode') switchMode(liquid ? 'page' : 'liquid');
@@ -595,7 +700,8 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   };
 
   const style = {
-    '--r-font': settings.font === 'serif' ? 'var(--serif)' : settings.font === 'mono' ? 'var(--mono)' : 'var(--sans)',
+    '--r-font': fontById(settings.font).family,
+    '--r-fscale': fontById(settings.font).scale,
     '--r-size': `${settings.fontSize}px`,
     '--r-lh': settings.lineHeight,
     '--r-margin': `${settings.margin}px`,
@@ -606,7 +712,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
 
   return (
     <div className="reader" data-theme={settings.readerTheme} data-dark={dark ? '1' : undefined} style={style}>
-      <div className="r-progress" style={{ width: `${Math.round(progress * 100)}%` }} />
+      <div className="r-progress" ref={barRef} style={{ width: `${Math.round(progress * 100)}%` }} />
       <div className="reader-scroll" ref={setScroller} style={{ paddingLeft: showPdfPages && thumbs ? 84 : 0 }}>
         {error ? (
           <div className="empty" style={{ paddingTop: 140 }}>
@@ -621,7 +727,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
             <PixelLoader grid={4} size={7} label="opening" />
           </div>
         ) : showPdfPages ? (
-          <PdfView ref={pdfRef} pdf={pdf} scroller={scroller} initialPage={page} thumbs={thumbs} onPage={onPdfPage} onTap={onContentTap} />
+          <PdfView ref={pdfRef} pdf={pdf} scroller={scroller} initialPage={page} thumbs={thumbs} onPage={onPdfPage} onProgress={setProg} onTap={onContentTap} />
         ) : isPdf && !liquid ? (
           <div style={{ display: 'grid', placeItems: 'center', height: '100%' }}>
             <PixelLoader grid={4} size={7} label="opening" />
@@ -631,7 +737,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
             <SheetView sheets={content.sheets} />
           </div>
         ) : content.type === 'image' ? (
-          <ImageView url={content.url} onTap={() => setChrome((c) => !c)} />
+          <ImageView url={content.url} onTap={() => setChrome((c) => !c)} layer={imgLayer} />
         ) : content.type === 'media' ? (
           <MediaView url={content.url} kind={content.kind} name={doc.name} />
         ) : content.type === 'code' ? (
@@ -696,6 +802,16 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
             {doc.name}
             {isPdf ? ` · ${page}/${doc.pages ?? '?'}` : ''}
           </div>
+          <button
+            className="r-ibtn"
+            onClick={() => {
+              setAskSel(undefined);
+              setSheet('ask');
+            }}
+            aria-label="Ask this document"
+          >
+            <Icon name="ask" />
+          </button>
           <button className="r-ibtn" onClick={() => setFind('')} aria-label="Search">
             <Icon name="search" />
           </button>
@@ -716,13 +832,14 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
             <ListenBar root={flowRef.current} scroller={scroller} startAt={listenFrom} onPlaying={setListening} docId={id} key={flowReady} />
           </div>
         )}
-        <div className="r-dock-row">
-          <button className="pill" onClick={() => setClockMode((m) => (m === 'time' ? 'left' : 'time'))} style={{ padding: '0 16px', gap: 8 }} aria-label="Clock / time left">
-            <Icon name="clock" size={19} />
-            <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{clockMode === 'time' ? now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : `${minutesLeft}m`}</span>
+        <div className="r-dock-row compact">
+          <button className="timechip" onClick={() => setClockMode((m) => (m === 'time' ? 'left' : 'time'))} aria-label="Clock / time left">
+            <Icon name="clock" size={14} />
+            <span>{clockMode === 'time' ? now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : `${minutesLeft}m left`}</span>
           </button>
           {(liquid || isPdf) && content?.type !== 'sheet' ? (
             <Segmented
+              className="compact"
               value={listen ? 'listen' : 'read'}
               onChange={toggleListen}
               options={[
@@ -731,11 +848,11 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
               ]}
             />
           ) : null}
-          <button className="pill round" onClick={cycleTheme} onContextMenu={(e) => (e.preventDefault(), setSheet('type'))} aria-label="Theme">
-            <Icon name={dark ? 'moon' : 'sun'} size={20} />
+          <button className="pill round sm" onClick={cycleTheme} onContextMenu={(e) => (e.preventDefault(), setSheet('type'))} aria-label="Theme">
+            <Icon name={dark ? 'moon' : 'sun'} size={17} />
           </button>
-          <button className="pill round" onClick={() => setSheet('type')} aria-label="Typography">
-            <TypeGlyph size={20} />
+          <button className="pill round sm" onClick={() => setSheet('type')} aria-label="Typography">
+            <TypeGlyph size={17} />
           </button>
         </div>
         <button className="r-chev" onClick={() => setChrome(false)} aria-label="Hide controls">
@@ -752,6 +869,11 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
         }}
         onHighlight={liquid ? addHighlight : undefined}
         onListen={liquid ? listenFromSelection : undefined}
+        onAsk={() => {
+          setAskSel(selectionText().slice(0, 1500));
+          clearSel();
+          setSheet('ask');
+        }}
         onCopy={() => {
           navigator.clipboard?.writeText(selectionText());
           clearSel();
@@ -821,6 +943,15 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
           ))}
         </div>
       </Sheet>
+      <AskSheet
+        open={sheet === 'ask'}
+        onClose={() => setSheet(null)}
+        title={doc.name}
+        getText={getDocText}
+        selection={askSel}
+        aiOk={settings.aiOk}
+        onConsent={() => updateSettings({ aiOk: true })}
+      />
       <Sheet open={sheet === 'ocr'} onClose={() => setSheet(null)} title="Recognised text">
         <div className="sheet-body">
           {ocrText?.busy ? (

@@ -31,6 +31,7 @@ export interface DocMeta {
   author?: string;
   coverId?: string; // key in blobs store
   readMs: number;
+  url?: string; // source link for saved web pages
   finished?: boolean;
   /** For scans: ids of page images. */
   scanPages?: string[];
@@ -56,13 +57,14 @@ export interface Bookmark {
 }
 
 export type ReaderTheme = 'paper' | 'white' | 'dusk' | 'night';
-export type ReaderFont = 'serif' | 'sans' | 'mono';
+export type ReaderFont = string;
 
 export interface Settings {
   name: string;
   appTheme: 'light' | 'system' | 'dark';
   readerTheme: ReaderTheme;
   font: ReaderFont;
+  fontFaves: string[]; // up to four favourites shown in the reading sheet
   fontSize: number; // px
   lineHeight: number;
   margin: number; // px side padding
@@ -75,14 +77,17 @@ export interface Settings {
   focusListen: boolean; // dim non-active sentences while listening
   defaultPdfMode: ReadMode;
   onboarded: boolean;
+  v: number; // settings schema version
+  aiOk: boolean; // user agreed to send questions + short excerpts to the free AI service
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   name: 'reader',
   appTheme: 'system',
   readerTheme: 'paper',
-  font: 'serif',
-  fontSize: 19,
+  font: 'garamond',
+  fontFaves: ['garamond', 'literata', 'inter', 'mono'],
+  fontSize: 20,
   lineHeight: 1.6,
   margin: 22,
   justify: true,
@@ -93,6 +98,8 @@ export const DEFAULT_SETTINGS: Settings = {
   focusListen: true,
   defaultPdfMode: 'page',
   onboarded: false,
+  v: 2,
+  aiOk: false,
 };
 
 /** Liquid content produced by any format loader. Rendered as HTML into the reading column. */

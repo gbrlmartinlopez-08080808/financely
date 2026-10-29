@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import * as db from './db';
 import { DEFAULT_SETTINGS, type DocMeta, type Settings } from './types';
+import { migrateFontId } from './fonts';
 
 interface State {
   ready: boolean;
@@ -35,10 +36,19 @@ export async function init() {
     db.get<Settings>('kv', 'settings'),
     db.entries<number>('days'),
   ]);
+  const merged: Settings = { ...DEFAULT_SETTINGS, ...settings };
+  merged.font = migrateFontId(merged.font);
+  merged.fontFaves = (merged.fontFaves ?? DEFAULT_SETTINGS.fontFaves).map(migrateFontId);
+  if (!settings || (settings.v ?? 1) < 2) {
+    // v2 scaled the interface down ~9%, so nudge saved reading sizes up to look the same as before
+    merged.fontSize = Math.round((settings?.fontSize ?? 19) * 1.08);
+    merged.v = 2;
+    db.put('kv', 'settings', merged);
+  }
   set({
     ready: true,
     docs: sortDocs(docs),
-    settings: { ...DEFAULT_SETTINGS, ...settings },
+    settings: merged,
     days: Object.fromEntries(dayEntries),
   });
 }
@@ -71,10 +81,13 @@ export async function removeDoc(id: string) {
   set({ docs: state.docs.filter((d) => d.id !== id) });
 }
 
-export async function updateSettings(patch: Partial<Settings>) {
+let saveT = 0;
+/** Applies instantly; the disk write is debounced so dragging a slider doesn't hammer IndexedDB. */
+export function updateSettings(patch: Partial<Settings>) {
   const settings = { ...state.settings, ...patch };
   set({ settings });
-  await db.put('kv', 'settings', settings);
+  clearTimeout(saveT);
+  saveT = window.setTimeout(() => db.put('kv', 'settings', state.settings), 400);
 }
 
 // ---------- reading time / streaks ----------

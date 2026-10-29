@@ -5,6 +5,11 @@ const config: CapacitorConfig = {
   appName: 'Quire',
   webDir: 'dist',
   android: { backgroundColor: '#EFEEEC' },
+  plugins: {
+    // Routes http(s) fetches through the native stack so saving links and word lookups
+    // aren't blocked by browser CORS rules.
+    CapacitorHttp: { enabled: true },
+  },
 };
 
 export default config;

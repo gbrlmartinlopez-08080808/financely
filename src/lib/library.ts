@@ -104,6 +104,50 @@ async function imageCover(blob: Blob): Promise<Blob | undefined> {
   }
 }
 
+/** Biggest picture inside an Office file (DOCX → word/media, PPTX → ppt/media). */
+async function officeCover(buf: ArrayBuffer, folder: string): Promise<Blob | undefined> {
+  try {
+    const JSZip = (await import('jszip')).default;
+    const zip = await JSZip.loadAsync(buf);
+    const files = Object.values(zip.files).filter((f) => f.name.startsWith(folder) && /\.(png|jpe?g|webp|gif)$/i.test(f.name) && !f.dir);
+    let best: { f: (typeof files)[number]; size: number } | null = null;
+    for (const f of files) {
+      const size = (f as unknown as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize ?? 0;
+      if (!best || size > best.size) best = { f, size };
+    }
+    if (!best || best.size < 25_000) return undefined;
+    const blob = await best.f.async('blob');
+    return imageCover(new Blob([blob], { type: /png$/i.test(best.f.name) ? 'image/png' : 'image/jpeg' }));
+  } catch {
+    return undefined;
+  }
+}
+
+export async function refreshCover(doc: DocMeta): Promise<boolean> {
+  const f = await getFile(doc.id);
+  if (!f) return false;
+  const buf = await f.arrayBuffer();
+  let cover: Blob | undefined;
+  if (doc.kind === 'pdf') cover = (await (await import('./formats/pdf')).pdfCover(buf)).cover ?? undefined;
+  else if (doc.kind === 'docx') cover = await officeCover(buf, 'word/media/');
+  else if (doc.kind === 'slides') cover = await officeCover(buf, 'ppt/media/');
+  if (!cover) cover = await generatedCover(doc.name, doc.kind, doc.author);
+  const coverId = `${doc.id}:cover-${Date.now()}`;
+  await db.put('blobs', coverId, cover);
+  if (doc.coverId) await db.del('blobs', doc.coverId);
+  const { patchDoc } = await import('./store');
+  await patchDoc(doc.id, { coverId });
+  return true;
+}
+
+/** Save pasted text as a note. */
+export async function importText(text: string, title?: string): Promise<DocMeta> {
+  const first = text.trim().split('\n').find((l) => l.trim()) ?? 'Note';
+  const t = (title?.trim() || first.replace(/^#+\s*/, '').slice(0, 60)) || 'Note';
+  const md = /^\s*#|\*\*|\$\$|^- /m.test(text);
+  return importFile(new Blob([text], { type: md ? 'text/markdown' : 'text/plain' }), `${t.replace(/[\\/:*?"<>|]+/g, '')}.${md ? 'md' : 'txt'}`, { title: t });
+}
+
 // ------------------------------------------------------------------ import
 
 export async function importFile(file: Blob, name: string, opts: { kind?: DocKind; title?: string; open?: boolean } = {}): Promise<DocMeta> {
@@ -133,7 +177,8 @@ export async function importFile(file: Blob, name: string, opts: { kind?: DocKin
       if (r.cover) cover = await imageCover(r.cover);
     } else if (kind === 'image' || kind === 'scan') {
       cover = await imageCover(file);
-    }
+    } else if (kind === 'docx') cover = await officeCover(buf, 'word/media/');
+    else if (kind === 'slides') cover = await officeCover(buf, 'ppt/media/');
   } catch (e) {
     console.warn('metadata failed', e);
   }
@@ -187,6 +232,35 @@ function mimeFor(kind: DocKind, name: string) {
 
 export async function getFile(id: string): Promise<Blob | undefined> {
   return db.get<Blob>('files', id);
+}
+
+const blurCache = new Map<string, string>();
+/** A tiny pre-blurred copy of the cover: gives the acrylic pocket its frosted look without a live blur filter. */
+export async function blurredCoverUrl(meta: DocMeta): Promise<string | undefined> {
+  if (!meta.coverId) return undefined;
+  const hit = blurCache.get(meta.coverId);
+  if (hit) return hit;
+  const b = await db.get<Blob>('blobs', meta.coverId);
+  if (!b) return undefined;
+  try {
+    const bmp = await createImageBitmap(b);
+    const w = 48;
+    const h = Math.max(8, Math.round((w * bmp.height) / bmp.width));
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext('2d')!;
+    ctx.filter = 'blur(1.5px)';
+    ctx.drawImage(bmp, 0, 0, w, h);
+    bmp.close();
+    const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/jpeg', 0.7));
+    if (!blob) return undefined;
+    const u = URL.createObjectURL(blob);
+    blurCache.set(meta.coverId, u);
+    return u;
+  } catch {
+    return undefined;
+  }
 }
 
 const coverCache = new Map<string, string>();

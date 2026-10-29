@@ -4,6 +4,7 @@ import type { Bookmark, Highlight, ReaderTheme, TocEntry } from '../lib/types';
 import { Icon } from '../ui/Icon';
 import { Pixel, Ruler, Segmented, Sheet, Toggle } from '../ui/kit';
 import type { PixelName } from '../lib/pixels';
+import { FONTS, fontById } from '../lib/fonts';
 
 export const THEMES: { id: ReaderTheme; bg: string; ink: string; name: string }[] = [
   { id: 'paper', bg: '#eeedea', ink: '#141414', name: 'paper' },
@@ -14,8 +15,10 @@ export const THEMES: { id: ReaderTheme; bg: string; ink: string; name: string }[
 
 export function TypeSheet({ open, onClose, isPdf, mode, onMode }: { open: boolean; onClose: () => void; isPdf: boolean; mode: 'page' | 'liquid'; onMode: (m: 'page' | 'liquid') => void }) {
   const s = useStore((x) => x.settings);
+  const [fonts, setFonts] = useState(false);
   return (
     <Sheet open={open} onClose={onClose} title="Reading">
+      <FontsSheet open={fonts} onClose={() => setFonts(false)} />
       <div className="sheet-body" style={{ paddingBottom: 12 }}>
         {isPdf && (
           <>
@@ -36,20 +39,20 @@ export function TypeSheet({ open, onClose, isPdf, mode, onMode }: { open: boolea
         {(!isPdf || mode === 'liquid') && (
           <>
             <div className="section-label">typeface</div>
-            <div className="fontpick">
-              {(
-                [
-                  ['serif', 'Garamond', 'var(--serif)'],
-                  ['sans', 'Inter', 'var(--sans)'],
-                  ['mono', 'Mono', 'var(--mono)'],
-                ] as const
-              ).map(([id, name, fam]) => (
-                <button key={id} className={s.font === id ? 'on' : ''} onClick={() => updateSettings({ font: id })}>
-                  <b style={{ fontFamily: fam }}>Aa</b>
-                  <span>{name}</span>
-                </button>
-              ))}
+            <div className="fontpick four">
+              {s.fontFaves.slice(0, 4).map((id) => {
+                const f = fontById(id);
+                return (
+                  <button key={id} className={s.font === id ? 'on' : ''} onClick={() => updateSettings({ font: id })}>
+                    <b style={{ fontFamily: f.family }}>Aa</b>
+                    <span>{f.name}</span>
+                  </button>
+                );
+              })}
             </div>
+            <button className="pill ghost sm" style={{ marginTop: 10 }} onClick={() => setFonts(true)}>
+              More fonts · {FONTS.length}
+            </button>
             <div className="section-label">size</div>
             <Ruler value={s.fontSize} min={13} max={32} step={1} onChange={(v) => updateSettings({ fontSize: v })} format={(v) => `${v}px`} label="Font size" />
             <div className="section-label">line spacing</div>
@@ -204,6 +207,50 @@ export function MoreSheet({ open, onClose, actions, onAction, title }: { open: b
               </button>
             ))}
         </div>
+      </div>
+    </Sheet>
+  );
+}
+
+/** Browse every bundled typeface; the four starred ones appear in the reading sheet. */
+export function FontsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const s = useStore((x) => x.settings);
+  const faves = s.fontFaves;
+  const toggle = (id: string) => {
+    if (faves.includes(id)) {
+      if (faves.length > 1) updateSettings({ fontFaves: faves.filter((f) => f !== id) });
+    } else {
+      // at most four: the oldest favourite makes room
+      updateSettings({ fontFaves: [...faves, id].slice(-4) });
+    }
+  };
+  return (
+    <Sheet open={open} onClose={onClose} title="Fonts">
+      <div className="sheet-body" style={{ paddingBottom: 16 }}>
+        <p className="muted" style={{ margin: '-4px 4px 12px', fontSize: 13.5, textAlign: 'center' }}>
+          Tap a font to read in it. Star up to four to keep them one tap away.
+        </p>
+        {FONTS.map((f) => (
+          <div key={f.id} className={`fontrow${s.font === f.id ? ' on' : ''}`}>
+            <button className="fontrow-main" onClick={() => updateSettings({ font: f.id })}>
+              <span className="fontrow-aa" style={{ fontFamily: f.family }}>
+                Aa
+              </span>
+              <span className="fontrow-text">
+                <span style={{ fontFamily: f.family, fontSize: 17 }}>The quiet pleasure of a good page</span>
+                <small className="mono">
+                  {f.name} · {f.note}
+                </small>
+              </span>
+              {s.font === f.id && <Icon name="check" size={18} />}
+            </button>
+            <button className={`star${faves.includes(f.id) ? ' on' : ''}`} onClick={() => toggle(f.id)} aria-label={faves.includes(f.id) ? `Remove ${f.name} from favourites` : `Add ${f.name} to favourites`}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill={faves.includes(f.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+                <path d="M12 3.5l2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-3-5.4 3 1.1-6-4.5-4.2 6.1-.8z" />
+              </svg>
+            </button>
+          </div>
+        ))}
       </div>
     </Sheet>
   );

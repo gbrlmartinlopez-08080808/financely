@@ -5,12 +5,15 @@ import { Icon } from '../ui/Icon';
 import { Ruler, Segmented, Sheet, Toggle, toast } from '../ui/kit';
 import { isNative } from '../lib/native';
 import { formatSize } from '../lib/library';
+import { FontsSheet } from '../reader/sheets';
+import { fontById } from '../lib/fonts';
 
 export function Settings({ open, onClose }: { open: boolean; onClose: () => void }) {
   const s = useStore((x) => x.settings);
   const docs = useStore((x) => x.docs);
   const [usage, setUsage] = useState<string>('');
   const [name, setName] = useState(s.name);
+  const [fonts, setFonts] = useState(false);
   useEffect(() => {
     if (!open) return;
     setName(s.name);
@@ -55,6 +58,16 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
           </div>
         </div>
         <Ruler value={s.dailyGoal} min={5} max={120} step={5} onChange={(v) => updateSettings({ dailyGoal: v })} format={(v) => `${v}m`} label="Daily goal" />
+        <button className="row" style={{ width: '100%', textAlign: 'left' }} onClick={() => setFonts(true)}>
+          <Icon name="text" />
+          <div className="grow">
+            <div className="row-label">Reading fonts</div>
+            <div className="row-sub">
+              {s.fontFaves.map((f) => fontById(f).name).join(' · ')}
+            </div>
+          </div>
+          <Icon name="right" size={18} />
+        </button>
         <div className="row" style={{ marginTop: 8 }}>
           <div className="grow">
             <div className="row-label">Open PDFs in</div>
@@ -83,6 +96,16 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
             <div className="row-label">Haptic Feedback</div>
           </div>
           <Toggle on={s.haptics} onChange={(v) => updateSettings({ haptics: v })} label="Haptic feedback" />
+        </div>
+
+        <div className="section-label">ask (free ai)</div>
+        <div className="row">
+          <Icon name="ask" />
+          <div className="grow">
+            <div className="row-label">Ask this document</div>
+            <div className="row-sub">Sends your question and a few short excerpts to a free open AI service. Off until you turn it on.</div>
+          </div>
+          <Toggle on={s.aiOk} onChange={(v) => updateSettings({ aiOk: v })} label="Ask this document" />
         </div>
 
         <div className="section-label">files</div>
@@ -117,9 +140,15 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
           </button>
         </div>
         <div style={{ textAlign: 'center', padding: '26px 0 10px' }} className="mono muted">
-          <div style={{ fontSize: 11 }}>quire 1.0 · no ads, no paywalls, no tracking</div>
+          <div style={{ fontSize: 11 }}>quire 1.1 · free · no ads · no accounts · no tracking</div>
+          <div style={{ fontSize: 10.5, marginTop: 6, lineHeight: 1.5 }}>
+            Your library stays on this phone.
+            <br />
+            Only word lookups, saved links and Ask use the internet.
+          </div>
         </div>
       </div>
+      <FontsSheet open={fonts} onClose={() => setFonts(false)} />
     </Sheet>
   );
 }

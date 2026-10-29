@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore, removeDoc, patchDoc, streakInfo, dayKey, COUNT_MS } from '../lib/store';
-import { coverUrl, ago, formatSize, getFile } from '../lib/library';
+import { coverUrl, blurredCoverUrl, ago, formatSize, getFile, refreshCover } from '../lib/library';
 import { KIND_LABEL } from '../lib/formats/detect';
 import type { DocMeta } from '../lib/types';
 import { Icon } from '../ui/Icon';
@@ -18,6 +18,44 @@ export function useCover(doc?: DocMeta) {
     };
   }, [doc?.coverId]); // eslint-disable-line react-hooks/exhaustive-deps
   return url;
+}
+
+function useBlur(doc?: DocMeta) {
+  const [url, setUrl] = useState<string>();
+  useEffect(() => {
+    let alive = true;
+    if (doc) blurredCoverUrl(doc).then((u) => alive && setUrl(u));
+    return () => {
+      alive = false;
+    };
+  }, [doc?.coverId]); // eslint-disable-line react-hooks/exhaustive-deps
+  return url;
+}
+
+function Pocket({ doc, active, onClick }: { doc: DocMeta; active: boolean; onClick: () => void }) {
+  const blur = useBlur(doc);
+  return (
+    <button className="pocket-wrap" onClick={onClick} aria-label={`Open ${doc.name}`} data-active={active ? '1' : undefined}>
+      <Cover doc={doc} className="cover" />
+      <div className="pocket">
+        {blur && (
+          <div className="pk-blur">
+            <img src={blur} alt="" />
+          </div>
+        )}
+        <Screws />
+        {doc.progress > 0.005 && (
+          <div className="pocket-progress">
+            <i style={{ width: `${Math.round(doc.progress * 100)}%` }} />
+          </div>
+        )}
+        <div className="pocket-label">
+          {KIND_LABEL[doc.kind]}
+          {doc.pages ? ` · ${doc.pages}p` : ''}
+        </div>
+      </div>
+    </button>
+  );
 }
 
 function Cover({ doc, className }: { doc: DocMeta; className?: string }) {
@@ -80,6 +118,7 @@ export function Library({
   const settings = useStore((s) => s.settings);
   const days = useStore((s) => s.days);
   const [filter, setFilter] = useState('all');
+  const [sort, setSort] = useState<'recent' | 'title' | 'type' | 'size'>('recent');
   const [query, setQuery] = useState<string | null>(null);
   const [menu, setMenu] = useState<DocMeta | null>(null);
   const [active, setActive] = useState(0);
@@ -101,8 +140,11 @@ export function Library({
       const q = query.toLowerCase();
       l = l.filter((d) => d.name.toLowerCase().includes(q) || d.fileName.toLowerCase().includes(q) || (d.author ?? '').toLowerCase().includes(q));
     }
+    if (sort === 'title') l = [...l].sort((a, b) => a.name.localeCompare(b.name));
+    else if (sort === 'type') l = [...l].sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name));
+    else if (sort === 'size') l = [...l].sort((a, b) => b.size - a.size);
     return l;
-  }, [docs, filter, query]);
+  }, [docs, filter, query, sort]);
 
   // New arrivals: bring the carousel back to the front.
   useEffect(() => {
@@ -124,8 +166,7 @@ export function Library({
         const ad = Math.min(1.4, Math.abs(d));
         const w = s.firstElementChild as HTMLElement;
         w.style.transform = `translateX(${-d * 14}%) scale(${1 - ad * 0.16}) rotateY(${-d * 10}deg)`;
-        w.style.opacity = String(1 - ad * 0.25);
-        w.style.filter = ad > 0.5 ? `blur(${(ad - 0.5) * 2}px)` : '';
+        w.style.opacity = String(1 - ad * 0.3);
         if (Math.abs(d) < bestD) {
           bestD = Math.abs(d);
           best = i;
@@ -198,26 +239,15 @@ export function Library({
             <div className="carousel" ref={car}>
               {recent.map((d) => (
                 <div className="slot" key={d.id}>
-                  <button
-                    className="pocket-wrap"
+                  <Pocket
+                    doc={d}
+                    active={recent.indexOf(d) === active}
                     onClick={() => {
                       const i = recent.indexOf(d);
                       if (i === active) onOpen(d.id);
                       else car.current?.querySelectorAll('.slot')[i]?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
                     }}
-                    aria-label={`Open ${d.name}`}
-                  >
-                    <Cover doc={d} className="cover" />
-                    <div className="pocket">
-                      <Screws />
-                      {d.progress > 0.005 && (
-                        <div className="pocket-progress">
-                          <i style={{ width: `${Math.round(d.progress * 100)}%` }} />
-                        </div>
-                      )}
-                      <div className="pocket-label">{KIND_LABEL[d.kind]}{d.pages ? ` · ${d.pages}p` : ''}</div>
-                    </div>
-                  </button>
+                  />
                 </div>
               ))}
             </div>
@@ -258,9 +288,22 @@ export function Library({
         <>
           <div className="shelf-head">
             <span className="mono">shelf · {list.length}</span>
-            <button className="chip" onClick={() => setQuery((q) => (q === null ? '' : null))} aria-label="Search">
-              <Icon name="search" size={18} />
-            </button>
+            <span style={{ display: 'flex', gap: 2 }}>
+              <button
+                className="chip mono"
+                onClick={() => {
+                  const order = ['recent', 'title', 'type', 'size'] as const;
+                  setSort(order[(order.indexOf(sort) + 1) % order.length]);
+                  tap('select');
+                }}
+                aria-label={`Sort by ${sort}`}
+              >
+                {sort}
+              </button>
+              <button className="chip" onClick={() => setQuery((q) => (q === null ? '' : null))} aria-label="Search">
+                <Icon name="search" size={18} />
+              </button>
+            </span>
           </div>
           <div className="filters">
             {FILTERS.map((f) => (
@@ -401,6 +444,30 @@ function DocMenu({ doc, onClose, onOpen, onConvert }: { doc: DocMeta | null; onC
                 </span>
                 Convert…
               </button>
+              {d.url && (
+                <button className="action" onClick={() => (onClose(), window.open(d.url, '_blank', 'noopener'))}>
+                  <span className="ic">
+                    <Icon name="globe" />
+                  </span>
+                  Open original page
+                </button>
+              )}
+              {['pdf', 'docx', 'slides'].includes(d.kind) && (
+                <button
+                  className="action"
+                  onClick={async () => {
+                    toast('Looking for a better cover…');
+                    const ok = await refreshCover(d).catch(() => false);
+                    toast(ok ? 'Cover refreshed' : 'Couldn’t refresh the cover');
+                    onClose();
+                  }}
+                >
+                  <span className="ic">
+                    <Icon name="image" />
+                  </span>
+                  Refresh cover
+                </button>
+              )}
               <button className="action" onClick={() => setRenaming(true)}>
                 <span className="ic">
                   <Icon name="edit" />

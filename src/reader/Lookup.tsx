@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { define, origin, wiki, normalizeWord, type Definition, type Origin, type WikiCard } from '../lib/lookup';
+import { define, origin, wiki, normalizeWord, sameSubject, type Definition, type Origin, type WikiCard } from '../lib/lookup';
 import { onBack, openExternal, tap } from '../lib/native';
 import { Icon } from '../ui/Icon';
 import { PixelLoader } from '../ui/kit';
@@ -16,6 +16,7 @@ export function LookupCard({ word, onClose }: { word: string | null; onClose: ()
   const [failed, setFailed] = useState<Record<Tab, boolean>>({ define: false, origin: false, wiki: false });
   const [attempt, setAttempt] = useState(0);
   const [closing, setClosing] = useState(false);
+  const [imgOk, setImgOk] = useState(true);
   const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
 
   useEffect(() => {
@@ -24,6 +25,7 @@ export function LookupCard({ word, onClose }: { word: string | null; onClose: ()
     setEty(undefined);
     setWk(undefined);
     setClosing(false);
+    setImgOk(true);
     const multi = /\s/.test(w);
     setTab(multi ? 'wiki' : 'define');
     setFailed({ define: false, origin: false, wiki: false });
@@ -51,6 +53,7 @@ export function LookupCard({ word, onClose }: { word: string | null; onClose: ()
   }, [w]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!w) return null;
+  const heroImg = wk?.thumb && (tab === 'wiki' || sameSubject(w, wk)) ? wk.thumb : undefined;
   const title = wk?.title && tab === 'wiki' ? wk.title : def?.word ?? w;
   const loading = (tab === 'define' && def === undefined) || (tab === 'origin' && ety === undefined) || (tab === 'wiki' && wk === undefined);
   const moreUrl = tab === 'wiki' && wk ? wk.url : tab === 'origin' ? `https://en.wiktionary.org/wiki/${encodeURIComponent(w)}#Etymology` : `https://en.wiktionary.org/wiki/${encodeURIComponent(w)}`;
@@ -60,15 +63,16 @@ export function LookupCard({ word, onClose }: { word: string | null; onClose: ()
       <div className={`scrim${closing ? ' out' : ''}`} style={{ background: 'rgba(0,0,0,.08)' }} onClick={close} />
       <div className={`lookup${closing ? ' out' : ''}`} role="dialog" aria-label={`Lookup ${w}`}>
         <div className="lk-word">{w.toLowerCase()}</div>
-        {tab === 'wiki' && wk?.thumb && (
+        {heroImg && imgOk && (
           <div className="lk-img">
-            <img src={wk.thumb} alt="" />
+            <img src={heroImg} alt="" onError={() => setImgOk(false)} />
           </div>
         )}
         <div className="lk-title">
           <h2>{title}</h2>
           {tab === 'define' && def?.phonetic && <span className="lk-sub mono">{def.phonetic}</span>}
           {tab === 'wiki' && wk?.description && <span className="lk-sub">{wk.description}</span>}
+          {tab === 'define' && !def?.phonetic && def?.source && <span className="lk-sub">via {def.source}</span>}
           {tab === 'origin' && <span className="lk-sub">word origin & roots</span>}
         </div>
         <div className="lk-tabs">
@@ -163,6 +167,7 @@ export function SelectionMenu({
   onDefine,
   onHighlight,
   onListen,
+  onAsk,
   onCopy,
   onShare,
 }: {
@@ -170,6 +175,7 @@ export function SelectionMenu({
   onDefine: () => void;
   onHighlight?: () => void;
   onListen?: () => void;
+  onAsk?: () => void;
   onCopy: () => void;
   onShare: () => void;
 }) {
@@ -181,6 +187,7 @@ export function SelectionMenu({
       <button onClick={onDefine}>Define</button>
       {onHighlight && <button onClick={onHighlight}>Highlight</button>}
       {onListen && <button onClick={onListen}>Listen</button>}
+      {onAsk && <button onClick={onAsk}>Ask</button>}
       <button onClick={onCopy}>Copy</button>
       <button onClick={onShare} aria-label="Share">
         <Icon name="share" size={16} />

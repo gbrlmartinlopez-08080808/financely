@@ -37,13 +37,103 @@ export async function renderPage(page: PDFPageProxy, scale: number, canvas?: HTM
   return { canvas: c, viewport };
 }
 
+interface ImgBox {
+  frac: number; // share of the page area
+  box: [number, number, number, number]; // x0,y0,x1,y1 in scale-1 viewport px
+}
+
+/** Largest picture on a page (found from the drawing commands, so it works for photos and embedded art). */
+async function largestImage(page: PDFPageProxy): Promise<ImgBox | null> {
+  const OPS = pdfjs.OPS as Record<string, number>;
+  const vp = page.getViewport({ scale: 1 });
+  const ops = await page.getOperatorList();
+  type M = [number, number, number, number, number, number];
+  const mul = (m: M, n: M): M => [
+    m[0] * n[0] + m[2] * n[1],
+    m[1] * n[0] + m[3] * n[1],
+    m[0] * n[2] + m[2] * n[3],
+    m[1] * n[2] + m[3] * n[3],
+    m[0] * n[4] + m[2] * n[5] + m[4],
+    m[1] * n[4] + m[3] * n[5] + m[5],
+  ];
+  let ctm: M = [1, 0, 0, 1, 0, 0];
+  const stack: M[] = [];
+  let best: ImgBox | null = null;
+  const imageOps = new Set([OPS.paintImageXObject, OPS.paintInlineImageXObject, OPS.paintImageMaskXObject].filter((x) => x !== undefined));
+  for (let i = 0; i < ops.fnArray.length; i++) {
+    const fn = ops.fnArray[i];
+    const args = ops.argsArray[i];
+    if (fn === OPS.save) stack.push(ctm);
+    else if (fn === OPS.restore) ctm = stack.pop() ?? ctm;
+    else if (fn === OPS.transform) ctm = mul(ctm, args as M);
+    else if (fn === OPS.paintFormXObjectBegin) {
+      stack.push(ctm);
+      if (args?.[0]) ctm = mul(ctm, args[0] as M);
+    } else if (fn === OPS.paintFormXObjectEnd) ctm = stack.pop() ?? ctm;
+    else if (imageOps.has(fn)) {
+      const pts = [
+        [0, 0],
+        [1, 0],
+        [0, 1],
+        [1, 1],
+      ].map(([x, y]) => [ctm[0] * x + ctm[2] * y + ctm[4], ctm[1] * x + ctm[3] * y + ctm[5]]);
+      const T = vp.transform as number[];
+      const vpts = pts.map((p) => [T[0] * p[0] + T[2] * p[1] + T[4], T[1] * p[0] + T[3] * p[1] + T[5]]);
+      const xs = vpts.map((p) => p[0]);
+      const ys = vpts.map((p) => p[1]);
+      const x0 = Math.max(0, Math.min(...xs));
+      const x1 = Math.min(vp.width, Math.max(...xs));
+      const y0 = Math.max(0, Math.min(...ys));
+      const y1 = Math.min(vp.height, Math.max(...ys));
+      const frac = Math.max(0, x1 - x0) * Math.max(0, y1 - y0) / (vp.width * vp.height);
+      if (!best || frac > best.frac) best = { frac, box: [x0, y0, x1, y1] };
+    }
+  }
+  return best;
+}
+
 export async function pdfCover(data: ArrayBuffer): Promise<{ cover: Blob | null; pages: number; title?: string; author?: string }> {
   const pdf = await openPdf(data);
   try {
     const page = await pdf.getPage(1);
     const vp = page.getViewport({ scale: 1 });
-    const { canvas } = await renderPage(page, 360 / vp.width);
-    const cover = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.85));
+    const encode = (c: HTMLCanvasElement) => new Promise<Blob | null>((r) => c.toBlob(r, 'image/jpeg', 0.85));
+    let cover: Blob | null = null;
+    // A bare title page (few words, no big picture) usually means the real cover art is a page or two later.
+    try {
+      const first = await largestImage(page);
+      const words = (await page.getTextContent()).items.reduce((n, i) => n + ('str' in i ? i.str.split(/\s+/).filter(Boolean).length : 0), 0);
+      if ((!first || first.frac < 0.2) && words < 120 && pdf.numPages > 1) {
+        for (let p = 2; p <= Math.min(pdf.numPages, 8); p++) {
+          const pg = await pdf.getPage(p);
+          const found = await largestImage(pg);
+          if (found && found.frac >= 0.3) {
+            const v = pg.getViewport({ scale: 1 });
+            const { canvas } = await renderPage(pg, 720 / v.width);
+            const s = canvas.width / v.width;
+            const [x0, y0, x1, y1] = found.box.map((n) => n * s);
+            const w = x1 - x0;
+            const h = y1 - y0;
+            let out = canvas;
+            if (found.frac < 0.9 && w / h > 0.45 && w / h < 1.8) {
+              out = document.createElement('canvas');
+              out.width = Math.round(w);
+              out.height = Math.round(h);
+              out.getContext('2d')!.drawImage(canvas, x0, y0, w, h, 0, 0, out.width, out.height);
+            }
+            cover = await encode(out);
+            break;
+          }
+          pg.cleanup();
+        }
+      }
+    } catch (e) {
+      console.warn('cover search failed', e);
+    }
+    if (!cover) {
+      const { canvas } = await renderPage(page, 360 / vp.width);
+      cover = await encode(canvas);
+    }
     let title: string | undefined;
     let author: string | undefined;
     try {

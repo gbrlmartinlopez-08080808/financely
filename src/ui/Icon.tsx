@@ -48,6 +48,7 @@ const P: Record<string, string> = {
   info: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 11v6M12 7.5h.01',
   undo: 'M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3',
   text: 'M5 6V4h14v2M12 4v16M9 20h6',
+  ask: 'M10 3l2 5.6L17.6 10.6 12 12.6 10 18.2 8 12.6 2.4 10.6 8 8.6zM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z',
 };
 
 export type IconName = keyof typeof P;

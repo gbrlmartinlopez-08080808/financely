@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { init, useStore, updateSettings } from './lib/store';
-import { importFile } from './lib/library';
+import { importFile, importText } from './lib/library';
 import { initBackButton, listenIncoming, readIncoming, setStatusBar, tap } from './lib/native';
 import type { DocMeta } from './lib/types';
 import { Library } from './screens/Library';
 import { Reader } from './reader/Reader';
-import { Stats } from './screens/Stats';
+import { StatsBubble } from './screens/Stats';
+import { AddSheet } from './screens/AddSheet';
+import { importUrl, looksLikeUrl } from './lib/links';
 import { Settings } from './screens/Settings';
 import { ConvertSheet } from './screens/Convert';
 import { ScanSheet } from './screens/Scan';
@@ -23,6 +25,9 @@ export default function App() {
   const [convert, setConvert] = useState<{ doc: DocMeta; root?: HTMLElement | null } | null>(null);
   const [scanFiles, setScanFiles] = useState<File[] | null>(null);
   const [importing, setImporting] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [linkBusy, setLinkBusy] = useState<string | null>(null);
+  const [linkErr, setLinkErr] = useState<string | null>(null);
   const fileIn = useRef<HTMLInputElement>(null);
   const camIn = useRef<HTMLInputElement>(null);
 
@@ -49,6 +54,15 @@ export default function App() {
     for (const f of files) {
       setImporting(f.name);
       try {
+        // a shared link arrives as a tiny text file: save the page instead
+        if (f.blob.size < 2048 && /\.txt$/i.test(f.name)) {
+          const t = (await f.blob.text()).trim();
+          if (looksLikeUrl(t)) {
+            const m = await importUrl(t);
+            first ??= m;
+            continue;
+          }
+        }
         const m = await importFile(f.blob, f.name);
         first ??= m;
       } catch (e) {
@@ -63,6 +77,23 @@ export default function App() {
       else toast(files.length > 1 ? `Added ${files.length} files` : 'Added to your shelf');
     }
   }, []);
+
+  const saveLink = async (url: string) => {
+    setLinkErr(null);
+    setLinkBusy('fetching');
+    try {
+      const m = await importUrl(url, (l) => setLinkBusy(l));
+      setAddOpen(false);
+      tap();
+      toast('Saved to your shelf');
+      setOpenId(m.id);
+    } catch (e) {
+      const msg = (e as Error).message || 'Couldn’t save that page.';
+      setLinkErr(/Failed to fetch|NetworkError|Load failed/i.test(msg) ? 'Couldn’t reach that site. Check the link and your connection.' : msg);
+    } finally {
+      setLinkBusy(null);
+    }
+  };
 
   // files shared / "opened with" from other Android apps
   useEffect(() => {
@@ -114,14 +145,14 @@ export default function App() {
     <>
       <Library
         onOpen={setOpenId}
-        onAdd={() => fileIn.current?.click()}
+        onAdd={() => setAddOpen(true)}
         onScan={() => camIn.current?.click()}
         onStats={() => setStats(true)}
         onSettings={() => setSettings(true)}
         onConvert={(doc) => setConvert({ doc })}
         onSample={() => importFile(new Blob([welcome], { type: 'text/markdown' }), 'Welcome to Quire.md', { title: 'Welcome to Quire' }).then((m) => setOpenId(m.id))}
       />
-      <Stats open={stats} onClose={() => setStats(false)} />
+      <StatsBubble open={stats} onClose={() => setStats(false)} />
       {openDoc && <Reader key={openDoc.id} doc={openDoc} onClose={() => setOpenId(null)} onConvert={(doc, root) => setConvert({ doc, root })} />}
       <Settings open={settings} onClose={() => setSettings(false)} />
       <ConvertSheet doc={convert?.doc ?? null} root={convert?.root} onClose={() => setConvert(null)} onOpenDoc={setOpenId} />
@@ -138,6 +169,21 @@ export default function App() {
           <PixelLoader size={4} gap={2} /> adding {importing.length > 26 ? importing.slice(0, 26) + '…' : importing}
         </div>
       )}
+      <AddSheet
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onFiles={() => fileIn.current?.click()}
+        onScan={() => camIn.current?.click()}
+        onLink={saveLink}
+        onPaste={async (text, title) => {
+          const m = await importText(text, title);
+          setAddOpen(false);
+          toast('Saved to your shelf');
+          setOpenId(m.id);
+        }}
+        busy={linkBusy}
+        error={linkErr}
+      />
       <Toasts />
       <input
         ref={fileIn}

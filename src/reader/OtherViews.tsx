@@ -100,18 +100,28 @@ const colName = (i: number) => {
   return s;
 };
 
-export function ImageView({ url, onTap }: { url: string; onTap: () => void }) {
+export function ImageView({ url, onTap, layer }: { url: string; onTap: () => void; layer?: { words: { t: string; x0: number; y0: number; x1: number; y1: number }[]; w: number; h: number } | null }) {
   const [t, setT] = useState({ s: 1, x: 0, y: 0 });
+  const box = useRef<HTMLDivElement>(null);
+  // the overlay's word heights are fractions of the picture's rendered height
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const set = () => el.style.setProperty('--bh', `${el.clientHeight}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [layer, url]);
   const pts = useRef(new Map<number, { x: number; y: number }>());
-  const start = useRef<{ d: number; s: number; x: number; y: number; px: number; py: number; moved: boolean } | null>(null);
+  const start = useRef<{ d: number; s: number; x: number; y: number; px: number; py: number; moved: boolean; at: number } | null>(null);
   return (
     <div
       className="imgview"
       onPointerDown={(e) => {
-        (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
         pts.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
         const p = [...pts.current.values()];
-        start.current = { d: p.length > 1 ? Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) : 0, s: t.s, x: t.x, y: t.y, px: e.clientX, py: e.clientY, moved: false };
+        start.current = { d: p.length > 1 ? Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) : 0, s: t.s, x: t.x, y: t.y, px: e.clientX, py: e.clientY, moved: false, at: Date.now() };
       }}
       onPointerMove={(e) => {
         if (!pts.current.has(e.pointerId) || !start.current) return;
@@ -124,12 +134,32 @@ export function ImageView({ url, onTap }: { url: string; onTap: () => void }) {
       }}
       onPointerUp={(e) => {
         pts.current.delete(e.pointerId);
-        if (start.current && !start.current.moved && pts.current.size === 0) onTap();
+        if (start.current && !start.current.moved && pts.current.size === 0 && Date.now() - start.current.at < 350) onTap();
         start.current = null;
       }}
       onDoubleClick={() => setT((v) => (v.s > 1 ? { s: 1, x: 0, y: 0 } : { ...v, s: 2.5 }))}
     >
-      <img src={url} alt="" draggable={false} style={{ transform: `translate(${t.x}px, ${t.y}px) scale(${t.s})` }} />
+      <div className="imgbox" ref={box} style={{ transform: `translate(${t.x}px, ${t.y}px) scale(${t.s})` }}>
+        <img src={url} alt="" draggable={false} />
+        {layer && (
+          <div className="ocr-layer" aria-hidden>
+            {layer.words.map((w, i) => (
+              <span
+                key={i}
+                style={{
+                  left: `${(w.x0 / layer.w) * 100}%`,
+                  top: `${(w.y0 / layer.h) * 100}%`,
+                  width: `${((w.x1 - w.x0) / layer.w) * 100}%`,
+                  height: `${((w.y1 - w.y0) / layer.h) * 100}%`,
+                  fontSize: `calc(var(--bh, 0px) * ${(((w.y1 - w.y0) / layer.h) * 0.85).toFixed(4)})`,
+                }}
+              >
+                {w.t}{' '}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

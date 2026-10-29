@@ -22,9 +22,17 @@
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/share": "^8.0.3",
     "@capacitor/status-bar": "^8.0.4",
+    "@fontsource/atkinson-hyperlegible": "^5.3.0",
+    "@fontsource/crimson-pro": "^5.3.0",
     "@fontsource/eb-garamond": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
     "@fontsource/inter": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/literata": "^5.3.0",
+    "@fontsource/lora": "^5.3.0",
+    "@fontsource/merriweather": "^5.3.0",
+    "@fontsource/opendyslexic": "^5.3.0",
+    "@fontsource/source-serif-4": "^5.3.1",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.2",
     "katex": "^0.19.1",
@@ -42,7 +50,10 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "d3-geo": "^3.1.1",
+    "topojson-client": "^3.1.0",
     "typescript": "^7.0.2",
-    "vite": "^8.3.5"
+    "vite": "^8.3.5",
+    "world-atlas": "^2.0.2"
   }
 }

@@ -1,0 +1,46 @@
+@import '@fontsource/literata/latin-400.css';
+@import '@fontsource/literata/latin-400-italic.css';
+@import '@fontsource/literata/latin-700.css';
+@import '@fontsource/literata/greek-400.css';
+@import '@fontsource/source-serif-4/latin-400.css';
+@import '@fontsource/source-serif-4/latin-400-italic.css';
+@import '@fontsource/source-serif-4/latin-700.css';
+@import '@fontsource/source-serif-4/greek-400.css';
+@import '@fontsource/lora/latin-400.css';
+@import '@fontsource/lora/latin-400-italic.css';
+@import '@fontsource/lora/latin-700.css';
+@import '@fontsource/crimson-pro/latin-400.css';
+@import '@fontsource/crimson-pro/latin-400-italic.css';
+@import '@fontsource/crimson-pro/latin-700.css';
+@import '@fontsource/merriweather/latin-400.css';
+@import '@fontsource/merriweather/latin-400-italic.css';
+@import '@fontsource/merriweather/latin-700.css';
+@import '@fontsource/atkinson-hyperlegible/latin-400.css';
+@import '@fontsource/atkinson-hyperlegible/latin-400-italic.css';
+@import '@fontsource/atkinson-hyperlegible/latin-700.css';
+@import '@fontsource/opendyslexic/latin-400.css';
+@import '@fontsource/opendyslexic/latin-400-italic.css';
+@import '@fontsource/opendyslexic/latin-700.css';
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+@import '@fontsource/ibm-plex-mono/latin-400-italic.css';
+@import '@fontsource/ibm-plex-mono/latin-700.css';
+
+@font-face {
+  font-family: 'Noto Serif';
+  src: url('/fonts/NotoSerif-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Noto Serif';
+  src: url('/fonts/NotoSerif-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Noto Serif';
+  src: url('/fonts/NotoSerif-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-display: swap;
+}

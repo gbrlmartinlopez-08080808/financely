@@ -225,7 +225,7 @@ export function applyHighlights(root: HTMLElement, list: { id: string; text: str
   }
 }
 
-export function wordAt(x: number, y: number): { word: string; rect: DOMRect } | null {
+export function wordAt(x: number, y: number): { word: string; rect: DOMRect; range: Range } | null {
   const doc = document as Document & { caretRangeFromPoint?: (x: number, y: number) => Range | null };
   const r = doc.caretRangeFromPoint?.(x, y);
   if (!r || r.startContainer.nodeType !== Node.TEXT_NODE) return null;
@@ -241,5 +241,5 @@ export function wordAt(x: number, y: number): { word: string; rect: DOMRect } | 
   const range = document.createRange();
   range.setStart(t, a);
   range.setEnd(t, b);
-  return { word, rect: range.getBoundingClientRect() };
+  return { word, rect: range.getBoundingClientRect(), range };
 }

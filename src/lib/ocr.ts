@@ -24,10 +24,20 @@ async function getWorker() {
   return workerP;
 }
 
+export interface OcrWord {
+  t: string;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
 export interface OcrResult {
   text: string;
   html: string;
   confidence: number;
+  words: OcrWord[];
+  w: number;
+  h: number;
 }
 
 /** Recognise one image. Returns plain text and paragraph HTML. */
@@ -36,6 +46,22 @@ export async function recognize(img: Blob | HTMLCanvasElement, onProgress?: (p: 
   const w = await getWorker();
   const { data } = await w.recognize(img as Blob, {}, { text: true, blocks: true });
   progressCb = null;
+  const words: OcrWord[] = [];
+  for (const b of data.blocks ?? [])
+    for (const p of b.paragraphs ?? [])
+      for (const l of p.lines ?? [])
+        for (const wd of l.words ?? []) if (wd.text.trim() && wd.confidence > 25) words.push({ t: wd.text, x0: wd.bbox.x0, y0: wd.bbox.y0, x1: wd.bbox.x1, y1: wd.bbox.y1 });
+  let iw = 0;
+  let ih = 0;
+  if (img instanceof Blob) {
+    const bmp = await createImageBitmap(img);
+    iw = bmp.width;
+    ih = bmp.height;
+    bmp.close();
+  } else {
+    iw = img.width;
+    ih = img.height;
+  }
   const paras: string[] = [];
   for (const b of data.blocks ?? []) for (const p of b.paragraphs ?? []) {
     const t = p.lines
@@ -48,7 +74,7 @@ export async function recognize(img: Blob | HTMLCanvasElement, onProgress?: (p: 
   }
   if (!paras.length && data.text.trim()) paras.push(...data.text.split(/\n\s*\n/).map((t) => t.replace(/\s*\n\s*/g, ' ').trim()).filter(Boolean));
   const html = paras.map((p) => `<p>${escapeHtml(p)}</p>`).join('');
-  return { text: paras.join('\n\n'), html, confidence: data.confidence };
+  return { text: paras.join('\n\n'), html, confidence: data.confidence, words, w: iw, h: ih };
 }
 
 /** Light pre-processing for photos of paper: grayscale + contrast stretch, max 2400px. */
