@@ -17,7 +17,7 @@ interface Props {
   onTap: (e: React.MouseEvent) => void;
 }
 
-const MAX_PIXELS = 5_200_000; // full page canvas budget
+const MAX_PIXELS = 4_200_000; // full page canvas budget
 const devPx = () => Math.min(window.devicePixelRatio || 1, 3.5);
 /** Snap a CSS length to whole device pixels so the canvas maps 1:1 onto the screen (no resampling blur). */
 const snap = (css: number) => Math.round(css * devPx()) / devPx();
@@ -41,7 +41,10 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
   const gesturing = useRef(false); // true while fingers are pinching: no canvas work, so the gesture stays at 60fps
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
-  const pending = useRef<{ real: number; cx: number; cy: number; sl: number; st: number; ex: number; ey: number } | null>(null);
+  const pending = useRef<{ i: number; fx: number; fy: number; ex: number; ey: number } | null>(null); // the page point to keep under the fingers
+  const anchor = useRef<{ i: number; off: number } | null>(null); // which page (and how far into it) is at the top of the view
+  const lastZoom = useRef(zoom);
+  const lastSizes = useRef(sizes);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -180,7 +183,9 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
     canvas.className = 'hi';
     canvas.width = Math.round(rw * k);
     canvas.height = Math.round(rh * k);
-    canvas.style.cssText = `left:${x0}px;top:${y0}px;width:${rw}px;height:${rh}px;inset:auto;right:auto;bottom:auto`;
+    // percentages of the page box, so the tile scales with the page if the size changes before it is replaced
+    const cssH = pageH(i);
+    canvas.style.cssText = `left:${(x0 / cssW) * 100}%;top:${(y0 / cssH) * 100}%;width:${(rw / cssW) * 100}%;height:${(rh / cssH) * 100}%;inset:auto;right:auto;bottom:auto`;
     try {
       await page.render({ canvas, canvasContext: canvas.getContext('2d', { alpha: false })!, viewport }).promise;
     } catch {
@@ -260,7 +265,7 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
     return () => io.disconnect();
   }, [scroller, sizes.length]);
 
-  // zoom / width changed: keep what's on screen, rescale text layers by CSS, then sharpen
+  // zoom / width / page sizes changed: keep what's on screen, rescale text layers by CSS, then sharpen
   useLayoutEffect(() => {
     sizes.forEach((s, i) => {
       const el = pageEls.current[i];
@@ -268,14 +273,32 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
     });
     const wr = wrap.current;
     if (wr) {
+      wr.style.transition = '';
       wr.style.transform = '';
       wr.style.willChange = '';
     }
+    // detail tiles belong to the old size: drop them at once (new ones follow)
+    wr?.querySelectorAll('canvas.hi').forEach((c) => c.remove());
+    hiDone.current.clear();
+    if (scroller) scroller.style.overflowX = zoom > 1.01 ? 'auto' : 'hidden';
+    const zoomChanged = lastZoom.current !== zoom;
+    const sizesChanged = lastSizes.current !== sizes;
+    lastZoom.current = zoom;
+    lastSizes.current = sizes;
     const p = pending.current;
     if (p && scroller) {
+      // the point of the page that was under your fingers stays under them, whatever the gaps and padding do
       pending.current = null;
-      scroller.scrollLeft = (p.sl + p.cx) * p.real - p.ex;
-      scroller.scrollTop = (p.st + p.cy) * p.real - p.ey;
+      const el = pageEls.current[p.i];
+      if (el) {
+        scroller.scrollTop = el.offsetTop + p.fy * pageH(p.i) - p.ey;
+        scroller.scrollLeft = el.offsetLeft + p.fx * pageW(p.i) - p.ex;
+      }
+    } else if (!zoomChanged && sizesChanged && anchor.current && scroller) {
+      // real page sizes arrived after the first layout: stay on the same page, same spot in it
+      const a = anchor.current;
+      const el = pageEls.current[a.i];
+      if (el) scroller.scrollTop = el.offsetTop + a.off * pageH(a.i);
     }
     const t = window.setTimeout(() => {
       visible.current.forEach((i) => {
@@ -284,7 +307,7 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
         hiDone.current.delete(i);
       });
       pumpRef.current();
-    }, 90);
+    }, 60);
     return () => clearTimeout(t);
   }, [zoom, vw, sizes]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -313,6 +336,8 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
           if (el && el.offsetTop <= mid) lo = m;
           else hi = m - 1;
         }
+        const top = pageEls.current[lo];
+        if (top && !gesturing.current) anchor.current = { i: lo, off: (scroller.scrollTop - top.offsetTop) / Math.max(1, top.offsetHeight) };
         const max = scroller.scrollHeight - scroller.clientHeight;
         onProgress(max > 0 ? scroller.scrollTop / max : 0);
         if (lo + 1 !== lastPage) {
@@ -335,26 +360,32 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
   useLayoutEffect(() => {
     if (restored.current || !sizes.length || !scroller) return;
     restored.current = true;
-    if (initialPage > 1) pageEls.current[initialPage - 1]?.scrollIntoView({ block: 'start' });
+    if (initialPage > 1) {
+      pageEls.current[initialPage - 1]?.scrollIntoView({ block: 'start' });
+      anchor.current = { i: initialPage - 1, off: 0 };
+    }
   }, [sizes, scroller, initialPage]);
 
-  // ---- pinch zoom + double tap: the gesture only moves a CSS transform; layout happens once at the end.
-  // The content follows the fingers (scale AND pan), stretches softly past the limits, snaps to "fit width"
-  // when you come back close to it, and no canvas is drawn until the fingers lift.
+  // ---- pinch zoom + double tap
+  // The gesture only moves a CSS transform on the page stack (scale AND pan, so the page follows your fingers);
+  // layout happens once, when the fingers lift. Past the limits it stretches softly and springs back, close to
+  // "fit width" it snaps, and nothing is drawn while fingers are down. Every timer belongs to a gesture number,
+  // so a new touch always cleanly takes over from an unfinished one.
   useEffect(() => {
     const el = scroller;
     const inner = wrap.current;
     if (!el || !inner) return;
     const MIN = 0.6;
     const MAX = 5;
+    let gen = 0;
     let start: { d: number; cx: number; cy: number; sl: number; st: number } | null = null;
     let live = { scale: 1, dx: 0, dy: 0 };
     let raf = 0;
     let lastTap = 0;
     let lastTapAt = { x: 0, y: 0 };
+    let finish: (() => void) | null = null; // completes an animation that is still running
     const dist = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
     const mid = (t: TouchList, r: DOMRect) => ({ x: (t[0].clientX + t[1].clientX) / 2 - r.left, y: (t[0].clientY + t[1].clientY) / 2 - r.top });
-    // total zoom after applying a relative factor, with rubber-band resistance outside [MIN, MAX]
     const soft = (factor: number) => {
       const z = zoomRef.current * factor;
       if (z < MIN) return (MIN * Math.pow(z / MIN, 0.45)) / zoomRef.current;
@@ -366,39 +397,73 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
       if (Math.abs(z - 1) < 0.07) z = 1;
       return z / zoomRef.current;
     };
+    const clearTransform = () => {
+      inner.style.transition = '';
+      inner.style.transform = '';
+      inner.style.willChange = '';
+    };
     const paint = () => {
       raf = 0;
       inner.style.transform = `translate(${live.dx}px, ${live.dy}px) scale(${live.scale})`;
     };
-    const commit = (factor: number, cx: number, cy: number, sl: number, st: number, ex = cx, ey = cy) => {
+    /** Which page, and where in it, sits at content point (x, y) of the unzoomed layout. */
+    const anchorAt = (x: number, y: number) => {
+      const pages = pageEls.current;
+      let i = 0;
+      for (let k = 0; k < pages.length; k++) {
+        const p = pages[k];
+        if (!p) continue;
+        i = k;
+        if (p.offsetTop + p.offsetHeight >= y) break;
+      }
+      const p = pages[i];
+      if (!p) return null;
+      return { i, fx: (x - p.offsetLeft) / Math.max(1, p.offsetWidth), fy: Math.max(0, Math.min(1, (y - p.offsetTop) / Math.max(1, p.offsetHeight))) };
+    };
+    /** Apply the new size for real: one React render, and the page point under the fingers stays there. */
+    const commit = (factor: number, fcx: number, fcy: number, ex: number, ey: number) => {
       const real = clampTotal(factor);
       gesturing.current = false;
       if (Math.abs(real - 1) < 0.01) {
-        inner.style.transition = '';
-        inner.style.transform = '';
-        inner.style.willChange = '';
-        el.scrollLeft = sl + cx - ex;
-        el.scrollTop = st + cy - ey;
+        const sl = el.scrollLeft;
+        const st = el.scrollTop;
+        clearTransform();
+        el.scrollLeft = sl + (fcx - el.scrollLeft) - ex;
+        el.scrollTop = st + (fcy - el.scrollTop) - ey;
         pumpRef.current();
         return;
       }
-      // (ex, ey) is where the fingers ended up: the point that was under them stays under them
-      pending.current = { real, cx, cy, sl, st, ex, ey };
+      const a = anchorAt(fcx, fcy);
+      if (!a) return clearTransform();
+      pending.current = { ...a, ex, ey };
       setZoom(Math.round(zoomRef.current * real * 1000) / 1000);
     };
-    const settle = (factor: number, s: NonNullable<typeof start>, ex: number, ey: number) => {
-      const real = clampTotal(factor);
-      if (Math.abs(real - factor) < 0.015) return commit(factor, s.cx, s.cy, s.sl, s.st, ex, ey);
-      // spring back from the rubber band, then commit
+    const abandon = () => {
+      // a new touch arrived while something was animating: finish it instantly, then carry on
+      const f = finish;
+      finish = null;
+      gen++;
+      f?.();
+    };
+    const settle = (s: NonNullable<typeof start>, ex: number, ey: number) => {
+      const my = ++gen;
+      const real = clampTotal(live.scale);
+      const fcx = s.sl + s.cx;
+      const fcy = s.st + s.cy;
+      const go = () => {
+        finish = null;
+        commit(real, fcx, fcy, ex, ey);
+      };
+      if (Math.abs(real - live.scale) < 0.015) return go();
+      // spring back from the rubber band
       inner.style.transition = 'transform 0.16s cubic-bezier(0.2, 0.8, 0.2, 1)';
       inner.style.transform = `translate(${ex - s.cx}px, ${ey - s.cy}px) scale(${real})`;
-      window.setTimeout(() => {
-        inner.style.transition = '';
-        commit(real, s.cx, s.cy, s.sl, s.st, ex, ey);
-      }, 170);
+      finish = go;
+      window.setTimeout(() => my === gen && go(), 170);
     };
     const ts = (e: TouchEvent) => {
-      if (e.touches.length === 2) {
+      if (e.touches.length >= 2) {
+        abandon();
         const r = el.getBoundingClientRect();
         const m = mid(e.touches, r);
         start = { d: dist(e.touches), cx: m.x, cy: m.y, sl: el.scrollLeft, st: el.scrollTop };
@@ -407,11 +472,13 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
         inner.style.transition = '';
         inner.style.transformOrigin = `${start.cx + start.sl}px ${start.cy + start.st}px`;
         inner.style.willChange = 'transform';
+        lastTap = 0;
       } else if (e.touches.length === 1) {
         const now = Date.now();
         const x = e.touches[0].clientX;
         const y = e.touches[0].clientY;
-        if (now - lastTap < 300 && Math.hypot(x - lastTapAt.x, y - lastTapAt.y) < 40) {
+        if (now - lastTap < 300 && Math.hypot(x - lastTapAt.x, y - lastTapAt.y) < 40 && !start) {
+          abandon();
           const r = el.getBoundingClientRect();
           const cx = x - r.left;
           const cy = y - r.top;
@@ -419,16 +486,19 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
           const st = el.scrollTop;
           const want = zoomRef.current > 1.05 ? 1 / zoomRef.current : 2.2 / zoomRef.current;
           const real = clampTotal(want);
+          const my = ++gen;
           gesturing.current = true;
-          // glide to the new size, then re-lay-out once
+          // glide to the new size, then lay out once
           inner.style.transformOrigin = `${cx + sl}px ${cy + st}px`;
           inner.style.willChange = 'transform';
           inner.style.transition = 'transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1)';
           inner.style.transform = `scale(${real})`;
-          window.setTimeout(() => {
-            inner.style.transition = '';
-            commit(real, cx, cy, sl, st);
-          }, 270);
+          const go = () => {
+            finish = null;
+            commit(real, sl + cx, st + cy, cx, cy);
+          };
+          finish = go;
+          window.setTimeout(() => my === gen && go(), 270);
           lastTap = 0;
         } else {
           lastTap = now;
@@ -437,34 +507,27 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
       }
     };
     const tm = (e: TouchEvent) => {
-      if (!start || e.touches.length !== 2) return;
-      e.preventDefault();
+      if (!start || e.touches.length < 2) return;
+      if (e.cancelable) e.preventDefault();
       const r = el.getBoundingClientRect();
       const m = mid(e.touches, r);
       live = { scale: soft(dist(e.touches) / start.d), dx: m.x - start.cx, dy: m.y - start.cy };
       if (!raf) raf = requestAnimationFrame(paint);
     };
-    const te = (e: TouchEvent) => {
+    const te = () => {
       if (!start) return;
-      // lifting one finger of two ends the pinch; the other finger must not start a drag from a stale baseline
       const s = start;
       start = null;
       cancelAnimationFrame(raf);
       raf = 0;
-      const r = el.getBoundingClientRect();
       const ex = s.cx + live.dx;
       const ey = s.cy + live.dy;
-      void r;
-      void e;
-      if (Math.abs(live.scale - 1) > 0.015 || Math.abs(live.dx) + Math.abs(live.dy) > 4) settle(live.scale, s, ex, ey);
+      if (Math.abs(live.scale - 1) > 0.015 || Math.abs(live.dx) + Math.abs(live.dy) > 4) settle(s, ex, ey);
       else {
         gesturing.current = false;
-        inner.style.transition = '';
-        inner.style.transform = '';
-        inner.style.willChange = '';
+        clearTransform();
         pumpRef.current();
       }
-      live = { scale: 1, dx: 0, dy: 0 };
     };
     el.addEventListener('touchstart', ts, { passive: true });
     el.addEventListener('touchmove', tm, { passive: false });
@@ -474,22 +537,22 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
       if (!e.ctrlKey) return;
       e.preventDefault();
       const r = el.getBoundingClientRect();
-      commit(e.deltaY < 0 ? 1.1 : 0.9, e.clientX - r.left, e.clientY - r.top, el.scrollLeft, el.scrollTop);
+      const cx = e.clientX - r.left;
+      const cy = e.clientY - r.top;
+      commit(e.deltaY < 0 ? 1.1 : 0.9, el.scrollLeft + cx, el.scrollTop + cy, cx, cy);
     };
     el.addEventListener('wheel', wheel, { passive: false });
     return () => {
+      gen++;
       el.removeEventListener('touchstart', ts);
       el.removeEventListener('touchmove', tm);
       el.removeEventListener('touchend', te);
       el.removeEventListener('touchcancel', te);
       el.removeEventListener('wheel', wheel);
       cancelAnimationFrame(raf);
+      gesturing.current = false;
     };
   }, [scroller]);
-
-  useEffect(() => {
-    if (scroller) scroller.style.overflowX = zoom > 1.01 ? 'auto' : 'hidden';
-  }, [zoom, scroller]);
 
   useImperativeHandle(ref, () => ({
     goTo: (p, smooth) => pageEls.current[p - 1]?.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'auto' }),

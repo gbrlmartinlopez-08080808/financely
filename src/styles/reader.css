@@ -773,3 +773,7 @@
   white-space: nowrap;
   animation: fade 0.3s;
 }
+
+.reader-scroll {
+  touch-action: pan-x pan-y; /* two-finger zoom is handled by the app, never by the browser */
+}
