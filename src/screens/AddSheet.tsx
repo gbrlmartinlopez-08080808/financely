@@ -11,6 +11,7 @@ export function AddSheet({
   onFiles,
   onFolder,
   onScan,
+  onDiscover,
   onLink,
   onPaste,
   busy,
@@ -21,6 +22,7 @@ export function AddSheet({
   onFiles: () => void;
   onFolder?: () => void;
   onScan: () => void;
+  onDiscover: () => void;
   onLink: (url: string) => void;
   onPaste: (text: string, title: string) => void;
   busy: string | null;
@@ -67,6 +69,13 @@ export function AddSheet({
                 <span className="r">stays up to date</span>
               </button>
             )}
+            <button className="action" onClick={() => (onClose(), onDiscover())}>
+              <span className="ic">
+                <Pixel name="book" size={16} />
+              </span>
+              Find free books
+              <span className="r">classics · papers · pdfs</span>
+            </button>
             <button className="action" onClick={() => setMode('link')}>
               <span className="ic">
                 <Icon name="globe" size={20} />

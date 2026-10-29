@@ -401,7 +401,7 @@ textarea {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--safe-b) + 96px);
+  bottom: max(var(--toast-bottom, 96px), calc(var(--safe-b) + 24px));
   transform: translateX(-50%);
   z-index: 90;
   background: var(--pill);

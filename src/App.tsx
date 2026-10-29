@@ -9,6 +9,7 @@ import { Library } from './screens/Library';
 import { Reader } from './reader/Reader';
 import { StatsBubble } from './screens/Stats';
 import { AddSheet } from './screens/AddSheet';
+import { Discover } from './screens/Discover';
 import { importUrl, looksLikeUrl } from './lib/links';
 import { Settings } from './screens/Settings';
 import { Onboarding, type Finish } from './screens/Onboarding';
@@ -29,6 +30,7 @@ export default function App() {
   const [scanFiles, setScanFiles] = useState<File[] | null>(null);
   const [importing, setImporting] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [discover, setDiscover] = useState(false);
   const [linkBusy, setLinkBusy] = useState<string | null>(null);
   const [linkErr, setLinkErr] = useState<string | null>(null);
   const fileIn = useRef<HTMLInputElement>(null);
@@ -214,6 +216,7 @@ export default function App() {
         onStats={() => setStats(true)}
         onSettings={() => setSettings(true)}
         onConvert={(doc) => setConvert({ doc })}
+        onDiscover={() => setDiscover(true)}
         onSample={() => importFile(new Blob([welcome], { type: 'text/markdown' }), 'Welcome to Quire.md', { title: 'Welcome to Quire' }).then((m) => setOpenId(m.id))}
       />
       <StatsBubble open={stats} onClose={() => setStats(false)} />
@@ -239,6 +242,7 @@ export default function App() {
         onFiles={pickFiles}
         onFolder={isNative ? pickFolder : undefined}
         onScan={() => camIn.current?.click()}
+        onDiscover={() => setDiscover(true)}
         onLink={saveLink}
         onPaste={async (text, title) => {
           const m = await importText(text, title);
@@ -249,6 +253,7 @@ export default function App() {
         busy={linkBusy}
         error={linkErr}
       />
+      {discover && <Discover onClose={() => setDiscover(false)} onOpen={setOpenId} />}
       <Toasts />
       <input
         ref={fileIn}

@@ -13,6 +13,8 @@ Your documents' copies, covers, reading position, bookmarks, highlights, notes, 
 | Look up a word | The selected word or phrase, your IP address | Wikipedia / Wiktionary (Wikimedia Foundation), dictionaryapi.dev |
 | Save a web link | The address you typed or shared; your IP address; requests for the page's images | The website you named |
 | Ask this document (optional, off by default) | Your question and a few short excerpts of the open document | Pollinations (open AI service) |
+| Find free books (only when you open it) | Your search words; the file you pick is downloaded | Project Gutenberg (gutendex.com), Internet Archive, arXiv, Google Books, Open Library |
+| Studio voice (only when you download one) | Nothing about you; the voice file and speech engine are downloaded once | Hugging Face, jsDelivr / cdnjs (CDNs) |
 | Report an AI answer | The question and answer text you choose to email | Our support mailbox, via your email app |
 
 These services have their own privacy policies and may log requests (for example IP addresses). We do not control that. Do not use *Ask* with documents containing confidential or personal information.

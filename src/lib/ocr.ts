@@ -40,6 +40,17 @@ export interface OcrResult {
   h: number;
 }
 
+/** Tesseract sometimes calls every line a paragraph: glue lines back together when a sentence plainly continues. */
+export function mergeParas(paras: string[]): string[] {
+  const out: string[] = [];
+  for (const p of paras) {
+    const prev = out[out.length - 1];
+    if (prev && !/[.!?:;"”’)\]]$/.test(prev) && /^[\p{Ll}\d(“"‘']/u.test(p)) out[out.length - 1] = `${prev} ${p}`;
+    else out.push(p);
+  }
+  return out;
+}
+
 /** Recognise one image. Returns plain text and paragraph HTML. */
 export async function recognize(img: Blob | HTMLCanvasElement, onProgress?: (p: number, status: string) => void): Promise<OcrResult> {
   progressCb = onProgress ?? null;
@@ -73,6 +84,7 @@ export async function recognize(img: Blob | HTMLCanvasElement, onProgress?: (p: 
     if (t) paras.push(t);
   }
   if (!paras.length && data.text.trim()) paras.push(...data.text.split(/\n\s*\n/).map((t) => t.replace(/\s*\n\s*/g, ' ').trim()).filter(Boolean));
+  paras.splice(0, paras.length, ...mergeParas(paras));
   const html = paras.map((p) => `<p>${escapeHtml(p)}</p>`).join('');
   return { text: paras.join('\n\n'), html, confidence: data.confidence, words, w: iw, h: ih };
 }

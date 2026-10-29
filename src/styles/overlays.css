@@ -1447,3 +1447,14 @@
   width: 48px;
   height: 48px;
 }
+
+.ask-quota {
+  margin: 0;
+  padding: 0 18px calc(10px + var(--safe-b));
+  font-size: 10.5px;
+  text-align: center;
+  color: var(--muted);
+}
+.ask-quota.low {
+  color: #c4351f;
+}

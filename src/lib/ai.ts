@@ -1,6 +1,24 @@
 // "Ask this document": free, no account. Only the question and a few relevant excerpts are sent
 // (never the whole file) to Pollinations' open text API, and only after the user opts in.
+import * as db from './db';
+import { dayKey } from './store';
+
 const ENDPOINT = 'https://text.pollinations.ai/openai';
+
+/**
+ * The free service is shared by everyone, so it rate-limits. To stay inside it (and keep Ask free for
+ * you) Quire allows this many questions a day on this phone; the counter resets at midnight.
+ */
+export const DAILY_ASK_CAP = 30;
+export async function askQuota(): Promise<{ used: number; left: number; cap: number }> {
+  const u = await db.get<{ day: string; n: number }>('kv', 'ask-usage');
+  const used = u && u.day === dayKey() ? u.n : 0;
+  return { used, left: Math.max(0, DAILY_ASK_CAP - used), cap: DAILY_ASK_CAP };
+}
+async function countAsk() {
+  const q = await askQuota();
+  await db.put('kv', 'ask-usage', { day: dayKey(), n: q.used + 1 });
+}
 
 export interface Msg {
   role: 'user' | 'assistant';
@@ -63,6 +81,7 @@ const SUMMARY = /\b(summar|overview|tl;?dr|main (idea|point)|key (idea|point|tak
 
 export async function ask(opts: { title: string; passages: string[]; question: string; history: Msg[]; selection?: string; signal?: AbortSignal }): Promise<string> {
   const { title, passages, question, history, selection, signal } = opts;
+  if ((await askQuota()).left <= 0) throw new Error(`That’s today’s ${DAILY_ASK_CAP} free questions. Ask resets at midnight — everything else in Quire stays free and unlimited.`);
   const excerpts = selection ? [selection] : SUMMARY.test(question) ? sample(passages) : retrieve(passages, question + ' ' + history.slice(-2).map((m) => m.content).join(' '));
   const context = excerpts.join('\n---\n').slice(0, 6500);
   const system =
@@ -81,5 +100,6 @@ export async function ask(opts: { title: string; passages: string[]; question: s
   const j = (await r.json()) as { choices?: { message?: { content?: string } }[] };
   const text = j.choices?.[0]?.message?.content?.trim();
   if (!text) throw new Error('The AI service sent an empty answer.');
+  await countAsk();
   return text;
 }

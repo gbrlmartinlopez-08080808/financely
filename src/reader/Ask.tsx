@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ask, chunk, type Msg } from '../lib/ai';
+import { ask, askQuota, chunk, type Msg } from '../lib/ai';
 import { Icon } from '../ui/Icon';
 import { PixelLoader, Sheet } from '../ui/kit';
 import { SUPPORT_EMAIL } from '../lib/config';
@@ -33,9 +33,11 @@ export function AskSheet({
   const abort = useRef<AbortController | null>(null);
   const end = useRef<HTMLDivElement>(null);
   const sel = useRef<string | undefined>(undefined);
+  const [left, setLeft] = useState<{ left: number; cap: number } | null>(null);
 
   useEffect(() => {
     if (open) sel.current = selection;
+    if (open) askQuota().then(setLeft);
   }, [open, selection]);
   useEffect(() => {
     end.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -55,6 +57,7 @@ export function AskSheet({
       if (!passages.current) passages.current = chunk(await getText());
       const answer = await ask({ title, passages: passages.current, question, history, selection: sel.current, signal: abort.current.signal });
       setMsgs((m) => [...m, { role: 'assistant', content: answer }]);
+      askQuota().then(setLeft);
     } catch (e) {
       if ((e as Error).name !== 'AbortError') setErr((e as Error).message || 'Something went wrong.');
     } finally {
@@ -143,6 +146,11 @@ export function AskSheet({
                 <Icon name="up" size={18} stroke={2.4} />
               </button>
             </form>
+            {left && (
+              <p className={`ask-quota mono${left.left <= 5 ? ' low' : ''}`}>
+                {left.left} of {left.cap} free questions left today
+              </p>
+            )}
           </>
         )}
       </div>

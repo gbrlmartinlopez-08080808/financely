@@ -17,7 +17,10 @@ interface Props {
   onTap: (e: React.MouseEvent) => void;
 }
 
-const MAX_PIXELS = 4_200_000; // full page canvas budget
+const MAX_PIXELS = 5_200_000; // full page canvas budget
+const devPx = () => Math.min(window.devicePixelRatio || 1, 3.5);
+/** Snap a CSS length to whole device pixels so the canvas maps 1:1 onto the screen (no resampling blur). */
+const snap = (css: number) => Math.round(css * devPx()) / devPx();
 const MAX_HI_PIXELS = 3_600_000; // zoomed-in detail tile budget
 
 export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, scroller, initialPage = 1, thumbs, onPage, onProgress, onTap }, ref) {
@@ -77,14 +80,13 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
   }, []);
 
   const baseW = Math.min(vw - 16, 920);
-  const pageW = (i: number) => (sizes[i] ? baseW * zoom * Math.min(1.4, sizes[i].w / (sizes[0]?.w || sizes[i].w)) : baseW * zoom);
-  const pageH = (i: number) => (sizes[i] ? (pageW(i) * sizes[i].h) / sizes[i].w : pageW(i) * 1.3);
+  const pageW = (i: number) => snap(sizes[i] ? baseW * zoom * Math.min(1.4, sizes[i].w / (sizes[0]?.w || sizes[i].w)) : baseW * zoom);
+  const pageH = (i: number) => snap(sizes[i] ? (pageW(i) * sizes[i].h) / sizes[i].w : pageW(i) * 1.3);
 
   // ---- render queue -----------------------------------------------------------------------------
   const targetScale = (i: number) => {
-    const dpr = Math.min(window.devicePixelRatio || 1, 3);
-    const cssW = pageW(i);
-    return Math.min((cssW * dpr) / sizes[i].w, Math.sqrt(MAX_PIXELS / (sizes[i].w * sizes[i].h)));
+    const wPx = Math.round(pageW(i) * devPx());
+    return Math.min(wPx / sizes[i].w, Math.sqrt(MAX_PIXELS / (sizes[i].w * sizes[i].h)));
   };
 
   const ensureText = async (i: number) => {
@@ -119,8 +121,10 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
     const canvas = document.createElement('canvas');
     try {
       const viewport = page.getViewport({ scale });
-      canvas.width = Math.ceil(viewport.width);
-      canvas.height = Math.ceil(viewport.height);
+      // exact device-pixel size of the page box: one canvas pixel per screen pixel
+      const exact = Math.abs(viewport.width - pageW(i) * devPx()) < 1.5;
+      canvas.width = exact ? Math.round(pageW(i) * devPx()) : Math.round(viewport.width);
+      canvas.height = exact ? Math.round(pageH(i) * devPx()) : Math.round(viewport.height);
       const ctx = canvas.getContext('2d', { alpha: false })!;
       await page.render({ canvas, canvasContext: ctx, viewport }).promise;
       if (!alive.current || !pageEls.current[i] || !visible.current.has(i)) return;
@@ -142,7 +146,7 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
     const sc = scroller;
     const base = done.current.get(i);
     if (!el || !sc || !sizes[i] || base === undefined || !visible.current.has(i)) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const dpr = devPx();
     const cssW = pageW(i);
     const cssPerPdf = cssW / sizes[i].w;
     const wanted = dpr * cssPerPdf;
@@ -156,10 +160,11 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
     const zoomed = pr.width / el.offsetWidth || 1; // 1 unless a pinch transform is mid-flight
     const mx = vr.width * 0.3;
     const my = vr.height * 0.3;
-    const x0 = Math.max(0, (vr.left - mx - pr.left) / zoomed);
-    const y0 = Math.max(0, (vr.top - my - pr.top) / zoomed);
-    const x1 = Math.min(el.offsetWidth, (vr.right + mx - pr.left) / zoomed);
-    const y1 = Math.min(el.offsetHeight, (vr.bottom + my - pr.top) / zoomed);
+    // tile edges sit on whole device pixels, like the page itself
+    const x0 = Math.floor(Math.max(0, (vr.left - mx - pr.left) / zoomed) * dpr) / dpr;
+    const y0 = Math.floor(Math.max(0, (vr.top - my - pr.top) / zoomed) * dpr) / dpr;
+    const x1 = Math.ceil(Math.min(el.offsetWidth, (vr.right + mx - pr.left) / zoomed) * dpr) / dpr;
+    const y1 = Math.ceil(Math.min(el.offsetHeight, (vr.bottom + my - pr.top) / zoomed) * dpr) / dpr;
     if (x1 - x0 < 20 || y1 - y0 < 20) return clear();
     const rw = x1 - x0;
     const rh = y1 - y0;
@@ -173,8 +178,8 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
     const viewport = page.getViewport({ scale: s, offsetX: -x0 * k, offsetY: -y0 * k });
     const canvas = document.createElement('canvas');
     canvas.className = 'hi';
-    canvas.width = Math.ceil(rw * k);
-    canvas.height = Math.ceil(rh * k);
+    canvas.width = Math.round(rw * k);
+    canvas.height = Math.round(rh * k);
     canvas.style.cssText = `left:${x0}px;top:${y0}px;width:${rw}px;height:${rh}px;inset:auto;right:auto;bottom:auto`;
     try {
       await page.render({ canvas, canvasContext: canvas.getContext('2d', { alpha: false })!, viewport }).promise;
@@ -279,7 +284,7 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
         hiDone.current.delete(i);
       });
       pumpRef.current();
-    }, 200);
+    }, 90);
     return () => clearTimeout(t);
   }, [zoom, vw, sizes]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -295,7 +300,7 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
         if (zoomRef.current <= 1.01 && !hiDone.current.size) return;
         visible.current.forEach((i) => hiQueue.current.add(i));
         pumpRef.current();
-      }, 180);
+      }, 110);
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;

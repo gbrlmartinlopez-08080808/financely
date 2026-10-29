@@ -22,6 +22,7 @@
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/share": "^8.0.3",
     "@capacitor/status-bar": "^8.0.4",
+    "@diffusionstudio/vits-web": "^1.0.3",
     "@fontsource/atkinson-hyperlegible": "^5.3.0",
     "@fontsource/crimson-pro": "^5.3.0",
     "@fontsource/eb-garamond": "^5.3.0",

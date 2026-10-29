@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { listVoices, speak, stopSpeaking, ttsAvailable, guessLang, type Voice } from '../lib/tts';
+import { bestVoice, listVoices, openVoiceInstall, speak, speechText, stopSpeaking, ttsAvailable, guessLang, type Voice } from '../lib/tts';
+import { NEURAL_PREFIX, NEURAL_VOICES, Player, isNeural, neuralDownload, neuralId, neuralRemove, neuralStored, neuralSupported, neuralSynth } from '../lib/neural';
 import { firstVisibleSentence, markSaying, sentenceText, wrapSentences } from './dom';
 import { updateSettings, useStore } from '../lib/store';
-import { tap } from '../lib/native';
+import { isNative, tap } from '../lib/native';
 import { Icon } from '../ui/Icon';
 import { Ruler, Sheet, toast } from '../ui/kit';
 
@@ -25,6 +26,12 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId }: Props) 
   const [voiceSheet, setVoiceSheet] = useState(false);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [sleep, setSleep] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [stored, setStored] = useState<string[]>([]);
+  const [dl, setDl] = useState<{ id: string; p: number } | null>(null);
+  const player = useRef<Player | null>(null);
+  const neuralBroken = useRef(false);
+  const bestRef = useRef<string | undefined>(undefined);
   const sleepAt = useRef(0);
   const rateT = useRef(0);
   const token = useRef(0);
@@ -56,7 +63,11 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId }: Props) 
 
   useEffect(() => {
     listVoices().then(setVoices);
+    neuralStored().then(setStored);
   }, []);
+  useEffect(() => {
+    bestRef.current = bestVoice(voices, lang.current)?.id;
+  }, [voices, total]);
 
   const follow = (el: HTMLElement | null) => {
     if (!el || !scroller) return;
@@ -67,6 +78,86 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId }: Props) 
     }
   };
 
+  /** Natural (on-device neural) voice: sentences are voiced a few at a time while the next group is prepared. */
+  const runNeural = async (from: number, my: number, sel: string, n: number) => {
+    if (!root) return;
+    const vid = neuralId(sel);
+    const pl = (player.current ??= new Player());
+    type Part = { i: number; w: number };
+    const chunks: { text: string; parts: Part[] }[] = [];
+    let cur: { text: string; parts: Part[] } = { text: '', parts: [] };
+    for (let i = from; i < n; i++) {
+      const t = speechText(sentenceText(root, i));
+      if (!t || !/[\p{L}\p{N}]/u.test(t)) continue;
+      const limit = chunks.length === 0 ? 150 : 420; // a short first chunk so playback starts quickly
+      if (cur.text && (cur.text.length + t.length > limit || cur.parts.length >= 4)) {
+        chunks.push(cur);
+        cur = { text: '', parts: [] };
+      }
+      cur.text += (cur.text ? ' ' : '') + t;
+      cur.parts.push({ i, w: t.length + 14 });
+    }
+    if (cur.text) chunks.push(cur);
+    const jobs = new Map<number, Promise<Blob>>();
+    const synth = (k: number) => {
+      if (k >= chunks.length) return undefined;
+      if (!jobs.has(k)) jobs.set(k, neuralSynth(chunks[k].text, vid));
+      return jobs.get(k)!;
+    };
+    for (let k = 0; k < chunks.length; k++) {
+      if (my !== token.current) return;
+      let blob: Blob;
+      setBusy(true);
+      try {
+        blob = await synth(k)!;
+      } catch (e) {
+        console.warn('neural voice failed', e);
+        setBusy(false);
+        neuralBroken.current = true;
+        toast('The natural voice couldn’t start — using the phone’s voice');
+        if (my === token.current) run(chunks[k].parts[0]?.i ?? from);
+        return;
+      }
+      setBusy(false);
+      if (my !== token.current) return;
+      synth(k + 1);
+      const { parts } = chunks[k];
+      const W = parts.reduce((a, b) => a + b.w, 0);
+      let shown = -1;
+      const r = await pl.play(blob, opts.current.ttsRate, (t, d) => {
+        if (!d || my !== token.current) return;
+        let acc = 0;
+        const at = (t / d) * W;
+        let part = parts[parts.length - 1];
+        for (const p of parts) {
+          acc += p.w;
+          if (at < acc) {
+            part = p;
+            break;
+          }
+        }
+        if (part.i !== shown) {
+          shown = part.i;
+          setIdx(part.i);
+          localStorage.setItem('listen:' + docId, String(part.i));
+          follow(markSaying(root, part.i));
+        }
+      });
+      jobs.delete(k);
+      if (my !== token.current || r === 'stopped') return;
+      if (sleepAt.current && Date.now() > sleepAt.current) {
+        sleepAt.current = 0;
+        setSleep(0);
+        toast('Sleep timer — paused. Sweet dreams.');
+        break;
+      }
+    }
+    if (my === token.current) {
+      setPlaying(false);
+      onPlaying(false);
+    }
+  };
+
   const run = useCallback(
     async (from: number) => {
       if (!root) return;
@@ -74,16 +165,18 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId }: Props) 
       setPlaying(true);
       onPlaying(true);
       const n = Number(root.dataset.wrapped ?? 0);
+      const chosen = opts.current.ttsVoice;
+      if (isNeural(chosen) && !neuralBroken.current) return runNeural(from, my, chosen, n);
       for (let i = from; i < n; i++) {
         if (my !== token.current) return;
         setIdx(i);
         localStorage.setItem('listen:' + docId, String(i));
         const el = markSaying(root, i);
         follow(el);
-        const text = sentenceText(root, i);
+        const text = speechText(sentenceText(root, i));
         if (!text || !/[\p{L}\p{N}]/u.test(text)) continue;
         const s = opts.current;
-        const r = await speak(text, { rate: s.ttsRate, pitch: s.ttsPitch, voice: s.ttsVoice, lang: lang.current });
+        const r = await speak(text, { rate: s.ttsRate, pitch: s.ttsPitch, voice: chosen ?? bestRef.current, lang: lang.current });
         if (my !== token.current || r === 'stopped') return;
         if (sleepAt.current && Date.now() > sleepAt.current) {
           sleepAt.current = 0;
@@ -103,6 +196,8 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId }: Props) 
   const pause = useCallback(() => {
     token.current++;
     stopSpeaking();
+    player.current?.stop();
+    setBusy(false);
     setPlaying(false);
     onPlaying(false);
   }, [onPlaying]);
@@ -159,9 +254,11 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId }: Props) 
   const wpm = 165 * settings.ttsRate;
   const leftWords = root ? Math.round(((total - idx) / Math.max(1, total)) * ((root.textContent ?? '').split(/\s+/).length || 0)) : 0;
   const leftMin = Math.max(1, Math.round(leftWords / wpm));
-  const voice = voices.find((v) => v.id === settings.ttsVoice);
+  const nv = isNeural(settings.ttsVoice) ? NEURAL_VOICES.find((v) => NEURAL_PREFIX + v.id === settings.ttsVoice) : undefined;
+  const voice = voices.find((v) => v.id === settings.ttsVoice) ?? (nv ? undefined : voices.find((v) => v.id === bestRef.current));
   const docLang = lang.current.slice(0, 2);
-  const sortedVoices = [...voices].sort((a, b) => Number(b.lang.startsWith(docLang)) - Number(a.lang.startsWith(docLang)) || a.lang.localeCompare(b.lang));
+  const sortedVoices = [...voices].sort((a, b) => Number(b.lang.startsWith(docLang)) - Number(a.lang.startsWith(docLang)) || b.score - a.score || a.lang.localeCompare(b.lang));
+  const studio = [...NEURAL_VOICES].sort((a, b) => Number(b.lang.startsWith(docLang)) - Number(a.lang.startsWith(docLang)));
 
   return (
     <div className="listen" style={{ position: 'relative' }}>
@@ -176,6 +273,7 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId }: Props) 
             onChange={(v) => {
               updateSettings({ ttsRate: v });
               opts.current = { ...opts.current, ttsRate: v };
+              if (isNeural(opts.current.ttsVoice) && !neuralBroken.current) return player.current?.setRate(v);
               clearTimeout(rateT.current);
               rateT.current = window.setTimeout(restartAtCurrent, 450);
             }}
@@ -190,7 +288,7 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId }: Props) 
           <i />
           <i />
         </span>
-        <span className="grow">{playing ? 'reading aloud' : 'paused'} · {idx + 1}/{total || '–'}</span>
+        <span className="grow">{busy ? 'preparing the voice…' : playing ? 'reading aloud' : 'paused'} · {idx + 1}/{total || '–'}</span>
         <span>{leftMin} min left</span>
       </div>
       <div className="listen-scrub" aria-hidden>
@@ -226,7 +324,7 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId }: Props) 
           <Icon name="speed" size={15} /> {settings.ttsRate.toFixed(1)}×
         </button>
         <button onClick={() => setVoiceSheet(true)}>
-          <Icon name="voice" size={15} /> {voice ? voice.name.replace(/^(Google|Microsoft)\s*/, '').slice(0, 14) : 'Voice'}
+          <Icon name="voice" size={15} /> {nv ? nv.label : voice ? voice.name.replace(/^(Google|Microsoft)\s*/, '').slice(0, 14) : 'Voice'}
         </button>
         <button
           className={sleep ? 'on' : ''}
@@ -245,6 +343,85 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId }: Props) 
       </div>
       <Sheet open={voiceSheet} onClose={() => setVoiceSheet(false)} title="Voice">
         <div className="sheet-body">
+          {neuralSupported() && (
+            <>
+              <div className="voice-h">
+                <b>Studio voices</b>
+                <span>the most natural · free · on this phone</span>
+              </div>
+              <div className="actions">
+                {studio.map((v) => {
+                  const have = stored.includes(v.id);
+                  const on = settings.ttsVoice === NEURAL_PREFIX + v.id;
+                  const busyDl = dl?.id === v.id;
+                  return (
+                    <div key={v.id} className="voice-row">
+                      <button
+                        className="action"
+                        disabled={busyDl}
+                        onClick={async () => {
+                          if (have) {
+                            neuralBroken.current = false;
+                            await updateSettings({ ttsVoice: NEURAL_PREFIX + v.id });
+                            setVoiceSheet(false);
+                            restartAtCurrent();
+                            return;
+                          }
+                          setDl({ id: v.id, p: 0 });
+                          try {
+                            await neuralDownload(v.id, (p) => setDl({ id: v.id, p }));
+                            setStored(await neuralStored());
+                            neuralBroken.current = false;
+                            await updateSettings({ ttsVoice: NEURAL_PREFIX + v.id });
+                            toast(`${v.label} is ready`);
+                            setVoiceSheet(false);
+                            restartAtCurrent();
+                          } catch {
+                            toast('Download failed — check your connection');
+                          } finally {
+                            setDl(null);
+                          }
+                        }}
+                      >
+                        <span className="ic mono" style={{ fontSize: 11 }}>
+                          {v.lang.slice(0, 2)}
+                        </span>
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ display: 'block' }}>{v.label}</span>
+                          <small className="muted mono" style={{ fontSize: 10.5 }}>
+                            {busyDl ? `downloading ${Math.round((dl?.p ?? 0) * 100)}%` : `${v.note}${have ? '' : ` · ${v.mb} MB`}`}
+                          </small>
+                        </span>
+                        {on ? <Icon name="check" /> : !have && !busyDl ? <span className="mono" style={{ fontSize: 11 }}>get</span> : null}
+                      </button>
+                      {have && (
+                        <button
+                          className="chip"
+                          aria-label={`Remove ${v.label}`}
+                          onClick={async () => {
+                            await neuralRemove(v.id).catch(() => {});
+                            setStored(await neuralStored());
+                            if (on) updateSettings({ ttsVoice: undefined });
+                          }}
+                        >
+                          <Icon name="trash" size={16} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+          <div className="voice-h" style={{ marginTop: 18 }}>
+            <b>This phone’s voices</b>
+            <span>{sortedVoices.some((v) => v.natural) ? 'natural ones first' : 'tip: install a high-quality voice for a more natural sound'}</span>
+          </div>
+          {isNative && (
+            <button className="pill ghost sm" style={{ margin: '0 0 10px' }} onClick={() => openVoiceInstall()}>
+              Get more natural voices
+            </button>
+          )}
           {!voices.length && <p className="muted mono" style={{ fontSize: 12 }}>No voices reported by the system. Install voices in Android Settings → Text-to-speech.</p>}
           <div className="actions">
             {sortedVoices.slice(0, 80).map((v) => (
@@ -261,7 +438,8 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId }: Props) 
                   {v.lang.slice(0, 2)}
                 </span>
                 <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.name}</span>
-                {settings.ttsVoice === v.id && <Icon name="check" />}
+                {v.natural && <span className="mono" style={{ fontSize: 10, opacity: 0.6 }}>natural</span>}
+                {(settings.ttsVoice === v.id || (!settings.ttsVoice && bestRef.current === v.id)) && <Icon name="check" />}
               </button>
             ))}
           </div>

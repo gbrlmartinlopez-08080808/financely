@@ -8,6 +8,58 @@ export interface Voice {
   name: string;
   lang: string;
   index?: number; // native voice index
+  score: number; // how natural it is likely to sound (higher is better)
+  natural: boolean;
+}
+
+/** Android and browsers don't say which voices are the good (neural) ones, so read the clues in their names. */
+export function scoreVoice(name: string, id: string, local?: boolean): number {
+  const s = `${name} ${id}`.toLowerCase();
+  let sc = 0;
+  if (/neural|natural|premium|enhanced|studio|wavenet|journey|polyglot|siri|high.?quality|\bhq\b/.test(s)) sc += 60;
+  if (/network|online/.test(s)) sc += 50; // Google's network voices are neural
+  if (/-x-[a-z]{3}-local/.test(s)) sc += 20; // Google's downloadable high-quality offline voices
+  if (local === false) sc += 15;
+  if (/compact|lite|\blow\b|espeak|flite|pico|-language$/.test(s)) sc -= 40;
+  return sc;
+}
+
+/** The most natural-sounding voice for a language (e.g. "en-US"), or undefined if none is clearly better. */
+export function bestVoice(voices: Voice[], lang: string): Voice | undefined {
+  const fam = lang.slice(0, 2).toLowerCase();
+  const pool = voices.filter((v) => v.lang.toLowerCase().replace('_', '-').startsWith(fam));
+  const exact = pool.filter((v) => v.lang.toLowerCase().replace('_', '-') === lang.toLowerCase());
+  return [...(exact.length ? exact : pool)].sort((a, b) => b.score - a.score)[0];
+}
+
+/** Opens Android's "install voice data" screen (where Google's natural voices live). */
+export async function openVoiceInstall() {
+  if (!isNative) return;
+  try {
+    const { TextToSpeech } = await loadNative();
+    await TextToSpeech.openInstall();
+  } catch {
+    /* no such screen on this phone */
+  }
+}
+
+/** Tidies text for the ear: no citation numbers, URLs, or abbreviations read letter by letter. */
+export function speechText(raw: string): string {
+  return raw
+    .replace(/\[\s*\d+(?:\s*[,–-]\s*\d+)*\s*\]/g, '')
+    .replace(/\(\s*(?:[A-Z][\p{L}'’.\- ]+(?:,| and | & )[^()]{0,60}?\d{4}[a-z]?;?\s*)+\)/gu, '')
+    .replace(/https?:\/\/\S+|www\.\S+/g, 'link')
+    .replace(/\be\.g\./gi, 'for example')
+    .replace(/\bi\.e\./gi, 'that is')
+    .replace(/\bet al\./g, 'et al')
+    .replace(/\bvs\./gi, 'versus')
+    .replace(/\bFig\./g, 'Figure')
+    .replace(/\bEq\./g, 'Equation')
+    .replace(/\bcf\./gi, 'compare')
+    .replace(/\u00ad/g, '')
+    .replace(/\s[—–]\s/g, ', ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export interface SpeakOpts {
@@ -29,7 +81,11 @@ export async function listVoices(): Promise<Voice[]> {
     try {
       const { TextToSpeech } = await loadNative();
       const { voices } = await TextToSpeech.getSupportedVoices();
-      voicesCache = voices.map((v, i) => ({ id: v.voiceURI || `${v.name}-${i}`, name: v.name, lang: v.lang, index: i }));
+      voicesCache = voices.map((v, i) => {
+        const id = v.voiceURI || `${v.name}-${i}`;
+        const score = scoreVoice(v.name, id, (v as { localService?: boolean }).localService);
+        return { id, name: v.name, lang: v.lang, index: i, score, natural: score >= 50 };
+      });
     } catch {
       voicesCache = [];
     }
@@ -46,7 +102,10 @@ export async function listVoices(): Promise<Voice[]> {
         r(synth.getVoices());
       };
     });
-  voicesCache = vs.map((v) => ({ id: v.voiceURI, name: v.name, lang: v.lang }));
+  voicesCache = vs.map((v) => {
+    const score = scoreVoice(v.name, v.voiceURI, v.localService);
+    return { id: v.voiceURI, name: v.name, lang: v.lang, score, natural: score >= 50 };
+  });
   return voicesCache;
 }
 

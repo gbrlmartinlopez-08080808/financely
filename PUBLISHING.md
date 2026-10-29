@@ -59,7 +59,7 @@ Do not claim things the app doesn't do, don't mention other apps/brands in the d
 
 - **Privacy policy** – required, public URL, and it must also be reachable inside the app (done: Settings → About). Start from `PRIVACY.md`; host it on GitHub Pages or any site.
 - **Data safety form** – conservative answers for this app *(verify wording in the form)*:
-  - *Does the app collect or share user data?* **Yes, optionally**: (a) words you look up are sent to Wikipedia/Wiktionary/dictionaryapi.dev; (b) web links you save are fetched; (c) if you turn on *Ask*, your question and short excerpts of the open document go to Pollinations. Declare **User content / App activity (search terms)** as *shared with third parties*, **optional**, **encrypted in transit**, not used for advertising.
+  - *Does the app collect or share user data?* **Yes, optionally**: (a) words you look up are sent to Wikipedia/Wiktionary/dictionaryapi.dev; (b) web links you save are fetched; (c) if you turn on *Ask*, your question and short excerpts of the open document go to Pollinations; (d) searches in *Find free books* go to Project Gutenberg / Internet Archive / arXiv / Google Books / Open Library; (e) a studio voice, if downloaded, comes from Hugging Face and jsDelivr. Declare **User content / App activity (search terms)** as *shared with third parties*, **optional**, **encrypted in transit**, not used for advertising.
   - Library, reading history, notes: **stored on device only** – not collected.
   - Data deletion: nothing is stored on your servers; uninstalling removes local data.
 - **Generative AI / AI-generated content policy** – the *Ask* feature produces AI output. Play requires a way for users to **report offensive AI content inside the app** (done: *Report this answer* → opens an email to `SUPPORT_EMAIL`; make sure that mailbox exists and is monitored) and that outputs follow Play's content rules. Mention the AI feature in your listing and content-rating answers.
@@ -97,3 +97,10 @@ Do not claim things the app doesn't do, don't mention other apps/brands in the d
 - Never commit the keystore or its passwords (they are git-ignored here).
 - Keep your privacy policy and Data-safety form in sync whenever you add a network feature.
 - Respond to reviews and to AI-answer reports; Google can pull apps that ignore AI-content reports.
+
+
+## Studio voices and licences (read before publishing)
+- The "studio voices" run Piper neural voices through `@diffusionstudio/vits-web` (MIT) and ONNX Runtime Web (MIT). Voices are downloaded by the user at run time from Hugging Face; each voice has its own licence (mostly MIT / CC BY 4.0 — see the model card of the voice you keep in `src/lib/neural.ts`).
+- The speech engine's phonemizer (`piper-wasm`, built from `piper-phonemize` / **espeak-ng, GPL-3.0**) is **not bundled in the app**: it is fetched at run time from jsDelivr only when someone turns on a studio voice. If you want to be extra careful about GPL, either keep it that way and say so in the store listing / About, or remove the "Studio voices" section (`src/lib/neural.ts`, the Voice sheet) and ship only phone voices.
+- Free catalogues: only files that the catalogues themselves offer for free are fetched (Gutenberg, Internet Archive, arXiv); Google Books / Open Library results are descriptions with links to the web. Rights belong to those sites; the app says so on screen.
+- Ask is capped at 30 questions per day per phone (`DAILY_ASK_CAP` in `src/lib/ai.ts`) to stay inside the free service's limits.

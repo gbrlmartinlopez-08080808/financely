@@ -25,6 +25,7 @@ export interface WikiImage {
   w: number;
   h: number;
   credit?: string;
+  lead?: boolean; // the article's own lead picture
 }
 export interface WikiCard {
   title: string;
@@ -224,7 +225,7 @@ async function queryWiki(params: Record<string, string>): Promise<WikiPage | nul
   return pages[0] ?? null;
 }
 
-const NOT_PICTURES = /(logo|icon|flag_of|commons-|wiki(?:media|data|pedia|source|quote|books|versity|news|voyage|species)|question_book|ambox|edit-|increase2|decrease2|steady2|crystal_clear|folder|nuvola|padlock|symbol_|portal|stub|disambig|oojs|redirect|information_icon|lock-|searchtool|merge-|split-|text_document|gnome|p_vip|star_|speaker_icon|loudspeaker|audio|button|arrow|blank|pending|wikt|ooui|vote|check_mark|cross_|red_pencil|cscr|translation|semi-protection)/i;
+const NOT_PICTURES = /(logo|icon|flag_of|commons-|wiki(?:media|data|pedia|source|quote|books|versity|news|voyage|species)|question_book|ambox|edit-|increase2|decrease2|steady2|crystal_clear|folder|nuvola|padlock|symbol|portal|stub|disambig|oojs|redirect|information_icon|lock-|searchtool|merge-|split-|text_document|gnome|p_vip|star_|speaker_icon|loudspeaker|audio|button|arrow|blank|pending|wikt|ooui|vote|check_mark|cross_|red_pencil|cscr|translation|semi-protection|cartoon|clipart|clip_art|emoji|emoticon|smiley|sticker|meme|comic|anime|manga|doodle|chibi|mascot|avatar|screenshot|poster|template|pictogram|ikon|badge|seal_of|coat_of_arms|signature|autograph|diagram_|chart|graph|banner|header|wordmark|stamp|sprite|animation|animated|gif)/i;
 
 const plain = (h?: string) => (h ? h.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim() : '');
 
@@ -242,20 +243,39 @@ interface RawInfo {
   }[];
 }
 
-function toImages(pages: Record<string, RawInfo> | undefined, first?: string): WikiImage[] {
+/** Words of the subject that a picture's file name must mention to count as "about" it. */
+const STOPWORDS = new Set(['the', 'and', 'for', 'with', 'from', 'that', 'this', 'file', 'image', 'photo', 'jpg', 'jpeg', 'png']);
+const subjectTokens = (...names: string[]) =>
+  new Set(names.flatMap((n) => n.toLowerCase().split(/[^\p{L}]+/u)).filter((t) => t.length >= 4 && !STOPWORDS.has(t)));
+
+function toImages(pages: Record<string, RawInfo> | undefined, first?: string, tokens?: Set<string>, cap = 6): WikiImage[] {
   const out: WikiImage[] = [];
   for (const p of Object.values(pages ?? {})) {
     const ii = p.imageinfo?.[0];
-    if (!ii?.thumburl || !/^image\/(jpeg|png|webp|gif|svg\+xml|tiff)/.test(ii.mime ?? '')) continue;
+    // real photographs and paintings only: no vector art, no animations
+    if (!ii?.thumburl || !/^image\/(jpeg|png|webp|tiff)/.test(ii.mime ?? '')) continue;
     if (NOT_PICTURES.test(p.title)) continue;
     const w = ii.width ?? ii.thumbwidth ?? 0;
     const h = ii.height ?? ii.thumbheight ?? 0;
-    if (Math.max(w, h) < 260 || Math.min(w, h) < 120) continue; // icons & slivers
-    if (/svg/.test(ii.mime ?? '') && Math.max(w, h) < 380) continue;
+    if (Math.max(w, h) < 480 || Math.min(w, h) < 260) continue; // icons, slivers, thumbnails
+    const ratio = w / Math.max(1, h);
+    if (ratio < 0.5 || ratio > 2.4) continue;
+    const rawName = p.title.replace(/^File:/, '').replace(/ /g, '_');
+    let decodedFirst = first ?? '';
+    try {
+      decodedFirst = decodeURIComponent(decodedFirst);
+    } catch {
+      /* keep as is */
+    }
+    const isLead = !!first && decodedFirst.includes(rawName);
+    const name = p.title.replace(/^File:/, '').replace(/[_\-.]+/g, ' ').toLowerCase();
+    // tightly related: the picture's own name has to mention the subject (the lead picture always does)
+    if (!isLead && tokens && ![...tokens].some((t) => name.includes(t))) continue;
     const meta = ii.extmetadata ?? {};
     const artist = plain(meta.Artist?.value).slice(0, 60);
     const lic = plain(meta.LicenseShortName?.value);
     out.push({
+      lead: isLead,
       src: ii.thumburl,
       full: ii.url,
       title: p.title.replace(/^File:/, '').replace(/\.[a-z]+$/i, '').replace(/_/g, ' '),
@@ -265,28 +285,28 @@ function toImages(pages: Record<string, RawInfo> | undefined, first?: string): W
     });
   }
   // lead picture first, then the biggest remaining
-  out.sort((a, b) => (a.src === first ? -1 : b.src === first ? 1 : b.w * b.h - a.w * a.h));
+  out.sort((a, b) => (a.lead ? -1 : b.lead ? 1 : b.w * b.h - a.w * a.h));
   const seen = new Set<string>();
-  return out.filter((i) => (seen.has(i.src) ? false : (seen.add(i.src), true))).slice(0, 12);
+  return out.filter((i) => (seen.has(i.src) ? false : (seen.add(i.src), true))).slice(0, cap);
 }
 
 const IMG_PROPS = { prop: 'imageinfo', iiprop: 'url|size|mime|extmetadata', iiurlwidth: '640', origin: '*', format: 'json', action: 'query' };
 
-async function articleImages(title: string, lead?: string): Promise<WikiImage[]> {
+async function articleImages(title: string, lead?: string, term?: string): Promise<WikiImage[]> {
   const qs = new URLSearchParams({ ...IMG_PROPS, generator: 'images', titles: title, gimlimit: '50' });
   const r = await fetch(`https://en.wikipedia.org/w/api.php?${qs}`, { headers: HDRS });
   if (!r.ok) return [];
   const j = (await r.json()) as { query?: { pages?: Record<string, RawInfo> } };
-  return toImages(j.query?.pages, lead);
+  return toImages(j.query?.pages, lead, subjectTokens(title, term ?? ''), 6);
 }
 
 /** Wikimedia Commons search: pictures for topics whose article has few or none. */
 async function commonsImages(term: string): Promise<WikiImage[]> {
-  const qs = new URLSearchParams({ ...IMG_PROPS, generator: 'search', gsrsearch: `${term} filetype:bitmap|drawing`, gsrnamespace: '6', gsrlimit: '14' });
+  const qs = new URLSearchParams({ ...IMG_PROPS, generator: 'search', gsrsearch: `${term} filetype:bitmap`, gsrnamespace: '6', gsrlimit: '14' });
   const r = await fetch(`https://commons.wikimedia.org/w/api.php?${qs}`, { headers: HDRS });
   if (!r.ok) return [];
   const j = (await r.json()) as { query?: { pages?: Record<string, RawInfo> } };
-  return toImages(j.query?.pages);
+  return toImages(j.query?.pages, undefined, subjectTokens(term), 4);
 }
 
 /** Wikipedia article (with a gallery of pictures); exact title first, then best search hit. */
@@ -302,16 +322,18 @@ export async function wiki(term: string, exactOnly = false): Promise<WikiCard | 
 
     let images: WikiImage[] = [];
     if (page) {
-      images = await articleImages(page.title, page.thumbnail?.source).catch(() => []);
+      images = await articleImages(page.title, page.thumbnail?.source, term).catch(() => []);
       // the lead picture is always allowed, even if the filters above would have dropped it
       if (page.thumbnail?.source && !images.some((i) => i.src === page!.thumbnail!.source)) {
         images.unshift({ src: page.thumbnail.source, title: page.title, w: 640, h: 480 });
+        images = images.slice(0, 6);
       }
     }
-    if (images.length < 3 && !exactOnly) {
+    // only when the article has no usable picture of its own: a few Commons photographs that name the subject
+    if (images.length < 2 && !exactOnly) {
       const more = await commonsImages(page?.title ?? term).catch(() => []);
       const have = new Set(images.map((i) => i.title));
-      images = [...images, ...more.filter((m) => !have.has(m.title))].slice(0, 12);
+      images = [...images, ...more.filter((m) => !have.has(m.title))].slice(0, 5);
     }
     if (!page && !images.length) return null;
     if (!page) {

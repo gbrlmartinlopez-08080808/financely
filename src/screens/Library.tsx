@@ -21,8 +21,9 @@ export function useCover(doc?: DocMeta) {
 }
 
 /** Cover + frosted holder, sized from the cover's own proportions (tall, square or wide) so nothing is cropped. */
-function Pocket({ doc, near, onClick }: { doc: DocMeta; near: boolean; onClick: () => void }) {
+function Pocket({ doc, near, onClick, onMenu }: { doc: DocMeta; near: boolean; onClick: () => void; onMenu: () => void }) {
   const [info, setInfo] = useState<{ url: string; ar: number }>();
+  const press = useRef(0);
   useEffect(() => {
     let alive = true;
     coverInfo(doc).then((i) => alive && setInfo(i));
@@ -32,7 +33,25 @@ function Pocket({ doc, near, onClick }: { doc: DocMeta; near: boolean; onClick: 
   }, [doc.coverId]); // eslint-disable-line react-hooks/exhaustive-deps
   const ar = Math.min(1.35, Math.max(0.5, info?.ar ?? 0.72));
   return (
-    <button className="pocket-wrap" style={{ ['--ar' as string]: ar }} onClick={onClick} aria-label={`Open ${doc.name}`} data-near={near ? '1' : undefined}>
+    <button
+      className="pocket-wrap"
+      style={{ ['--ar' as string]: ar }}
+      onClick={onClick}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onMenu();
+      }}
+      onTouchStart={() => {
+        press.current = window.setTimeout(() => {
+          tap('medium');
+          onMenu();
+        }, 520);
+      }}
+      onTouchEnd={() => clearTimeout(press.current)}
+      onTouchMove={() => clearTimeout(press.current)}
+      aria-label={`Open ${doc.name}`}
+      data-near={near ? '1' : undefined}
+    >
       <div className="cover">{info && <img src={info.url} alt="" draggable={false} style={{ objectFit: Math.abs(info.ar - ar) < 0.02 ? 'cover' : 'contain' }} />}</div>
       <div className="pocket">
         <Screws />
@@ -97,6 +116,7 @@ export function Library({
   onSettings,
   onConvert,
   onSample,
+  onDiscover,
 }: {
   onOpen: (id: string) => void;
   onAdd: () => void;
@@ -105,6 +125,7 @@ export function Library({
   onSettings: () => void;
   onConvert: (doc: DocMeta) => void;
   onSample: () => void;
+  onDiscover: () => void;
 }) {
   const docs = useStore((s) => s.docs);
   const settings = useStore((s) => s.settings);
@@ -113,6 +134,8 @@ export function Library({
   const [sort, setSort] = useState<'recent' | 'title' | 'type' | 'size'>('recent');
   const [query, setQuery] = useState<string | null>(null);
   const [menu, setMenu] = useState<DocMeta | null>(null);
+  const [picked, setPicked] = useState<Set<string> | null>(null); // non-null while choosing several to remove
+  const [confirmDel, setConfirmDel] = useState(false);
   const [active, setActive] = useState(0);
   const car = useRef<HTMLDivElement>(null);
 
@@ -221,8 +244,8 @@ export function Library({
               <button className="pill" onClick={onAdd}>
                 <Icon name="plus" size={18} /> Add a file
               </button>
-              <button className="pill ghost" onClick={onSample}>
-                Try a sample
+              <button className="pill ghost" onClick={onDiscover}>
+                Find free books
               </button>
             </div>
           </div>
@@ -233,6 +256,7 @@ export function Library({
                 <div className="slot" key={d.id}>
                   <Pocket
                     doc={d}
+                    onMenu={() => setMenu(d)}
                     near={Math.abs(recent.indexOf(d) - active) <= 1}
                     onClick={() => {
                       const i = recent.indexOf(d);
@@ -292,6 +316,16 @@ export function Library({
               >
                 {sort}
               </button>
+              <button
+                className={`chip mono${picked ? ' on' : ''}`}
+                onClick={() => {
+                  tap('select');
+                  setPicked((p) => (p ? null : new Set()));
+                }}
+                aria-label="Choose several to remove"
+              >
+                {picked ? 'done' : 'select'}
+              </button>
               <button className="chip" onClick={() => setQuery((q) => (q === null ? '' : null))} aria-label="Search">
                 <Icon name="search" size={18} />
               </button>
@@ -307,7 +341,21 @@ export function Library({
           <div className="shelf">
             {list.length === 0 && <div style={{ padding: 30, textAlign: 'center' }} className="mono muted">nothing here yet</div>}
             {list.map((d) => (
-              <ShelfRow key={d.id} doc={d} onOpen={() => onOpen(d.id)} onMenu={() => setMenu(d)} />
+              <ShelfRow
+                key={d.id}
+                doc={d}
+                picked={picked ? picked.has(d.id) : undefined}
+                onOpen={() =>
+                  picked
+                    ? setPicked((p) => {
+                        const n = new Set(p);
+                        n.has(d.id) ? n.delete(d.id) : n.add(d.id);
+                        return n;
+                      })
+                    : onOpen(d.id)
+                }
+                onMenu={() => setMenu(d)}
+              />
             ))}
           </div>
           <div className="lib-foot">{'· · ·\nquire'}</div>
@@ -325,7 +373,44 @@ export function Library({
         </div>
       )}
 
-      <div className="dock">
+      {picked && (
+        <div className="dock sel-bar">
+          <button className="pill ghost" onClick={() => setPicked(new Set(list.map((d) => d.id)))}>
+            All
+          </button>
+          <button className="pill danger" disabled={!picked.size} onClick={() => setConfirmDel(true)}>
+            <Icon name="trash" size={18} /> Remove {picked.size || ''}
+          </button>
+          <button className="pill round ghost" onClick={() => setPicked(null)} aria-label="Cancel">
+            <Icon name="close" size={18} />
+          </button>
+        </div>
+      )}
+      <Sheet open={confirmDel} onClose={() => setConfirmDel(false)} title={`Remove ${picked?.size ?? 0} from your shelf?`}>
+        <div className="sheet-body">
+          <p className="muted" style={{ marginTop: 0, fontSize: 14 }}>
+            Books and files you added are deleted from Quire. Files you opened in place (from your phone’s storage) stay exactly where they are — only the shelf entry goes. Bookmarks and highlights for these are removed too.
+          </p>
+          <button
+            className="pill danger"
+            style={{ width: '100%' }}
+            onClick={async () => {
+              const ids = [...(picked ?? [])];
+              for (const id of ids) {
+                const d = docs.find((x) => x.id === id);
+                if (d?.uri) (await import('../lib/linked')).ignoreUri(d.uri);
+                await removeDoc(id);
+              }
+              setConfirmDel(false);
+              setPicked(null);
+              toast(`Removed ${ids.length}`);
+            }}
+          >
+            Remove {picked?.size}
+          </button>
+        </div>
+      </Sheet>
+      <div className="dock" style={picked ? { display: 'none' } : undefined}>
         <button className="pill" onClick={onAdd} style={{ paddingLeft: 16 }}>
           <Icon name="plus" size={18} /> Add
         </button>
@@ -340,16 +425,16 @@ export function Library({
         </button>
       </div>
 
-      <DocMenu doc={menu} onClose={() => setMenu(null)} onOpen={onOpen} onConvert={onConvert} />
+      <DocMenu doc={menu} onClose={() => setMenu(null)} onOpen={onOpen} onConvert={onConvert} onSelect={(d) => setPicked(new Set([d.id]))} />
     </div>
   );
 }
 
-function ShelfRow({ doc, onOpen, onMenu }: { doc: DocMeta; onOpen: () => void; onMenu: () => void }) {
+function ShelfRow({ doc, onOpen, onMenu, picked }: { doc: DocMeta; onOpen: () => void; onMenu: () => void; picked?: boolean }) {
   const press = useRef<number>(0);
   return (
     <button
-      className="shelf-row"
+      className={`shelf-row${picked !== undefined ? ' choosing' : ''}${picked ? ' picked' : ''}`}
       onClick={onOpen}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -364,6 +449,7 @@ function ShelfRow({ doc, onOpen, onMenu }: { doc: DocMeta; onOpen: () => void; o
       onTouchEnd={() => clearTimeout(press.current)}
       onTouchMove={() => clearTimeout(press.current)}
     >
+      {picked !== undefined && <span className={`tick${picked ? ' on' : ''}`} aria-hidden>{picked ? '✓' : ''}</span>}
       <Cover doc={doc} className="thumb" />
       <div className="info">
         <div className="name">{doc.name}</div>
@@ -392,7 +478,7 @@ function ShelfRow({ doc, onOpen, onMenu }: { doc: DocMeta; onOpen: () => void; o
   );
 }
 
-function DocMenu({ doc, onClose, onOpen, onConvert }: { doc: DocMeta | null; onClose: () => void; onOpen: (id: string) => void; onConvert: (d: DocMeta) => void }) {
+function DocMenu({ doc, onClose, onOpen, onConvert, onSelect }: { doc: DocMeta | null; onClose: () => void; onOpen: (id: string) => void; onConvert: (d: DocMeta) => void; onSelect: (d: DocMeta) => void }) {
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState('');
   const [confirm, setConfirm] = useState(false);
@@ -491,6 +577,12 @@ function DocMenu({ doc, onClose, onOpen, onConvert }: { doc: DocMeta | null; onC
                 </span>
                 {d.finished ? 'Mark as unread' : 'Mark as finished'}
               </button>
+              <button className="action" onClick={() => (onClose(), onSelect(d))}>
+                <span className="ic">
+                  <Icon name="check" />
+                </span>
+                Select several…
+              </button>
               <button
                 className="action danger"
                 onClick={async () => {
@@ -504,7 +596,7 @@ function DocMenu({ doc, onClose, onOpen, onConvert }: { doc: DocMeta | null; onC
                 <span className="ic">
                   <Icon name="trash" />
                 </span>
-                {confirm ? 'Tap again to remove' : d.uri ? 'Remove from shelf' : 'Remove'}
+                {confirm ? 'Tap again to delete' : d.uri ? 'Remove from shelf' : 'Delete from Quire'}
               </button>
             </div>
           )}
