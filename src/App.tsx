@@ -10,6 +10,7 @@ import { Reader } from './reader/Reader';
 import { StatsBubble } from './screens/Stats';
 import { AddSheet } from './screens/AddSheet';
 import { Discover } from './screens/Discover';
+import { prefetch as prefetchCatalog } from './lib/catalog';
 import { importUrl, looksLikeUrl } from './lib/links';
 import { Settings } from './screens/Settings';
 import { Onboarding, type Finish } from './screens/Onboarding';
@@ -145,6 +146,13 @@ export default function App() {
       toast((e as Error).message || 'Couldn’t read that folder');
     }
   };
+
+  // warm the free-books catalogue quietly, so opening it is instant
+  useEffect(() => {
+    if (!ready) return;
+    const t = setTimeout(prefetchCatalog, 6000);
+    return () => clearTimeout(t);
+  }, [ready]);
 
   // today's goal reached → say so; at the end of a day that reached it, the light is awarded
   useEffect(() => {

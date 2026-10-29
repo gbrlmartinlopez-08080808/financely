@@ -13,7 +13,7 @@ const LIBS: [string, string][] = [
   ['JSZip', 'MIT'],
   ['jsPDF', 'MIT'],
   ['SheetJS Community Edition', 'Apache-2.0'],
-  ['ONNX Runtime Web + vits-web (studio voices)', 'MIT'],
+  ['ONNX Runtime Web, vits-web / piper-phonemize loader (studio voices)', 'MIT'],
   ['Piper voices (studio voices)', 'MIT · CC BY 4.0 (per voice)'],
   ['d3-geo, topojson (build time)', 'ISC · BSD-3-Clause'],
 ];
@@ -34,7 +34,7 @@ export function About({ open, onClose }: { open: boolean; onClose: () => void })
         <div className="section-label">your data</div>
         <p>Your library, notes, highlights and reading history live only on this phone. Quire has no account system and no analytics.</p>
         <p>
-          The internet is used only when you ask for it: looking up a word (the word is sent to Wikipedia / Wiktionary / dictionaryapi.dev), saving a web link (the page is fetched), the optional <b>Ask</b> feature (your question and a few short excerpts go to Pollinations’ open AI service, only after you opt in), <b>Find free books</b> (your search goes to Project Gutenberg, the Internet Archive, arXiv, Google Books or Open Library, and the file you choose is downloaded), and the one-time download of a <b>studio voice</b> (from Hugging Face, with its speech engine from jsDelivr; after that it runs offline on the phone).
+          The internet is used only when you ask for it: looking up a word (the word is sent to Wikipedia / Wiktionary / dictionaryapi.dev), saving a web link (the page is fetched), the optional <b>Ask</b> feature (your question and a few short excerpts go to Pollinations’ open AI service, only after you opt in), <b>Find free books</b> (your search goes to Project Gutenberg, the Internet Archive, arXiv, Google Books or Open Library, and the file you choose is downloaded), and the one-time download of a <b>studio voice</b> (from Hugging Face, with its speech engine from jsDelivr and cdnjs; after that it runs offline on the phone).
         </p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="pill sm ghost" onClick={() => openExternal(PRIVACY_URL)}>

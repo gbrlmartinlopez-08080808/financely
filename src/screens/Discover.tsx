@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { SOURCES, archivePdf, fetchFile, search, type Item, type SourceId } from '../lib/catalog';
+import { SOURCES, archivePdf, featuredNow, fetchFile, peek, search, type Item, type SourceId } from '../lib/catalog';
 import { importFile } from '../lib/library';
 import { patchDoc } from '../lib/store';
 import { onBack, openExternal, tap } from '../lib/native';
@@ -13,7 +13,7 @@ export function Discover({ onClose, onOpen }: { onClose: () => void; onOpen: (id
   const [q, setQ] = useState('');
   const [items, setItems] = useState<Item[]>([]);
   const [next, setNext] = useState<number | undefined>();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [adding, setAdding] = useState<string | null>(null);
   const [added, setAdded] = useState<Record<string, string>>({}); // item id → doc id
@@ -25,17 +25,35 @@ export function Discover({ onClose, onOpen }: { onClose: () => void; onOpen: (id
 
   const load = async (page: number) => {
     const my = ++seq.current;
-    setLoading(true);
     setErr(null);
+    // the featured shelf is built in: nothing to wait for
+    if (source === 'books' && query === 'featured') {
+      setItems(featuredNow().items);
+      setNext(undefined);
+      setLoading(false);
+      return;
+    }
+    // 1. what we already know: shown at once
+    const known = await peek(source, query, page);
+    if (my !== seq.current) return;
+    if (known) {
+      setItems((old) => (page === 1 ? known.page.items : [...old, ...known.page.items]));
+      setNext(known.page.next);
+      setLoading(false);
+      if (known.fresh) return;
+    } else setLoading(true);
+    // 2. ask the catalogue (quietly, if there was something to show)
     try {
       const r = await search(source, query, page);
       if (my !== seq.current) return;
-      setItems((old) => (page === 1 ? r.items : [...old, ...r.items]));
+      setItems((old) => (page === 1 ? r.items : [...old.slice(0, (page - 1) * (r.items.length || 20)), ...r.items]));
       setNext(r.next);
     } catch (e) {
       if (my !== seq.current) return;
-      if (page === 1) setItems([]);
-      setErr((e as Error).message || 'Couldn’t reach the catalogue. Are you online?');
+      if (!known) {
+        if (page === 1) setItems([]);
+        setErr((e as Error).message || 'Couldn’t reach the catalogue. Are you online?');
+      }
     } finally {
       if (my === seq.current) setLoading(false);
     }
@@ -54,7 +72,7 @@ export function Discover({ onClose, onOpen }: { onClose: () => void; onOpen: (id
       let g = it.get;
       if (!g && it.source === 'archive') g = await archivePdf(it.id.slice(1));
       if (!g) throw new Error('No free file for this one.');
-      const blob = await fetchFile(g.url);
+      const blob = await fetchFile(g);
       const meta = await importFile(blob, g.name, { title: it.title });
       if (it.author && !meta.author) await patchDoc(meta.id, { author: it.author });
       setAdded((a) => ({ ...a, [it.id]: meta.id }));
@@ -136,10 +154,10 @@ export function Discover({ onClose, onOpen }: { onClose: () => void; onOpen: (id
           const canGet = !!it.get || it.source === 'archive';
           return (
             <div className="disc-row" key={it.id}>
-              <div className="disc-cover">{it.cover ? <img src={it.cover} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')} /> : null}<span aria-hidden>{it.title.slice(0, 1)}</span></div>
+              <ItemCover item={it} />
               <div className="disc-info">
                 <div className="name">{it.title}</div>
-                {it.author && <div className="by">{it.author}</div>}
+                {(it.author || it.year) && <div className="by">{[it.author, it.year && !it.author?.includes(String(it.year)) ? it.year : null].filter(Boolean).join(' · ')}</div>}
                 {it.blurb && <div className="blurb">{it.blurb}</div>}
                 <div className="acts">
                   {it.tag && <span className={`tag mono ${/sale|preview|info/.test(it.tag) ? 'web' : ''}`}>{it.tag}</span>}
@@ -164,7 +182,19 @@ export function Discover({ onClose, onOpen }: { onClose: () => void; onOpen: (id
             </div>
           );
         })}
-        {loading && (
+        {loading &&
+          !items.length &&
+          Array.from({ length: 6 }, (_, k) => (
+            <div className="disc-row skel" key={k} aria-hidden>
+              <div className="disc-cover" />
+              <div className="disc-info">
+                <div className="bar w70" />
+                <div className="bar w40" />
+                <div className="bar w90" />
+              </div>
+            </div>
+          ))}
+        {loading && !!items.length && (
           <div className="disc-load">
             <PixelLoader grid={4} size={6} />
           </div>
@@ -185,6 +215,48 @@ export function Discover({ onClose, onOpen }: { onClose: () => void; onOpen: (id
           Quire only fetches files these sites offer for free (public-domain and open-access works). Rights and licences are the sites’ own — check the page behind the globe icon if you plan to share anything.
         </p>
       </div>
+    </div>
+  );
+}
+
+const hue = (s: string) => {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return (h >>> 0) % 360;
+};
+
+/** The cover from the catalogue when there is a real one; otherwise a clean cover made from the title. */
+function ItemCover({ item }: { item: Item }) {
+  const [bad, setBad] = useState(!item.cover);
+  useEffect(() => setBad(!item.cover), [item.cover]);
+  return (
+    <div className={`disc-cover${bad ? ' gen' : ''}${item.source === 'papers' ? ' paper' : ''}`} style={bad ? ({ ['--h' as string]: hue(item.title) } as React.CSSProperties) : undefined}>
+      {item.cover && !bad && (
+        <img
+          src={item.cover}
+          alt=""
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onLoad={(e) => {
+            const i = e.currentTarget;
+            // catalogues sometimes answer with a blank or tiny placeholder: that is not a cover
+            if (i.naturalWidth < 60 || i.naturalHeight < 80 || i.naturalWidth / i.naturalHeight > 1.4) setBad(true);
+          }}
+          onError={() => setBad(true)}
+        />
+      )}
+      {bad && (item.source === 'papers' ? (
+        <div className="paper-page" aria-hidden>
+          <b>{item.title.length > 70 ? item.title.slice(0, 68) + '…' : item.title}</b>
+          <i>{item.author}</i>
+          <u /><u /><u /><u /><u className="s" />
+        </div>
+      ) : (
+        <div className="gen-book" aria-hidden>
+          <b>{item.title.length > 44 ? item.title.slice(0, 42) + '…' : item.title}</b>
+          {item.author && <i>{item.author}</i>}
+        </div>
+      ))}
     </div>
   );
 }

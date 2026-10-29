@@ -1,7 +1,8 @@
 // "Studio" voices: neural text-to-speech that runs on the phone itself (Piper voices through ONNX Runtime Web).
-// A voice is downloaded once (about 60 MB, free, no account), then works offline. The synthesiser itself only
-// loads the first time you use it, so it costs nothing until then.
-import type { VoiceId } from '@diffusionstudio/vits-web';
+// A voice is downloaded once (about 60 MB, plus a one-time ~30 MB speech engine; free, no account) into the app's
+// private storage and then works offline. Synthesis runs in a worker that keeps the voice loaded, and the audio is
+// scheduled sentence by sentence on one timeline, so phrases follow each other without gaps.
+export type VoiceId = string;
 
 export interface NeuralVoice {
   id: VoiceId;
@@ -28,96 +29,246 @@ export const NEURAL_PREFIX = 'neural:';
 export const isNeural = (voice?: string): voice is string => !!voice && voice.startsWith(NEURAL_PREFIX);
 export const neuralId = (voice: string) => voice.slice(NEURAL_PREFIX.length) as VoiceId;
 
-type Lib = typeof import('@diffusionstudio/vits-web');
-let lib: Promise<Lib> | null = null;
-const load = () => (lib ??= import('@diffusionstudio/vits-web'));
+const HF = 'https://huggingface.co/diffusionstudio/piper-voices/resolve/main';
+const RUNTIME: { name: string; url: string }[] = [
+  { name: 'ort-wasm-simd.wasm', url: 'https://cdnjs.cloudflare.com/ajax/libs/onnxruntime-web/1.18.0/ort-wasm-simd.wasm' },
+  { name: 'piper_phonemize.wasm', url: 'https://cdn.jsdelivr.net/npm/@diffusionstudio/piper-wasm@1.0.0/build/piper_phonemize.wasm' },
+  { name: 'piper_phonemize.data', url: 'https://cdn.jsdelivr.net/npm/@diffusionstudio/piper-wasm@1.0.0/build/piper_phonemize.data' },
+];
 
-/** Needs WebAssembly and the browser's private file store (all current Android WebViews have both). */
-export const neuralSupported = () => typeof WebAssembly !== 'undefined' && !!navigator.storage?.getDirectory;
+/** en_US-ryan-medium → en/en_US/ryan/medium/en_US-ryan-medium */
+const voicePath = (id: string) => {
+  const [loc, ...rest] = id.split('-');
+  const quality = rest[rest.length - 1];
+  const name = rest.slice(0, -1).join('-');
+  return `${loc.split('_')[0]}/${loc}/${name}/${quality}/${id}`;
+};
 
+/** Needs WebAssembly, workers and the browser's private file store (all current Android WebViews have them). */
+export const neuralSupported = () => typeof WebAssembly !== 'undefined' && typeof Worker !== 'undefined' && !!navigator.storage?.getDirectory;
+
+const dir = async (name: string, create = false) => (await navigator.storage.getDirectory()).getDirectoryHandle(name, { create });
+const has = async (d: FileSystemDirectoryHandle, name: string) => {
+  try {
+    await d.getFileHandle(name);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+async function runtimeReady() {
+  try {
+    return await has(await dir('piper-rt'), 'rt.ok');
+  } catch {
+    return false;
+  }
+}
+
+/** Voices that are fully installed (voice files and the speech engine). */
 export async function neuralStored(): Promise<string[]> {
   try {
-    return (await (await load()).stored()) as string[];
+    if (!(await runtimeReady())) return [];
+    const d = await dir('piper', true);
+    const out: string[] = [];
+    for await (const k of d.keys()) if (k.endsWith('.onnx') && (await has(d, `${k}.json`))) out.push(k.slice(0, -5));
+    return out;
   } catch {
     return [];
   }
 }
 
+async function save(d: FileSystemDirectoryHandle, name: string, url: string, onBytes: (n: number) => void) {
+  const r = await fetch(url);
+  if (!r.ok || !r.body) throw new Error(`download failed (${r.status})`);
+  const w = await (await d.getFileHandle(name, { create: true })).createWritable();
+  const reader = r.body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    await w.write(value);
+    onBytes(value.length);
+  }
+  await w.close();
+}
+
 export async function neuralDownload(id: VoiceId, onProgress: (fraction: number) => void): Promise<void> {
-  const t = await load();
-  const seen = new Map<string, { loaded: number; total: number }>();
-  await t.download(id, (p) => {
-    seen.set(p.url, { loaded: p.loaded, total: p.total });
-    let l = 0;
-    let tot = 0;
-    for (const v of seen.values()) {
-      l += v.loaded;
-      tot += v.total;
-    }
-    onProgress(tot ? l / tot : 0);
-  });
+  const needRt = !(await runtimeReady());
+  const total = (needRt ? 29_300_000 : 0) + 63_000_000;
+  let got = 0;
+  const bump = (n: number) => onProgress(Math.min(0.99, (got += n) / total));
+  if (needRt) {
+    const d = await dir('piper-rt', true);
+    for (const f of RUNTIME) await save(d, f.name, f.url, bump);
+    await (await d.getFileHandle('rt.ok', { create: true })).createWritable().then((w) => w.close());
+  }
+  const d = await dir('piper', true);
+  const base = `${HF}/${voicePath(id)}.onnx`;
+  await save(d, `${id}.onnx.json`, `${base}.json`, bump);
+  await save(d, `${id}.onnx`, base, bump);
+  onProgress(1);
 }
 
 export async function neuralRemove(id: VoiceId) {
-  await (await load()).remove(id);
+  try {
+    const d = await dir('piper');
+    await d.removeEntry(`${id}.onnx`).catch(() => {});
+    await d.removeEntry(`${id}.onnx.json`).catch(() => {});
+  } catch {
+    /* already gone */
+  }
 }
 
-// one synthesis at a time: each runs in its own worker and a phone should not hold two models in memory
-let chain: Promise<unknown> = Promise.resolve();
-export function neuralSynth(text: string, id: VoiceId): Promise<Blob> {
-  const run = chain.then(async () => (await load()).predict({ text, voiceId: id }));
-  chain = run.catch(() => {});
-  return run;
-}
+// ------------------------------------------------------------------ engine (worker)
+export class NeuralEngine {
+  private w: Worker | null = null;
+  private seq = 0;
+  private waits = new Map<number, { ok: (v: { samples: Float32Array; rate: number } | void) => void; fail: (e: Error) => void }>();
+  private voice = '';
 
-/** Plays a WAV blob. Resolves when it ends or `stop()` is called. */
-export class Player {
-  private a = new Audio();
-  private url = '';
-  private ended: (() => void) | null = null;
-  constructor() {
-    this.a.preservesPitch = true;
-  }
-  get element() {
-    return this.a;
-  }
-  setRate(r: number) {
-    this.a.playbackRate = r;
-  }
-  play(blob: Blob, rate: number, onTime?: (t: number, d: number) => void): Promise<'done' | 'stopped'> {
-    this.release();
-    this.url = URL.createObjectURL(blob);
-    this.a.src = this.url;
-    this.a.playbackRate = rate;
-    this.a.preservesPitch = true;
-    return new Promise((resolve) => {
-      let raf = 0;
-      const tick = () => {
-        onTime?.(this.a.currentTime, this.a.duration || 0);
-        raf = requestAnimationFrame(tick);
+  private worker() {
+    if (!this.w) {
+      this.w = new Worker(new URL('./piper.worker.ts', import.meta.url), { type: 'module' });
+      this.w.onmessage = (e: MessageEvent) => {
+        const m = e.data as { type: string; id: number; samples?: Float32Array; rate?: number; message?: string };
+        const t = this.waits.get(m.id);
+        if (!t) return;
+        this.waits.delete(m.id);
+        if (m.type === 'error') t.fail(new Error(m.message));
+        else t.ok(m.samples ? { samples: m.samples, rate: m.rate! } : undefined);
       };
-      const finish = (r: 'done' | 'stopped') => {
-        cancelAnimationFrame(raf);
-        this.ended = null;
-        resolve(r);
+      this.w.onerror = (e) => {
+        const err = new Error(e.message || 'the voice engine stopped');
+        this.waits.forEach((t) => t.fail(err));
+        this.waits.clear();
       };
-      this.ended = () => finish('stopped');
-      this.a.onended = () => finish('done');
-      this.a.onerror = () => finish('stopped');
-      this.a.onplaying = () => {
-        cancelAnimationFrame(raf);
-        raf = requestAnimationFrame(tick);
-      };
-      this.a.play().catch(() => finish('stopped'));
+    }
+    return this.w;
+  }
+  private call<T>(msg: Record<string, unknown>): Promise<T> {
+    const id = ++this.seq;
+    return new Promise<T>((ok, fail) => {
+      this.waits.set(id, { ok: ok as never, fail });
+      this.worker().postMessage({ ...msg, id });
     });
   }
-  stop() {
-    this.a.pause();
-    this.ended?.();
-    this.release();
+  async init(voice: VoiceId) {
+    if (this.voice === voice) return;
+    await this.call<void>({ type: 'init', voice });
+    this.voice = voice;
   }
-  private release() {
-    if (this.url) URL.revokeObjectURL(this.url);
-    this.url = '';
+  say(text: string, rate: number) {
+    return this.call<{ samples: Float32Array; rate: number }>({ type: 'say', text, rate });
+  }
+  dispose() {
+    this.w?.terminate();
+    this.w = null;
+    this.voice = '';
+    this.waits.forEach((t) => t.fail(new Error('stopped')));
+    this.waits.clear();
+  }
+}
+
+// ------------------------------------------------------------------ gapless playback
+interface Slot {
+  i: number; // sentence index
+  start: number; // seconds on the audio clock
+  end: number;
+}
+
+/** Plays sentence after sentence on one audio clock: each starts the instant the last one ends. */
+export class NeuralPlayer {
+  private ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+  private nextAt = 0;
+  private slots: Slot[] = [];
+  private srcs: AudioBufferSourceNode[] = [];
+  private held: { i: number; buf: AudioBuffer; gap: number }[] = [];
+  private heldSecs = 0;
+  private released = false;
+  constructor(
+    private tempo = 1,
+    private prebuffer = 3, // seconds of speech to have in hand before starting, so the first sentences never run dry
+  ) {
+    this.ctx.resume().catch(() => {});
+  }
+  /** seconds of speech that are scheduled but not yet heard */
+  ahead() {
+    return Math.max(0, this.nextAt - this.ctx.currentTime);
+  }
+  /** Quiet trimmed from both ends, then a pause that fits the punctuation. */
+  enqueue(i: number, samples: Float32Array, rate: number, gapAfter: number) {
+    let a = 0;
+    let b = samples.length;
+    const quiet = 0.006;
+    while (a < b - 1 && Math.abs(samples[a]) < quiet) a++;
+    while (b > a + 1 && Math.abs(samples[b - 1]) < quiet) b--;
+    a = Math.max(0, a - Math.round(rate * 0.03));
+    b = Math.min(samples.length, b + Math.round(rate * 0.05));
+    const buf = this.ctx.createBuffer(1, b - a, rate);
+    buf.copyToChannel(samples.subarray(a, b) as Float32Array<ArrayBuffer>, 0);
+    if (!this.released) {
+      this.held.push({ i, buf, gap: gapAfter });
+      this.heldSecs += buf.duration / this.tempo;
+      if (this.heldSecs >= this.prebuffer) this.release();
+      return;
+    }
+    this.place(i, buf, gapAfter);
+  }
+  private place(i: number, buf: AudioBuffer, gapAfter: number) {
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = this.tempo;
+    src.connect(this.ctx.destination);
+    const at = Math.max(this.nextAt, this.ctx.currentTime + 0.05);
+    const dur = buf.duration / this.tempo;
+    src.start(at);
+    this.slots.push({ i, start: at, end: at + dur });
+    this.nextAt = at + dur + gapAfter;
+    this.srcs.push(src);
+    src.onended = () => {
+      const k = this.srcs.indexOf(src);
+      if (k >= 0) this.srcs.splice(k, 1);
+    };
+  }
+  /** Start playing what has been gathered so far (called automatically, or when there is no more to wait for). */
+  release() {
+    if (this.released) return;
+    this.released = true;
+    for (const h of this.held) this.place(h.i, h.buf, h.gap);
+    this.held = [];
+  }
+  /** nothing at all was voiced */
+  empty() {
+    return this.slots.length === 0 && this.held.length === 0;
+  }
+  /** The sentence being heard now (stays on the last one through the pause that follows it). */
+  current(): number | null {
+    const t = this.ctx.currentTime;
+    let cur: number | null = null;
+    for (const s of this.slots) {
+      if (s.start <= t + 0.01) cur = s.i;
+      else break;
+    }
+    return cur;
+  }
+  /** everything scheduled has been heard */
+  drained() {
+    return this.slots.length > 0 && this.ctx.currentTime >= (this.slots[this.slots.length - 1].end ?? 0);
+  }
+  started() {
+    return this.slots.length > 0 && this.ctx.currentTime >= this.slots[0].start;
+  }
+  stop() {
+    this.srcs.forEach((s) => {
+      try {
+        s.onended = null;
+        s.stop();
+      } catch {
+        /* already stopped */
+      }
+    });
+    this.srcs = [];
+    this.slots = [];
+    this.ctx.close().catch(() => {});
   }
 }

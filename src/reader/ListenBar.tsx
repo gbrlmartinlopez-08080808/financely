@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { bestVoice, listVoices, openVoiceInstall, speak, speechText, stopSpeaking, ttsAvailable, guessLang, type Voice } from '../lib/tts';
-import { NEURAL_PREFIX, NEURAL_VOICES, Player, isNeural, neuralDownload, neuralId, neuralRemove, neuralStored, neuralSupported, neuralSynth } from '../lib/neural';
+import { NEURAL_PREFIX, NEURAL_VOICES, NeuralEngine, NeuralPlayer, isNeural, neuralDownload, neuralId, neuralRemove, neuralStored, neuralSupported } from '../lib/neural';
 import { firstVisibleSentence, markSaying, sentenceText, wrapSentences } from './dom';
 import { updateSettings, useStore } from '../lib/store';
 import { isNative, tap } from '../lib/native';
@@ -29,7 +29,8 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId }: Props) 
   const [busy, setBusy] = useState(false);
   const [stored, setStored] = useState<string[]>([]);
   const [dl, setDl] = useState<{ id: string; p: number } | null>(null);
-  const player = useRef<Player | null>(null);
+  const engine = useRef<NeuralEngine | null>(null);
+  const player = useRef<NeuralPlayer | null>(null);
   const neuralBroken = useRef(false);
   const bestRef = useRef<string | undefined>(undefined);
   const sleepAt = useRef(0);
@@ -78,84 +79,80 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId }: Props) 
     }
   };
 
-  /** Natural (on-device neural) voice: sentences are voiced a few at a time while the next group is prepared. */
+  /**
+   * Studio voice. A worker keeps the voice loaded and voices sentence after sentence; every sentence is placed on
+   * one audio clock right behind the previous one, so phrases flow without gaps. The highlight follows that clock.
+   */
   const runNeural = async (from: number, my: number, sel: string, n: number) => {
     if (!root) return;
-    const vid = neuralId(sel);
-    const pl = (player.current ??= new Player());
-    type Part = { i: number; w: number };
-    const chunks: { text: string; parts: Part[] }[] = [];
-    let cur: { text: string; parts: Part[] } = { text: '', parts: [] };
-    for (let i = from; i < n; i++) {
-      const t = speechText(sentenceText(root, i));
-      if (!t || !/[\p{L}\p{N}]/u.test(t)) continue;
-      const limit = chunks.length === 0 ? 150 : 420; // a short first chunk so playback starts quickly
-      if (cur.text && (cur.text.length + t.length > limit || cur.parts.length >= 4)) {
-        chunks.push(cur);
-        cur = { text: '', parts: [] };
-      }
-      cur.text += (cur.text ? ' ' : '') + t;
-      cur.parts.push({ i, w: t.length + 14 });
-    }
-    if (cur.text) chunks.push(cur);
-    const jobs = new Map<number, Promise<Blob>>();
-    const synth = (k: number) => {
-      if (k >= chunks.length) return undefined;
-      if (!jobs.has(k)) jobs.set(k, neuralSynth(chunks[k].text, vid));
-      return jobs.get(k)!;
-    };
-    for (let k = 0; k < chunks.length; k++) {
-      if (my !== token.current) return;
-      let blob: Blob;
-      setBusy(true);
-      try {
-        blob = await synth(k)!;
-      } catch (e) {
-        console.warn('neural voice failed', e);
-        setBusy(false);
-        neuralBroken.current = true;
-        toast('The natural voice couldn’t start — using the phone’s voice');
-        if (my === token.current) run(chunks[k].parts[0]?.i ?? from);
-        return;
-      }
+    const eng = (engine.current ??= new NeuralEngine());
+    setBusy(true);
+    try {
+      await eng.init(neuralId(sel));
+    } catch (e) {
+      console.warn('studio voice failed to load', e);
       setBusy(false);
+      neuralBroken.current = true;
+      toast('The studio voice couldn’t start — using the phone’s voice');
+      if (my === token.current) run(from);
+      return;
+    }
+    if (my !== token.current) return;
+    const rate = opts.current.ttsRate;
+    const tempo = rate > 2 ? rate / 2 : 1; // beyond 2× the voice itself stops getting faster: speed up playback a little
+    const pl = (player.current = new NeuralPlayer(tempo));
+    let shown = -1;
+    let finished = false;
+    const watch = () => {
       if (my !== token.current) return;
-      synth(k + 1);
-      const { parts } = chunks[k];
-      const W = parts.reduce((a, b) => a + b.w, 0);
-      let shown = -1;
-      const r = await pl.play(blob, opts.current.ttsRate, (t, d) => {
-        if (!d || my !== token.current) return;
-        let acc = 0;
-        const at = (t / d) * W;
-        let part = parts[parts.length - 1];
-        for (const p of parts) {
-          acc += p.w;
-          if (at < acc) {
-            part = p;
-            break;
-          }
-        }
-        if (part.i !== shown) {
-          shown = part.i;
-          setIdx(part.i);
-          localStorage.setItem('listen:' + docId, String(part.i));
-          follow(markSaying(root, part.i));
-        }
-      });
-      jobs.delete(k);
-      if (my !== token.current || r === 'stopped') return;
-      if (sleepAt.current && Date.now() > sleepAt.current) {
+      const i = pl.current();
+      if (i !== null && i !== shown) {
+        shown = i;
+        setBusy(false);
+        setIdx(i);
+        localStorage.setItem('listen:' + docId, String(i));
+        follow(markSaying(root, i));
+      }
+      if (sleepAt.current && Date.now() > sleepAt.current && pl.started()) {
         sleepAt.current = 0;
         setSleep(0);
         toast('Sleep timer — paused. Sweet dreams.');
-        break;
+        return pause();
+      }
+      if (finished && (pl.drained() || pl.empty())) {
+        setPlaying(false);
+        onPlaying(false);
+        return;
+      }
+      requestAnimationFrame(watch);
+    };
+    requestAnimationFrame(watch);
+    for (let i = from; i < n; i++) {
+      if (my !== token.current) return;
+      const text = speechText(sentenceText(root, i));
+      if (!text || !/[\p{L}\p{N}]/u.test(text)) continue;
+      // keep about half a minute of speech ready, no more
+      while (pl.ahead() > 30 && my === token.current) await new Promise((r) => setTimeout(r, 250));
+      if (my !== token.current) return;
+      try {
+        const t0 = performance.now();
+        const r = await eng.say(text, Math.min(rate, 2));
+        if (my !== token.current) return;
+        console.debug(`[studio] sentence ${i}: ${Math.round(performance.now() - t0)} ms for ${(r.samples.length / r.rate).toFixed(1)} s of speech, ${pl.ahead().toFixed(1)} s ready ahead`);
+        const end = text.slice(-1);
+        pl.enqueue(i, r.samples, r.rate, /[.!?…]/.test(end) ? 0.34 : /[,;:]/.test(end) ? 0.18 : 0.26);
+      } catch (e) {
+        if (my !== token.current) return;
+        console.warn('studio voice failed', e);
+        neuralBroken.current = true;
+        pl.stop();
+        toast('The studio voice stopped — using the phone’s voice');
+        run(i);
+        return;
       }
     }
-    if (my === token.current) {
-      setPlaying(false);
-      onPlaying(false);
-    }
+    pl.release();
+    finished = true;
   };
 
   const run = useCallback(
@@ -197,6 +194,7 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId }: Props) 
     token.current++;
     stopSpeaking();
     player.current?.stop();
+    player.current = null;
     setBusy(false);
     setPlaying(false);
     onPlaying(false);
@@ -225,7 +223,14 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId }: Props) 
     return () => root.removeEventListener('click', on, true);
   }, [root, playing, run, pause]);
 
-  useEffect(() => () => pause(), []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(
+    () => () => {
+      pause();
+      engine.current?.dispose(); // frees the voice's memory
+      engine.current = null;
+    },
+    [], // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   const restartAtCurrent = () => {
     if (playing) {
@@ -273,7 +278,6 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId }: Props) 
             onChange={(v) => {
               updateSettings({ ttsRate: v });
               opts.current = { ...opts.current, ttsRate: v };
-              if (isNeural(opts.current.ttsVoice) && !neuralBroken.current) return player.current?.setRate(v);
               clearTimeout(rateT.current);
               rateT.current = window.setTimeout(restartAtCurrent, 450);
             }}
@@ -347,7 +351,7 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId }: Props) 
             <>
               <div className="voice-h">
                 <b>Studio voices</b>
-                <span>the most natural · free · on this phone</span>
+                <span>{stored.length ? 'the most natural · free · works offline' : 'the most natural · free · the first one also installs a ~30 MB speech engine'}</span>
               </div>
               <div className="actions">
                 {studio.map((v) => {
