@@ -270,10 +270,10 @@ export function Ruler({
 }
 
 // ------------------------------------------------------------------ toasts
-let toastMsg: { text: string; id: number } | null = null;
+let toastMsg: { text: string; id: number; kind?: 'award' } | null = null;
 const toastSubs = new Set<() => void>();
-export function toast(text: string) {
-  toastMsg = { text, id: Date.now() };
+export function toast(text: string, kind?: 'award') {
+  toastMsg = { text, id: Date.now(), kind };
   toastSubs.forEach((s) => s());
   const id = toastMsg.id;
   setTimeout(() => {
@@ -281,7 +281,7 @@ export function toast(text: string) {
       toastMsg = null;
       toastSubs.forEach((s) => s());
     }
-  }, 2400);
+  }, kind ? 4200 : 2400);
 }
 export function Toasts() {
   const msg = useSyncExternalStore(
@@ -292,7 +292,7 @@ export function Toasts() {
     () => toastMsg,
   );
   return msg ? (
-    <div className="toast" key={msg.id} role="status">
+    <div className={`toast${msg.kind ? ' ' + msg.kind : ''}`} key={msg.id} role="status">
       {msg.text}
     </div>
   ) : null;

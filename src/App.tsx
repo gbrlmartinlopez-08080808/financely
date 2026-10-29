@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { init, useStore, updateSettings } from './lib/store';
+import { init, useStore, updateSettings, getState, dayKey } from './lib/store';
+import * as db from './lib/db';
 import { importFile, importText, upgradeCovers } from './lib/library';
 import { initBackButton, isNative, listenIncoming, manageSelectionMenu, readIncoming, setStatusBar, tap } from './lib/native';
 import { linkFolder, linkPickedFiles, rescanAll } from './lib/linked';
@@ -142,6 +143,31 @@ export default function App() {
       toast((e as Error).message || 'Couldn’t read that folder');
     }
   };
+
+  // today's goal reached → say so; at the end of a day that reached it, the light is awarded
+  useEffect(() => {
+    if (!ready) return;
+    const onGoal = () => toast('Goal reached — today’s light is blinking', 'award');
+    const checkAward = async () => {
+      const s = getState();
+      const y = dayKey(new Date(Date.now() - 864e5));
+      if ((s.days[y] ?? 0) < s.settings.dailyGoal * 60_000) return;
+      const last = await db.get<string>('kv', 'awarded');
+      if (last && last >= y) return;
+      await db.put('kv', 'awarded', y);
+      toast('Yesterday’s light is on your map', 'award');
+    };
+    window.addEventListener('quire:goal', onGoal);
+    const t = setTimeout(checkAward, 2500);
+    const iv = setInterval(checkAward, 60_000);
+    document.addEventListener('visibilitychange', checkAward);
+    return () => {
+      window.removeEventListener('quire:goal', onGoal);
+      clearTimeout(t);
+      clearInterval(iv);
+      document.removeEventListener('visibilitychange', checkAward);
+    };
+  }, [ready]);
 
   // end of the introduction: the welcome guide goes on the shelf (once), then whatever they chose
   const finishIntro = async (f: Finish) => {

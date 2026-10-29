@@ -812,6 +812,7 @@
 .ob {
   position: fixed;
   inset: 0;
+  overflow: hidden;
   z-index: 300;
   background: var(--bg);
   display: flex;
@@ -1206,4 +1207,86 @@
   display: block;
   margin: 0 auto;
   width: fit-content;
+}
+
+/* ------------------------------------------------------------ goal marks, gradients, logo */
+.cal-grid button[data-met] {
+  color: #e0a800;
+  text-shadow: 0 0 8px rgba(255, 196, 40, 0.55);
+}
+.cal-grid button[data-met].sel {
+  background: #ffd23f;
+  color: #111;
+  text-shadow: none;
+}
+.cal-legend span[data-met] {
+  color: #e0a800;
+}
+:root[data-app-theme='dark'] .cal-grid button[data-met],
+:root[data-app-theme='dark'] .cal-legend span[data-met] {
+  color: #ffd23f;
+}
+.ob-card pre b,
+.ascii-card pre b.y {
+  color: #ffd23f;
+  text-shadow: 0 0 8px rgba(255, 210, 63, 0.7);
+}
+.toast.award {
+  background: linear-gradient(110deg, #1b3cff, #6a4cff 55%, #e8cf9a);
+  color: #fff;
+  box-shadow: 0 10px 34px rgba(60, 70, 255, 0.35);
+  font-weight: 600;
+}
+.bubble.met::before {
+  opacity: 1;
+}
+.bubble::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 220px;
+  background: radial-gradient(ellipse 60% 70% at 18% 0, rgba(46, 76, 255, 0.16), transparent 70%), radial-gradient(ellipse 60% 70% at 88% 0, rgba(232, 207, 154, 0.35), transparent 70%);
+  opacity: 0.8;
+  pointer-events: none;
+  border-radius: inherit;
+  transition: opacity 0.6s;
+}
+.bubble.met::before {
+  background: radial-gradient(ellipse 60% 70% at 18% 0, rgba(255, 196, 40, 0.34), transparent 70%), radial-gradient(ellipse 60% 70% at 88% 0, rgba(255, 150, 60, 0.22), transparent 70%);
+}
+.bubble > * {
+  position: relative;
+}
+.lib {
+  background-image: radial-gradient(ellipse 90% 34% at 12% -4%, rgba(46, 76, 255, 0.16), transparent 70%), radial-gradient(ellipse 80% 30% at 92% -2%, rgba(232, 207, 154, 0.5), transparent 70%);
+  background-repeat: no-repeat;
+}
+:root[data-app-theme='dark'] .lib {
+  background-image: radial-gradient(ellipse 90% 34% at 12% -4%, rgba(46, 76, 255, 0.3), transparent 70%), radial-gradient(ellipse 80% 30% at 92% -2%, rgba(232, 207, 154, 0.16), transparent 70%);
+}
+/* onboarding: a soft glow per step */
+.ob::before {
+  content: '';
+  position: absolute;
+  inset: -20% -20% auto -20%;
+  height: 62%;
+  pointer-events: none;
+  background: radial-gradient(ellipse 46% 52% at 24% 28%, var(--g1, #1b3cff), transparent 100%), radial-gradient(ellipse 46% 52% at 78% 22%, var(--g2, #e8cf9a), transparent 100%);
+  filter: blur(34px);
+  opacity: 0.32;
+  transition: opacity 0.6s;
+  animation: ob-drift 14s ease-in-out infinite alternate;
+}
+:root[data-app-theme='dark'] .ob::before {
+  opacity: 0.5;
+}
+@keyframes ob-drift {
+  to {
+    transform: translate(4%, 6%) scale(1.08);
+  }
+}
+.ob > * {
+  position: relative;
 }

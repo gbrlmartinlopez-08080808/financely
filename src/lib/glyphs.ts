@@ -1,18 +1,28 @@
-// One character per day: the more you read, the heavier the mark.
-export const GLYPHS: { min: number; ch: string; label: string }[] = [
-  { min: 60, ch: '@', label: '60+' },
-  { min: 30, ch: '%', label: '30' },
-  { min: 15, ch: '*', label: '15' },
-  { min: 5, ch: '+', label: '5' },
-  { min: 1, ch: ':', label: '1' },
+// One character per day, measured against your own daily goal: the closer you got, the heavier the mark.
+// Reaching the goal earns the yellow @ (and a light on the globe once the day is over).
+export const GLYPHS = [
+  { ch: ':', label: '25' },
+  { ch: '+', label: '50' },
+  { ch: '*', label: '75' },
+  { ch: '%', label: '99' },
+  { ch: '@', label: 'goal' },
 ];
 
-/** ms read → { ch, level 0‥5 } (level drives the ink strength). */
-export function glyphFor(ms: number): { ch: string; level: number } {
-  const m = ms / 60000;
-  const i = GLYPHS.findIndex((g) => m >= g.min);
-  if (i < 0) return { ch: ms > 0 ? '.' : '·', level: 0 };
-  return { ch: GLYPHS[i].ch, level: GLYPHS.length - i };
+export interface Glyph {
+  ch: string;
+  level: number; // 0‥5 → ink strength
+  met: boolean; // goal reached → yellow @
+}
+
+export function glyphFor(ms: number, goalMs: number): Glyph {
+  if (ms <= 0) return { ch: '·', level: 0, met: false };
+  const f = ms / Math.max(1, goalMs);
+  if (f >= 1) return { ch: '@', level: 5, met: true };
+  if (ms < 60_000) return { ch: '.', level: 1, met: false };
+  if (f < 0.25) return { ch: ':', level: 1, met: false };
+  if (f < 0.5) return { ch: '+', level: 2, met: false };
+  if (f < 0.75) return { ch: '*', level: 3, met: false };
+  return { ch: '%', level: 4, met: false };
 }
 
 export const fmtMs = (ms: number) => {

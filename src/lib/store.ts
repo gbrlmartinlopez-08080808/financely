@@ -102,7 +102,10 @@ let hoursT = 0;
 export async function addReading(ms: number, docId?: string) {
   if (ms <= 0) return;
   const k = dayKey();
-  const days = { ...state.days, [k]: (state.days[k] ?? 0) + ms };
+  const before = state.days[k] ?? 0;
+  const days = { ...state.days, [k]: before + ms };
+  const goalMs = state.settings.dailyGoal * 60_000;
+  if (before < goalMs && days[k] >= goalMs) window.dispatchEvent(new CustomEvent('quire:goal'));
   const h = new Date().getHours();
   const row = [...(state.hours[k] ?? new Array(24).fill(0))];
   row[h] += ms;

@@ -207,16 +207,17 @@ function StreakStage({ name }: { name: string }) {
       const i = c * 7 + r;
       if (i >= upto) return '·';
       const h = Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1;
-      const ms = h < 0.14 ? 0 : [2, 8, 20, 40, 75][Math.floor(h * 5.5) % 5] * 60000;
-      return glyphFor(ms).ch;
+      const ms = h < 0.14 ? 0 : [2, 5, 9, 13, 16, 22, 30][Math.floor(h * 7.5) % 7] * 60000;
+      const g = glyphFor(ms, 15 * 60_000);
+      return g.met ? `<b>${g.ch}</b>` : g.ch;
     }).join(' '),
   );
   const streak = Math.min(12, Math.floor(upto / 7) + 1);
   return (
     <Card>
       <p className="ob-cap mono top">{displayName(name) || 'you'} · day {Math.min(streak, 12)} <Pixel name="flame" size={12} style={{ verticalAlign: -1 }} /></p>
-      <pre aria-hidden>{rows.join('\n')}</pre>
-      <p className="ob-cap mono">{GLYPHS.slice().reverse().map((g) => `${g.ch} ${g.label}`).join('  ')} min</p>
+      <pre aria-hidden dangerouslySetInnerHTML={{ __html: rows.join('\n') }} />
+      <p className="ob-cap mono">{GLYPHS.map((g) => `${g.ch} ${g.label}`).join('  ')}</p>
     </Card>
   );
 }
@@ -251,7 +252,7 @@ const STEPS: StepDef[] = [
   { id: 'listen', title: () => 'Let it read to you.', body: () => 'Tap Listen and the page is read aloud in your phone’s voices, at your pace, sentence by sentence.', cta: 'Next' },
   { id: 'lookup', title: () => 'Press a word. Know it.', body: () => 'Hold any word for its meaning, origin, Wikipedia entry and pictures — in a card, without leaving the page.', cta: 'Next' },
   { id: 'ask', title: () => 'Questions, scans, conversions.', body: () => 'Ask your document anything (free, optional, only with your OK). Scan paper with OCR. Convert to other formats.', cta: 'Next' },
-  { id: 'streak', title: (n) => (n ? `${n}, let’s keep a quiet streak.` : 'Let’s keep a quiet streak.'), body: () => 'One minute a day lights a place on your globe, and a mark in your calendar — heavier the longer you read. Miss a day and nothing shouts. The light just waits.', cta: 'Sounds good' },
+  { id: 'streak', title: (n) => (n ? `${n}, let’s keep a quiet streak.` : 'Let’s keep a quiet streak.'), body: () => 'Reach your daily goal and a place lights up on your globe at midnight — and a yellow @ appears in your calendar. Fall short and nothing shouts; any minute still keeps the streak alive.', cta: 'Sounds good' },
   {
     id: 'goal',
     title: () => 'How much, each day?',
@@ -260,6 +261,8 @@ const STEPS: StepDef[] = [
   },
   { id: 'ready', title: (n) => (n ? `${n}, day one starts now.` : 'Day one starts now.'), body: () => 'Your first light is blinking. Pick a book, or begin with the short guide. Everything stays on your phone.', cta: '' },
 ];
+
+const GLOW: [string, string][] = [['#1b3cff', '#e8cf9a'], ['#e8cf9a', '#ff9bb0'], ['#7a4cff', '#e8cf9a'], ['#1fa2e8', '#ffd23f'], ['#1b3cff', '#7de0c0'], ['#ff7a3c', '#ffd23f'], ['#ffd23f', '#1b3cff'], ['#7a4cff', '#1fa2e8'], ['#ffc93c', '#ff7a3c'], ['#1b3cff', '#ffd23f'], ['#ffd23f', '#1b3cff']];
 
 export function Onboarding({ onDone }: { onDone: (f: Finish) => void }) {
   const settings = useStore((s) => s.settings);
@@ -308,7 +311,7 @@ export function Onboarding({ onDone }: { onDone: (f: Finish) => void }) {
   })();
 
   return (
-    <div className="ob" role="dialog" aria-label={`Welcome, step ${i + 1} of ${STEPS.length}`}>
+    <div className="ob" role="dialog" aria-label={`Welcome, step ${i + 1} of ${STEPS.length}`} style={{ ['--g1' as string]: GLOW[i][0], ['--g2' as string]: GLOW[i][1] }}>
       <div className="ob-top">
         <button className="ob-back" onClick={() => go(-1)} aria-label="Back" style={{ visibility: i === 0 ? 'hidden' : 'visible' }}>
           <Icon name="back" size={22} />

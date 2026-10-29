@@ -122,7 +122,8 @@ export function StatsBubble({ open, onClose }: { open: boolean; onClose: () => v
   const settings = useStore((s) => s.settings);
   const [full, setFull] = useState(false);
   const [goalOpen, setGoalOpen] = useState(false);
-  const [view, setView] = useState<'globe' | 'plant'>('globe');
+  const view = settings.streakView ?? 'globe';
+  const setView = (f: (v: 'globe' | 'plant') => 'globe' | 'plant') => updateSettings({ streakView: f(view) });
   const [harvest, setHarvest] = useState<Record<string, Harvest>>({});
   const [nameDraft, setNameDraft] = useState('');
   const [mounted, setMounted] = useState(open);
@@ -167,16 +168,18 @@ export function StatsBubble({ open, onClose }: { open: boolean; onClose: () => v
     };
   }, [open, docs.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // a light per day you reached your goal; today's blinks until midnight, then it stays
   const readingDays = useMemo(
     () =>
       Object.keys(days)
-        .filter((k) => days[k] >= COUNT_MS)
+        .filter((k) => days[k] >= goal)
         .sort(),
-    [days],
+    [days, goal],
   );
   const lights = useMemo(() => lightsFor(readingDays, dayKey()), [readingDays]);
   const msg = [...MESSAGES].reverse().find(([n]) => info.current >= n)?.[1] ?? MESSAGES[0][1];
   const todayDone = info.today >= COUNT_MS;
+  const met = info.today >= goal;
   const words = cheer({ name: settings.name, todayMs: info.today, goalMs: goal, days, streak: info.current, docs, harvest });
   const quote = useMemo(() => pickQuote(docs, harvest), [docs, harvest]);
   const art = useMemo(() => quoteArt(quote), [quote]);
@@ -222,7 +225,7 @@ export function StatsBubble({ open, onClose }: { open: boolean; onClose: () => v
   return (
     <>
       <div className={`scrim${closing ? ' out' : ''}`} style={{ background: full ? 'rgba(0,0,0,.28)' : 'rgba(0,0,0,.12)' }} onClick={onClose} />
-      <div ref={box} className={`bubble${full ? ' full' : ''}${closing ? ' out' : ''}`} role="dialog" aria-label="Reading streak">
+      <div ref={box} className={`bubble${full ? ' full' : ''}${closing ? ' out' : ''}${met ? ' met' : ''}`} role="dialog" aria-label="Reading streak">
         <div className="bubble-drag" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
           <div className="sheet-grip" />
           <div className="bubble-head">
@@ -268,8 +271,8 @@ export function StatsBubble({ open, onClose }: { open: boolean; onClose: () => v
             <b className="mono">
               {lights.length} light{lights.length === 1 ? '' : 's'} on your map
             </b>
-            <span>{lights.length ? 'One for every day you’ve read.' : 'Read for one minute to light the first place.'}</span>
-            <span className="muted">{todayDone ? 'Today’s light is blinking.' : `${Math.max(1, Math.ceil((goal - info.today) / 60000))} min to today’s goal.`}</span>
+            <span>{lights.length ? 'One for every day you reached your goal.' : 'Reach your daily goal to light the first place.'}</span>
+            <span className="muted">{info.today >= goal ? 'Today’s light is blinking — it joins the map at midnight.' : `${Math.max(1, Math.ceil((goal - info.today) / 60000))} min to today’s light.`}</span>
           </div>
           <div className="bubble-line mono">
             <span>
@@ -302,11 +305,12 @@ export function StatsBubble({ open, onClose }: { open: boolean; onClose: () => v
                 </div>
                 <div className="cal-grid" role="grid" aria-label="Reading days">
                   {grid.map((c) => {
-                    const g = glyphFor(c.ms);
+                    const g = glyphFor(c.ms, goal);
                     return (
                       <button
                         key={c.key}
                         data-l={g.level}
+                        data-met={g.met || undefined}
                         className={`${c.today ? 'today' : ''}${c.key === sel.key ? ' sel' : ''}`}
                         style={{ visibility: c.future ? 'hidden' : 'visible' }}
                         aria-label={`${c.date.toDateString()}: ${fmtMs(c.ms)}`}
@@ -322,12 +326,11 @@ export function StatsBubble({ open, onClose }: { open: boolean; onClose: () => v
                 </div>
                 <div className="cal-legend mono" aria-hidden>
                   <span>·&nbsp;none</span>
-                  {[...GLYPHS].reverse().map((g) => (
-                    <span key={g.ch}>
+                  {GLYPHS.map((g) => (
+                    <span key={g.ch} data-met={g.ch === '@' || undefined}>
                       {g.ch}&nbsp;{g.label}
                     </span>
                   ))}
-                  <span>min</span>
                 </div>
                 <DayChart date={sel.date} ms={sel.ms} hours={hours[sel.key]} />
               </div>
