@@ -2,7 +2,7 @@
 // file only when you open it, so linking a thousand PDFs costs almost no space.
 import * as db from './db';
 import { detectKind, titleFromFile } from './formats/detect';
-import { generatedCover, extractMeta } from './library';
+import { generatedCover, extractMeta, COVER_V } from './library';
 import { getState, patchDoc, saveDoc, removeDoc } from './store';
 import { listFolderNative, pickFilesNative, pickFolderNative, readUriBlob, type LinkedFile } from './native';
 import type { DocMeta } from './types';
@@ -136,7 +136,7 @@ async function run() {
       }
       const blob = await readLinked(cur);
       const x = await extractMeta(blob, cur.fileName, cur.kind);
-      const patch: Partial<DocMeta> = { enriched: true, pages: x.pages ?? cur.pages, author: x.author ?? cur.author };
+      const patch: Partial<DocMeta> = { enriched: true, coverV: COVER_V, pages: x.pages ?? cur.pages, author: x.author ?? cur.author };
       if (x.title && x.title !== cur.name && cur.name === titleFromFile(cur.fileName)) patch.name = x.title;
       if (x.cover) {
         const coverId = `${cur.id}:cover-${Date.now()}`;

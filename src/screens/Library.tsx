@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore, removeDoc, patchDoc, streakInfo, dayKey, COUNT_MS } from '../lib/store';
-import { coverUrl, ago, formatSize, getFile, refreshCover } from '../lib/library';
+import { coverUrl, coverInfo, ago, formatSize, getFile, refreshCover } from '../lib/library';
 import { KIND_LABEL } from '../lib/formats/detect';
 import type { DocMeta } from '../lib/types';
 import { Icon } from '../ui/Icon';
@@ -20,10 +20,20 @@ export function useCover(doc?: DocMeta) {
   return url;
 }
 
+/** Cover + frosted holder, sized from the cover's own proportions (tall, square or wide) so nothing is cropped. */
 function Pocket({ doc, near, onClick }: { doc: DocMeta; near: boolean; onClick: () => void }) {
+  const [info, setInfo] = useState<{ url: string; ar: number }>();
+  useEffect(() => {
+    let alive = true;
+    coverInfo(doc).then((i) => alive && setInfo(i));
+    return () => {
+      alive = false;
+    };
+  }, [doc.coverId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ar = Math.min(1.35, Math.max(0.5, info?.ar ?? 0.72));
   return (
-    <button className="pocket-wrap" onClick={onClick} aria-label={`Open ${doc.name}`} data-near={near ? '1' : undefined}>
-      <Cover doc={doc} className="cover" />
+    <button className="pocket-wrap" style={{ ['--ar' as string]: ar }} onClick={onClick} aria-label={`Open ${doc.name}`} data-near={near ? '1' : undefined}>
+      <div className="cover">{info && <img src={info.url} alt="" draggable={false} style={{ objectFit: Math.abs(info.ar - ar) < 0.02 ? 'cover' : 'contain' }} />}</div>
       <div className="pocket">
         <Screws />
         {doc.progress > 0.005 && (

@@ -38,3 +38,11 @@ Contains an optional AI feature that sends your question and short excerpts to a
 
 **Category:** Books & Reference · **Tags:** PDF reader, e-reader, text to speech, OCR, scanner
 **Content rating:** answer IARC honestly (user web content + AI chat) · **Target audience:** 13+ / 18+
+
+---
+
+## Screenshot credits (keep these in your submission notes)
+
+`3-page-mode.png` and `4-liquid-mode.png` show excerpts of **"Mamba: Linear-Time Sequence Modeling with Selective State Spaces"** by Albert Gu and Tri Dao (arXiv:2312.00752), licensed **CC BY 4.0** — https://creativecommons.org/licenses/by/4.0/ — shown here to demonstrate the PDF reader. No changes were made to the text beyond on-screen reflow. Other screenshots use public-domain text (Alice's Adventures in Wonderland), the app's own welcome guide, and generated sample covers.
+
+Screenshot order: 1 library · 2 reading globe · 3 page mode (research paper) · 4 liquid mode (same paper) · 5 word lookup · 6 fonts · 7 ask (AI answer with formula).

@@ -136,7 +136,7 @@ export async function refreshCover(doc: DocMeta): Promise<boolean> {
   await db.put('blobs', coverId, cover);
   if (doc.coverId) await db.del('blobs', doc.coverId);
   const { patchDoc } = await import('./store');
-  await patchDoc(doc.id, { coverId });
+  await patchDoc(doc.id, { coverId, coverV: COVER_V });
   return true;
 }
 
@@ -149,6 +149,8 @@ export async function importText(text: string, title?: string): Promise<DocMeta>
 }
 
 // ------------------------------------------------------------------ import
+
+export const COVER_V = 2;
 
 export interface Extracted {
   title: string;
@@ -213,6 +215,7 @@ export async function importFile(file: Blob, name: string, opts: { kind?: DocKin
     pages: x.pages,
     author: x.author,
     coverId,
+    coverV: COVER_V,
     readMs: 0,
   };
   await saveDoc(meta);
@@ -283,6 +286,48 @@ export async function blurredCoverUrl(meta: DocMeta): Promise<string | undefined
 }
 
 const coverCache = new Map<string, string>();
+const arCache = new Map<string, number>();
+
+/** Cover URL plus its true aspect ratio (width / height), so the book holder can fit any cover without cropping. */
+export async function coverInfo(meta: DocMeta): Promise<{ url: string; ar: number } | undefined> {
+  const url = await coverUrl(meta);
+  if (!url || !meta.coverId) return undefined;
+  let ar = arCache.get(meta.coverId);
+  if (ar === undefined) {
+    const b = await db.get<Blob>('blobs', meta.coverId);
+    try {
+      const bmp = await createImageBitmap(b!);
+      ar = bmp.width / bmp.height;
+      bmp.close();
+    } catch {
+      ar = 0.72;
+    }
+    arCache.set(meta.coverId, ar);
+  }
+  return { url, ar };
+}
+
+/** Rebuild covers made by older versions of the cover logic (one at a time, in the background). */
+let upgrading = false;
+export async function upgradeCovers() {
+  if (upgrading) return;
+  upgrading = true;
+  try {
+    const stale = () => getState().docs.find((d) => (d.coverV ?? 1) < COVER_V && ['pdf', 'docx', 'slides'].includes(d.kind) && d.size < 120_000_000);
+    for (let d = stale(); d; d = stale()) {
+      await refreshCover(d).catch(() => patchDocQuiet(d.id));
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    // other kinds never used the changed logic
+    for (const d of getState().docs.filter((x) => (x.coverV ?? 1) < COVER_V)) await patchDocQuiet(d.id);
+  } finally {
+    upgrading = false;
+  }
+}
+async function patchDocQuiet(id: string) {
+  const { patchDoc } = await import('./store');
+  await patchDoc(id, { coverV: COVER_V });
+}
 export async function coverUrl(meta: DocMeta): Promise<string | undefined> {
   if (!meta.coverId) return undefined;
   const hit = coverCache.get(meta.coverId);

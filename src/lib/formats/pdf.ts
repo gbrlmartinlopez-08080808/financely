@@ -92,22 +92,36 @@ async function largestImage(page: PDFPageProxy): Promise<ImgBox | null> {
   return best;
 }
 
+/** Share of pixels that are not (near-)white: a real cover is mostly ink, a bare title page almost none. */
+function inkShare(c: HTMLCanvasElement): number {
+  const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+  let n = 0;
+  let ink = 0;
+  for (let i = 0; i < d.length; i += 16) {
+    n++;
+    if (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] < 232) ink++;
+  }
+  return n ? ink / n : 0;
+}
+
 export async function pdfCover(data: ArrayBuffer): Promise<{ cover: Blob | null; pages: number; title?: string; author?: string }> {
   const pdf = await openPdf(data);
   try {
     const page = await pdf.getPage(1);
     const vp = page.getViewport({ scale: 1 });
-    const encode = (c: HTMLCanvasElement) => new Promise<Blob | null>((r) => c.toBlob(r, 'image/jpeg', 0.85));
+    const encode = (c: HTMLCanvasElement) => new Promise<Blob | null>((r) => c.toBlob(r, 'image/jpeg', 0.88));
+    // Page one is the cover unless it is a bare, nearly empty title page. (A vector-art cover has few words and no
+    // embedded picture, so "how much of the page is inked" is the test, not "does it contain an image".)
+    const { canvas: first } = await renderPage(page, 420 / vp.width);
     let cover: Blob | null = null;
-    // A bare title page (few words, no big picture) usually means the real cover art is a page or two later.
     try {
-      const first = await largestImage(page);
+      const ink = inkShare(first);
       const words = (await page.getTextContent()).items.reduce((n, i) => n + ('str' in i ? i.str.split(/\s+/).filter(Boolean).length : 0), 0);
-      if ((!first || first.frac < 0.2) && words < 120 && pdf.numPages > 1) {
+      if (ink < 0.035 && words < 120 && pdf.numPages > 1) {
         for (let p = 2; p <= Math.min(pdf.numPages, 8); p++) {
           const pg = await pdf.getPage(p);
           const found = await largestImage(pg);
-          if (found && found.frac >= 0.3) {
+          if (found && found.frac >= 0.35) {
             const v = pg.getViewport({ scale: 1 });
             const { canvas } = await renderPage(pg, 720 / v.width);
             const s = canvas.width / v.width;
@@ -130,10 +144,7 @@ export async function pdfCover(data: ArrayBuffer): Promise<{ cover: Blob | null;
     } catch (e) {
       console.warn('cover search failed', e);
     }
-    if (!cover) {
-      const { canvas } = await renderPage(page, 360 / vp.width);
-      cover = await encode(canvas);
-    }
+    if (!cover) cover = await encode(first);
     let title: string | undefined;
     let author: string | undefined;
     try {

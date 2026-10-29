@@ -64,7 +64,7 @@ export function AskSheet({
   };
 
   return (
-    <Sheet open={open} onClose={onClose} title="Ask" className="ask">
+    <Sheet open={open} onClose={onClose} className="ask">
       <div className="ask-body">
         {!aiOk ? (
           <div className="ask-consent">

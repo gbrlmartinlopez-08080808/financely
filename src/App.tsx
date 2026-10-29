@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { init, useStore, updateSettings } from './lib/store';
-import { importFile, importText } from './lib/library';
+import { importFile, importText, upgradeCovers } from './lib/library';
 import { initBackButton, isNative, listenIncoming, manageSelectionMenu, readIncoming, setStatusBar, tap } from './lib/native';
 import { linkFolder, linkPickedFiles, rescanAll } from './lib/linked';
 import type { DocMeta } from './lib/types';
@@ -110,6 +110,13 @@ export default function App() {
     }).then((o) => (off = o));
     return () => off();
   }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // covers made by older versions get rebuilt quietly, one at a time
+  useEffect(() => {
+    if (!ready) return;
+    const t = setTimeout(() => upgradeCovers(), 5000);
+    return () => clearTimeout(t);
+  }, [ready]);
 
   // keep linked folders fresh (new files appear, deleted ones go)
   useEffect(() => {

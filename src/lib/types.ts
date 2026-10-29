@@ -35,6 +35,7 @@ export interface DocMeta {
   uri?: string; // Android document URI: the file stays where it is (nothing is copied)
   folder?: string; // linked folder this file came from
   modified?: number;
+  coverV?: number; // cover algorithm version (older covers are rebuilt in the background)
   enriched?: boolean; // real cover / title read from the file
   finished?: boolean;
   /** For scans: ids of page images. */
