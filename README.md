@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Quire
 
-## Getting Started
+A calm, ad-free, paywall-free reader for Android (and the web) that opens almost anything: PDF, EPUB, DOCX, ODT, RTF, Markdown, HTML, TXT, PPTX, XLSX/CSV, images, audio, video and source code.
 
-First, run the development server:
+**Install:** download [`releases/Quire-1.0.apk`](releases/Quire-1.0.apk) on your phone and open it. Allow “Install unknown apps” for your browser or file manager when asked (on Xiaomi/HyperOS you may also have to confirm a security prompt).
+
+## What it does
+
+- **Liquid mode for PDFs.** Reflows fixed pages into one phone-sized column. It handles two-column papers, running headers, footnotes and hyphenation. Display equations, inline fractions, tables and figures are lifted from the page as crisp masks sized in `em`, so maths keeps its exact structure, scales with your font size and follows dark themes.
+- **Listen.** Sentence-by-sentence read-aloud with highlight, speed ruler, voice picker, sleep timer and a focus mode. Uses Android's native TTS engine.
+- **Look up.** Select a word and tap *Define* to get the definition, its origin (Greek and Latin roots shown as chips) and a Wikipedia card.
+- **Convert.** To PDF, TXT, Markdown, standalone HTML, PNG pages, CSV or JPEG. Photos get on-device OCR to text.
+- **Scan.** Photograph pages to get cleaned images, on-device OCR (Tesseract, bundled) and a searchable PDF.
+- **Reading kit.** Page / liquid views, pinch zoom, page thumbnails, search, contents, bookmarks, highlights, four reading themes, typography controls.
+- **Quiet streaks.** Daily goal ring, day blocks, and an ASCII seedling that grows with your streak.
+- **Open with Quire.** Registered for “Open with…” and the Share sheet for every file type.
+
+Everything is stored on the device (IndexedDB). Only word lookups use the network.
+
+## Develop
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev               # web app at http://localhost:5173
+npm run build             # production web build in dist/
+npx cap sync android && cd android && ./gradlew assembleRelease   # APK
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Release signing reads `android/keystore.properties` (git-ignored). Without it, release builds fall back to the debug key. Every push also builds an APK in GitHub Actions (artifact `Quire-apk`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Stack: Vite + React + TypeScript, Capacitor 8, pdf.js, mammoth, JSZip, marked + KaTeX, SheetJS, jsPDF, tesseract.js.

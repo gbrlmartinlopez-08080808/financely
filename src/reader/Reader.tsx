@@ -1,0 +1,864 @@
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import * as db from '../lib/db';
+import { addReading, patchDoc, useStore, updateSettings } from '../lib/store';
+import { loadContent, getFile, importFile, type Content } from '../lib/library';
+import type { Bookmark, DocMeta, Highlight, TocEntry } from '../lib/types';
+import { openPdf, pdfOutline, type PDFDocumentProxy } from '../lib/formats/pdf';
+import { blocksToHtml, pdfToLiquid, type LBlock } from '../lib/formats/liquidPdf';
+import { onBack, setStatusBar, shareFile, shareText, tap } from '../lib/native';
+import { Icon, TypeGlyph } from '../ui/Icon';
+import { PixelBar, PixelLoader, Segmented, Sheet, toast } from '../ui/kit';
+import { PdfView, type PdfViewHandle } from './PdfView';
+import { LookupCard, SelectionMenu, ZoomViewer } from './Lookup';
+import { ListenBar } from './ListenBar';
+import { ContentsSheet, MoreSheet, THEMES, TypeSheet, type MoreAction } from './sheets';
+import { BinaryView, CodeView, ImageView, MediaView, SheetView } from './OtherViews';
+import { anchorFromSelection, applyHighlights, clearMarks, findAll, wrapSentences } from './dom';
+import { KIND_LABEL } from '../lib/formats/detect';
+
+const LQ_VERSION = 'lq8';
+
+export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () => void; onConvert: (doc: DocMeta, root?: HTMLElement | null) => void }) {
+  const id = doc.id;
+  const settings = useStore((s) => s.settings);
+  const [content, setContent] = useState<Content | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
+  const [mode, setMode] = useState<'page' | 'liquid'>(doc.position?.mode ?? settings.defaultPdfMode);
+  const [listen, setListen] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [chrome, setChrome] = useState(true);
+  const [sheet, setSheet] = useState<null | 'type' | 'contents' | 'more' | 'info' | 'ocr'>(null);
+  const [find, setFind] = useState<string | null>(null);
+  const [findHits, setFindHits] = useState<{ n: number; cur: number; pages?: number[] }>({ n: 0, cur: 0 });
+  const [lookup, setLookup] = useState<string | null>(null);
+  const [selRect, setSelRect] = useState<DOMRect | null>(null);
+  const [zoom, setZoom] = useState<{ src: string; mask: boolean; ratio: number } | null>(null);
+  const [toc, setToc] = useState<TocEntry[]>([]);
+  const [clockMode, setClockMode] = useState<'time' | 'left'>('time');
+  const [now, setNow] = useState(() => new Date());
+  const [progress, setProgress] = useState(doc.progress);
+  const [page, setPage] = useState(doc.kind === 'pdf' && doc.position ? Math.max(1, Math.round(doc.position.value)) : 1);
+  const [liquifying, setLiquifying] = useState<{ page: number; pages: number } | null>(null);
+  const [listenFrom, setListenFrom] = useState<number | null>(null);
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [thumbs, setThumbs] = useState(false);
+  const [scanned, setScanned] = useState<number[]>([]);
+  const [ocrText, setOcrText] = useState<{ text: string; busy: boolean; p: number } | null>(null);
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
+  const flowRef = useRef<HTMLDivElement>(null);
+  const pdfRef = useRef<PdfViewHandle>(null);
+  const urls = useRef<string[]>([]);
+  const listeningRef = useRef(false);
+  listeningRef.current = listening;
+  const [flowReady, setFlowReady] = useState(0);
+
+  const isPdf = doc.kind === 'pdf';
+  const liquid = !isPdf || mode === 'liquid';
+  const theme = THEMES.find((t) => t.id === settings.readerTheme) ?? THEMES[0];
+  const dark = settings.readerTheme === 'dusk' || settings.readerTheme === 'night';
+
+  // ---------------------------------------------------------------- load
+  useEffect(() => {
+    let alive = true;
+    patchDoc(id, { openedAt: Date.now() }, true);
+    loadContent(doc)
+      .then(async (c) => {
+        if (!alive) return;
+        setContent(c);
+        if (c.type === 'pdf') {
+          const p = await openPdf(c.data);
+          if (!alive) return p.loadingTask.destroy();
+          setPdf(p);
+          pdfOutline(p).then((o) => alive && o.length && setToc(o.map((x, i) => ({ title: x.title, anchor: `page-${x.page}`, level: x.level, page: x.page, i }))));
+        } else if (c.type === 'flow') {
+          setToc(c.liquid.toc);
+          urls.current.push(...c.liquid.urls);
+        }
+      })
+      .catch((e) => alive && setError(String(e?.message ?? e)));
+    db.entries<Highlight | Bookmark>('marks').then((all) => {
+      if (!alive) return;
+      const mine = all.filter(([k]) => k.startsWith(id + ':')).map(([, v]) => v);
+      setHighlights(mine.filter((m): m is Highlight => 'text' in m).sort((a, b) => a.at - b.at));
+      setBookmarks(mine.filter((m): m is Bookmark => 'label' in m).sort((a, b) => a.progress - b.progress));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(
+    () => () => {
+      pdf?.loadingTask.destroy();
+    },
+    [pdf],
+  );
+  useEffect(
+    () => () => {
+      urls.current.forEach((u) => URL.revokeObjectURL(u));
+    },
+    [],
+  );
+
+  // ---------------------------------------------------------------- liquid html
+  useLayoutEffect(() => {
+    const root = flowRef.current;
+    if (!root || !content || !liquid) return;
+    if (content.type === 'flow') {
+      root.innerHTML = content.liquid.html;
+      delete root.dataset.wrapped;
+      setFlowReady((n) => n + 1);
+      return;
+    }
+    if (content.type !== 'pdf') return;
+    let alive = true;
+    const ac = new AbortController();
+    root.innerHTML = '';
+    delete root.dataset.wrapped;
+    (async () => {
+      const key = `${id}:${LQ_VERSION}`;
+      const cached = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', key);
+      if (!alive) return;
+      if (cached) {
+        root.innerHTML = blocksToHtml(cached.blocks, urls.current);
+        setScanned(cached.scanned);
+        afterLiquid(root);
+        return;
+      }
+      const all: LBlock[] = [];
+      setLiquifying({ page: 0, pages: doc.pages ?? 0 });
+      try {
+        const res = await pdfToLiquid(
+          content.data,
+          (blocks, p) => {
+            if (!alive) return;
+            all.push(...blocks);
+            root.insertAdjacentHTML('beforeend', blocksToHtml(blocks, urls.current));
+            setLiquifying({ page: p.page, pages: p.pages });
+            if (p.page === Math.max(1, page)) restoreLiquidPage(root);
+          },
+          ac.signal,
+        );
+        if (!alive) return;
+        setScanned(res.scannedPages);
+        await db.put('cache', key, { blocks: res.blocks, scanned: res.scannedPages });
+        afterLiquid(root);
+      } catch (e) {
+        if ((e as Error).name !== 'AbortError') {
+          console.error(e);
+          toast('Liquid mode had trouble with this file');
+        }
+      } finally {
+        if (alive) setLiquifying(null);
+      }
+    })();
+    return () => {
+      alive = false;
+      ac.abort();
+    };
+  }, [content, liquid]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const restoredLiquid = useRef(false);
+  const restoreLiquidPage = (root: HTMLElement) => {
+    if (restoredLiquid.current || !scroller) return;
+    if (page > 1) {
+      const el = root.querySelector<HTMLElement>(`#page-${page}`);
+      if (el) {
+        restoredLiquid.current = true;
+        scroller.scrollTop = el.offsetTop - 70;
+      }
+    } else restoredLiquid.current = true;
+  };
+
+  const afterLiquid = (root: HTMLElement) => {
+    if (isPdf) {
+      restoreLiquidPage(root);
+      // Use liquid headings when the PDF has no outline
+      setToc((t) => {
+        if (t.length) return t;
+        return Array.from(root.querySelectorAll<HTMLElement>('h2,h3,h4'))
+          .filter((h) => (h.textContent ?? '').length < 100)
+          .map((h) => ({ title: h.textContent ?? '', anchor: h.id, level: Number(h.tagName[1]) - 1, page: Number(h.dataset.page) || undefined }));
+      });
+    }
+    setFlowReady((n) => n + 1);
+  };
+
+  // restore position for flow documents
+  useEffect(() => {
+    if (!flowReady || !scroller || isPdf || restoredLiquid.current) return;
+    restoredLiquid.current = true;
+    const v = doc.position?.value ?? doc.progress;
+    if (v > 0.001) requestAnimationFrame(() => (scroller.scrollTop = v * (scroller.scrollHeight - scroller.clientHeight)));
+  }, [flowReady, scroller]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // highlights
+  useEffect(() => {
+    const root = flowRef.current;
+    if (root && flowReady) applyHighlights(root, highlights);
+  }, [flowReady, highlights]);
+
+  // ---------------------------------------------------------------- status bar & theme
+  useEffect(() => {
+    setStatusBar(dark, theme.bg);
+  }, [dark, theme.bg]);
+
+  // ---------------------------------------------------------------- reading time
+  useEffect(() => {
+    let last = Date.now();
+    let lastAct = Date.now();
+    const act = () => (lastAct = Date.now());
+    const el = scroller;
+    el?.addEventListener('scroll', act, { passive: true });
+    window.addEventListener('pointerdown', act);
+    const tick = () => {
+      const n = Date.now();
+      const active = document.visibilityState === 'visible' && (n - lastAct < 120_000 || listeningRef.current);
+      if (active) addReading(Math.min(n - last, 30_000), id);
+      last = n;
+      setNow(new Date());
+    };
+    const t = setInterval(tick, 15_000);
+    return () => {
+      clearInterval(t);
+      tick();
+      el?.removeEventListener('scroll', act);
+      window.removeEventListener('pointerdown', act);
+    };
+  }, [scroller, id]);
+
+  // ---------------------------------------------------------------- progress + chrome on scroll
+  const saveT = useRef(0);
+  const lastY = useRef(0);
+  const onPdfPage = useCallback(
+    (p: number, prog: number) => {
+      setPage(p);
+      setProgress(prog);
+      clearTimeout(saveT.current);
+      saveT.current = window.setTimeout(() => patchDoc(id, { progress: Math.max(prog, 0), position: { mode: 'page', value: p } }), 600);
+    },
+    [id],
+  );
+  useEffect(() => {
+    const el = scroller;
+    if (!el) return;
+    const on = () => {
+      const y = el.scrollTop;
+      const dy = y - lastY.current;
+      lastY.current = y;
+      if (y > 120 && dy > 10 && !listeningRef.current) setChrome(false);
+      else if (dy < -14) setChrome(true);
+      if (!liquid) return;
+      const max = el.scrollHeight - el.clientHeight;
+      const prog = max > 0 ? y / max : 0;
+      setProgress(prog);
+      let p = page;
+      if (isPdf) {
+        // current pdf page from the nearest page marker above the viewport top
+        const marks = flowRef.current?.querySelectorAll<HTMLElement>('.pg');
+        if (marks?.length) {
+          let lo = 0;
+          let hi = marks.length - 1;
+          while (lo < hi) {
+            const mid = (lo + hi + 1) >> 1;
+            if (marks[mid].offsetTop <= y + 120) lo = mid;
+            else hi = mid - 1;
+          }
+          p = Number(marks[lo].dataset.page) || 1;
+          setPage(p);
+        }
+      }
+      clearTimeout(saveT.current);
+      saveT.current = window.setTimeout(() => {
+        const done = !liquifying || !isPdf;
+        patchDoc(id, {
+          progress: isPdf ? (doc.pages ? p / doc.pages : prog) : prog,
+          position: isPdf ? { mode: 'liquid', value: p } : { mode: 'liquid', value: prog },
+          ...(done && prog > 0.985 && !doc.finished ? { finished: true } : {}),
+        });
+      }, 700);
+    };
+    el.addEventListener('scroll', on, { passive: true });
+    return () => el.removeEventListener('scroll', on);
+  }, [scroller, liquid, isPdf, page, liquifying, id, doc.pages, doc.finished]);
+
+  // ---------------------------------------------------------------- selection
+  useEffect(() => {
+    let t = 0;
+    const on = () => {
+      clearTimeout(t);
+      t = window.setTimeout(() => {
+        const sel = window.getSelection();
+        if (!sel || sel.isCollapsed || !sel.rangeCount || !scroller) return setSelRect(null);
+        const r = sel.getRangeAt(0);
+        if (!scroller.contains(r.commonAncestorContainer)) return setSelRect(null);
+        setSelRect(r.getBoundingClientRect());
+      }, 160);
+    };
+    document.addEventListener('selectionchange', on);
+    return () => document.removeEventListener('selectionchange', on);
+  }, [scroller]);
+
+  const selectionText = () => window.getSelection()?.toString().trim() ?? '';
+  const clearSel = () => {
+    window.getSelection()?.removeAllRanges();
+    setSelRect(null);
+  };
+
+  // ---------------------------------------------------------------- back button
+  useEffect(
+    () =>
+      onBack(() => {
+        if (find !== null) {
+          closeFind();
+          return true;
+        }
+        if (listen) {
+          setListen(false);
+          return true;
+        }
+        if (thumbs) {
+          setThumbs(false);
+          return true;
+        }
+        close();
+        return true;
+      }),
+    [find, listen, thumbs], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  const close = () => {
+    clearTimeout(saveT.current);
+    if (scroller && liquid && !isPdf) {
+      const max = scroller.scrollHeight - scroller.clientHeight;
+      const prog = max > 0 ? scroller.scrollTop / max : 0;
+      patchDoc(id, { progress: prog, position: { mode: 'liquid', value: prog } });
+    } else if (isPdf) patchDoc(id, { position: { mode, value: page } });
+    onClose();
+  };
+
+  // ---------------------------------------------------------------- actions
+  const switchMode = (m: 'page' | 'liquid') => {
+    if (m === mode) return;
+    restoredLiquid.current = false;
+    setMode(m);
+    updateSettings({ defaultPdfMode: m });
+    patchDoc(id, { position: { mode: m, value: page } });
+    if (m === 'page') setTimeout(() => pdfRef.current?.goTo(page), 100);
+  };
+
+  const toggleListen = (v: 'read' | 'listen') => {
+    if (v === 'listen') {
+      if (!liquid) {
+        switchMode('liquid');
+        toast('Listening uses liquid view');
+      }
+      setListen(true);
+      setChrome(true);
+    } else setListen(false);
+  };
+
+  const cycleTheme = () => {
+    tap();
+    const i = THEMES.findIndex((t) => t.id === settings.readerTheme);
+    const next = THEMES[(i + 1) % THEMES.length];
+    updateSettings({ readerTheme: next.id });
+    toast(next.name);
+  };
+
+  const onContentTap = (e: React.MouseEvent) => {
+    if (selectionText()) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('a')) {
+      const a = target.closest('a')!;
+      const href = a.getAttribute('href') ?? '';
+      if (href.startsWith('#')) {
+        e.preventDefault();
+        const el = flowRef.current?.querySelector(CSS.escape ? `#${CSS.escape(href.slice(1))}` : href);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      return;
+    }
+    const fig = target.closest<HTMLElement>('figure.lq, .flow figure');
+    if (fig) {
+      const src = fig.dataset.src ?? fig.querySelector('img')?.getAttribute('src');
+      if (src) {
+        const w = Number(fig.dataset.w) || 1;
+        const h = Number(fig.dataset.h) || 1;
+        setZoom({ src, mask: !!fig.querySelector('.mask'), ratio: w / h });
+        return;
+      }
+    }
+    if (listening && target.closest('.s')) return;
+    setChrome((c) => !c);
+  };
+
+  const addHighlight = async () => {
+    const root = flowRef.current;
+    const sel = window.getSelection();
+    if (!root || !sel) return;
+    const a = anchorFromSelection(root, sel);
+    if (!a) return;
+    const h: Highlight = { id: db.uid(), docId: id, text: a.text, prefix: a.prefix, at: Date.now() };
+    await db.put('marks', `${id}:h:${h.id}`, h);
+    clearSel();
+    setHighlights((l) => [...l, h]);
+    tap();
+    toast('Highlighted');
+  };
+
+  const listenFromSelection = () => {
+    const root = flowRef.current;
+    const sel = window.getSelection();
+    if (!root || !sel?.rangeCount) return;
+    wrapSentences(root);
+    let node: Node | null = sel.getRangeAt(0).startContainer;
+    let s: HTMLElement | null = null;
+    while (node && node !== root) {
+      if (node instanceof HTMLElement && node.classList.contains('s')) {
+        s = node;
+        break;
+      }
+      node = node.parentNode;
+    }
+    if (!s) {
+      const r = sel.getRangeAt(0).getBoundingClientRect();
+      const all = root.querySelectorAll<HTMLElement>('.s');
+      s = Array.from(all).find((x) => x.getBoundingClientRect().bottom >= r.top) ?? null;
+    }
+    clearSel();
+    setListen(true);
+    setListenFrom(s ? Number(s.dataset.i) : 0);
+  };
+
+  const addBookmark = async () => {
+    let label = '';
+    if (isPdf) label = `Page ${page}`;
+    if (liquid && scroller && flowRef.current) {
+      const top = scroller.getBoundingClientRect().top + 90;
+      const el = Array.from(flowRef.current.querySelectorAll<HTMLElement>('p,h2,h3,li')).find((p) => p.getBoundingClientRect().bottom > top);
+      const t = (el?.textContent ?? '').trim();
+      if (t) label = (isPdf ? `p.${page} · ` : '') + (t.length > 70 ? t.slice(0, 70) + '…' : t);
+    }
+    const b: Bookmark = { id: db.uid(), docId: id, progress: isPdf && !liquid ? page / (doc.pages || 1) : progress, label: label || `${Math.round(progress * 100)}%`, at: Date.now() };
+    if (isPdf) (b as Bookmark & { page?: number }).page = page;
+    await db.put('marks', `${id}:b:${b.id}`, b);
+    setBookmarks((l) => [...l, b].sort((x, y) => x.progress - y.progress));
+    tap('medium');
+    toast('Bookmarked');
+  };
+
+  const goProgress = (p: number, pg?: number) => {
+    if (isPdf && pg) {
+      if (liquid) flowRef.current?.querySelector<HTMLElement>(`#page-${pg}`)?.scrollIntoView({ block: 'start' });
+      else pdfRef.current?.goTo(pg);
+      return;
+    }
+    if (scroller) scroller.scrollTop = p * (scroller.scrollHeight - scroller.clientHeight);
+  };
+
+  // ---------------------------------------------------------------- find
+  const pageTexts = useRef<Map<number, string>>(new Map());
+  const runFind = useCallback(
+    async (q: string) => {
+      if (liquid) {
+        const root = flowRef.current;
+        if (!root) return;
+        const groups = findAll(root, q);
+        setFindHits({ n: groups.length, cur: 0 });
+        if (groups[0]) {
+          groups[0].forEach((m) => m.classList.add('cur'));
+          groups[0][0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+      } else if (pdf) {
+        const query = q.trim().toLowerCase();
+        if (query.length < 2) return setFindHits({ n: 0, cur: 0 });
+        const pages: number[] = [];
+        for (let i = 1; i <= pdf.numPages; i++) {
+          let t = pageTexts.current.get(i);
+          if (t === undefined) {
+            const tc = await (await pdf.getPage(i)).getTextContent();
+            t = tc.items.map((it) => ('str' in it ? it.str : '')).join(' ').toLowerCase();
+            pageTexts.current.set(i, t);
+          }
+          if (t.includes(query)) pages.push(i);
+        }
+        pdfRef.current?.highlight(q);
+        setFindHits({ n: pages.length, cur: 0, pages });
+        if (pages[0]) pdfRef.current?.goTo(pages[0], true);
+      }
+    },
+    [liquid, pdf],
+  );
+  const findT = useRef(0);
+  const stepFind = (d: number) => {
+    const n = findHits.n;
+    if (!n) return;
+    const cur = (findHits.cur + d + n) % n;
+    setFindHits((h) => ({ ...h, cur }));
+    if (liquid) {
+      const root = flowRef.current!;
+      root.querySelectorAll('mark.find.cur').forEach((m) => m.classList.remove('cur'));
+      const marks = Array.from(root.querySelectorAll<HTMLElement>('mark.find'));
+      // groups are contiguous; rebuild by order
+      const groups: HTMLElement[][] = [];
+      let lastEnd: HTMLElement | null = null;
+      for (const m of marks) {
+        if (lastEnd && lastEnd.nextSibling === m) groups[groups.length - 1].push(m);
+        else groups.push([m]);
+        lastEnd = m;
+      }
+      const g = groups[cur];
+      g?.forEach((m) => m.classList.add('cur'));
+      g?.[0]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    } else if (findHits.pages) pdfRef.current?.goTo(findHits.pages[cur], true);
+  };
+  const closeFind = () => {
+    setFind(null);
+    if (flowRef.current) clearMarks(flowRef.current, 'find');
+    pdfRef.current?.highlight('');
+    setFindHits({ n: 0, cur: 0 });
+  };
+
+  // ---------------------------------------------------------------- OCR (images & scanned PDF pages)
+  const runOcr = async () => {
+    const { recognize, prepareScan } = await import('../lib/ocr');
+    setSheet('ocr');
+    setOcrText({ text: '', busy: true, p: 0 });
+    try {
+      if (content?.type === 'image') {
+        const img = await prepareScan(content.blob);
+        const r = await recognize(img, (p) => setOcrText((o) => (o ? { ...o, p } : o)));
+        setOcrText({ text: r.text, busy: false, p: 1 });
+      } else if (isPdf && flowRef.current) {
+        const key = `${id}:${LQ_VERSION}`;
+        const cached = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', key);
+        if (!cached) throw new Error('Open liquid view first');
+        const out: LBlock[] = [];
+        let done = 0;
+        const total = cached.blocks.filter((b) => b.t === 'img' && b.kind === 'scan').length;
+        let text = '';
+        for (const b of cached.blocks) {
+          if (b.t === 'img' && b.kind === 'scan') {
+            const r = await recognize(b.blob, (p) => setOcrText({ text, busy: true, p: (done + p) / Math.max(1, total) }));
+            done++;
+            text += r.text + '\n\n';
+            for (const para of r.text.split(/\n\n+/)) if (para.trim()) out.push({ t: 'p', html: para.replace(/&/g, '&amp;').replace(/</g, '&lt;'), page: b.page });
+          } else out.push(b);
+        }
+        await db.put('cache', key, { blocks: out, scanned: [] });
+        flowRef.current.innerHTML = blocksToHtml(out, urls.current);
+        delete flowRef.current.dataset.wrapped;
+        setScanned([]);
+        setFlowReady((n) => n + 1);
+        setOcrText({ text, busy: false, p: 1 });
+      }
+    } catch (e) {
+      setOcrText({ text: `OCR failed: ${(e as Error).message}`, busy: false, p: 1 });
+    }
+  };
+
+  // ---------------------------------------------------------------- derived
+  const words = useMemo(() => {
+    if (!flowReady || !flowRef.current) return 0;
+    return (flowRef.current.textContent ?? '').split(/\s+/).length;
+  }, [flowReady]);
+  const minutesLeft = liquid ? Math.max(1, Math.round((words * (1 - progress)) / 230)) : Math.max(1, Math.round(((doc.pages ?? 1) - page + 1) * 1.8));
+
+  const moreActions: MoreAction[] = [
+    { id: 'find', label: 'Search in document', icon: 'search' },
+    { id: 'contents', label: 'Contents & marks', icon: 'list' },
+    { id: 'bookmark', label: 'Bookmark this spot', icon: 'bookmark' },
+    { id: 'mode', label: liquid ? 'Original pages' : 'Liquid view', icon: liquid ? 'page' : 'liquid', hidden: !isPdf },
+    { id: 'thumbs', label: thumbs ? 'Hide page thumbnails' : 'Page thumbnails', icon: 'sidebar', hidden: !isPdf || liquid },
+    { id: 'ocr', label: 'Recognise text (OCR)', pixel: 'scan', hidden: !(content?.type === 'image' || (isPdf && liquid && scanned.length > 0)), right: isPdf ? `${scanned.length} scanned` : undefined },
+    { id: 'convert', label: 'Convert / export…', pixel: 'convert' },
+    { id: 'share', label: 'Share original', icon: 'share' },
+    { id: 'info', label: 'About this file', icon: 'info' },
+  ];
+
+  const onMore = async (a: string) => {
+    if (a === 'find') setFind('');
+    else if (a === 'contents') setSheet('contents');
+    else if (a === 'bookmark') addBookmark();
+    else if (a === 'mode') switchMode(liquid ? 'page' : 'liquid');
+    else if (a === 'thumbs') setThumbs((t) => !t);
+    else if (a === 'convert') onConvert(doc, liquid ? flowRef.current : null);
+    else if (a === 'ocr') runOcr();
+    else if (a === 'info') setSheet('info');
+    else if (a === 'share') {
+      const f = await getFile(id);
+      if (f) shareFile(f, doc.fileName).catch(() => {});
+    }
+  };
+
+  const style = {
+    '--r-font': settings.font === 'serif' ? 'var(--serif)' : settings.font === 'mono' ? 'var(--mono)' : 'var(--sans)',
+    '--r-size': `${settings.fontSize}px`,
+    '--r-lh': settings.lineHeight,
+    '--r-margin': `${settings.margin}px`,
+    '--r-align': settings.justify ? 'justify' : 'left',
+  } as React.CSSProperties;
+
+  const showPdfPages = isPdf && !liquid && pdf;
+
+  return (
+    <div className="reader" data-theme={settings.readerTheme} data-dark={dark ? '1' : undefined} style={style}>
+      <div className="r-progress" style={{ width: `${Math.round(progress * 100)}%` }} />
+      <div className="reader-scroll" ref={setScroller} style={{ paddingLeft: showPdfPages && thumbs ? 84 : 0 }}>
+        {error ? (
+          <div className="empty" style={{ paddingTop: 140 }}>
+            <h2>Couldn’t open this file</h2>
+            <p>{error}</p>
+            <button className="pill" onClick={close}>
+              Back to library
+            </button>
+          </div>
+        ) : !content ? (
+          <div style={{ display: 'grid', placeItems: 'center', height: '100%' }}>
+            <PixelLoader grid={4} size={7} label="opening" />
+          </div>
+        ) : showPdfPages ? (
+          <PdfView ref={pdfRef} pdf={pdf} scroller={scroller} initialPage={page} thumbs={thumbs} onPage={onPdfPage} onTap={onContentTap} />
+        ) : isPdf && !liquid ? (
+          <div style={{ display: 'grid', placeItems: 'center', height: '100%' }}>
+            <PixelLoader grid={4} size={7} label="opening" />
+          </div>
+        ) : content.type === 'sheet' ? (
+          <div onClick={onContentTap}>
+            <SheetView sheets={content.sheets} />
+          </div>
+        ) : content.type === 'image' ? (
+          <ImageView url={content.url} onTap={() => setChrome((c) => !c)} />
+        ) : content.type === 'media' ? (
+          <MediaView url={content.url} kind={content.kind} name={doc.name} />
+        ) : content.type === 'code' ? (
+          <CodeView text={content.text} onTap={() => setChrome((c) => !c)} />
+        ) : content.type === 'binary' ? (
+          <BinaryView
+            hex={content.hex}
+            size={content.size}
+            onAsText={async () => {
+              const f = await getFile(id);
+              if (!f) return;
+              await patchDoc(id, { kind: 'text' });
+              const { textToLiquid } = await import('../lib/formats/flow');
+              setContent({ type: 'flow', liquid: textToLiquid(await f.arrayBuffer()) });
+            }}
+          />
+        ) : (
+          <div className="flow" data-font={settings.font} ref={flowRef} onClick={onContentTap} lang="en" />
+        )}
+      </div>
+
+      {liquifying && (
+        <div className="liquify" role="status">
+          <PixelLoader size={4} gap={2} />
+          liquifying {liquifying.page}/{liquifying.pages || '…'}
+          <PixelBar value={liquifying.pages ? liquifying.page / liquifying.pages : 0} cells={10} />
+        </div>
+      )}
+
+      {find !== null ? (
+        <div className="findbar">
+          <Icon name="search" size={18} />
+          <input
+            autoFocus
+            placeholder={liquid ? 'find in text' : 'find in pages'}
+            value={find}
+            onChange={(e) => {
+              const v = e.target.value;
+              setFind(v);
+              clearTimeout(findT.current);
+              findT.current = window.setTimeout(() => runFind(v), 280);
+            }}
+            onKeyDown={(e) => e.key === 'Enter' && stepFind(e.shiftKey ? -1 : 1)}
+          />
+          <span className="count">{findHits.n ? `${findHits.cur + 1}/${findHits.n}${findHits.pages ? 'p' : ''}` : find.length > 1 ? '0' : ''}</span>
+          <button className="r-ibtn" onClick={() => stepFind(-1)} aria-label="Previous match">
+            <Icon name="up" />
+          </button>
+          <button className="r-ibtn" onClick={() => stepFind(1)} aria-label="Next match">
+            <Icon name="down" />
+          </button>
+          <button className="r-ibtn" onClick={closeFind} aria-label="Close search">
+            <Icon name="close" />
+          </button>
+        </div>
+      ) : (
+        <div className={`r-top${chrome ? '' : ' hide'}`}>
+          <button className="r-ibtn" onClick={close} aria-label="Back to library">
+            <Icon name="back" size={24} />
+          </button>
+          <div className="title">
+            {doc.name}
+            {isPdf ? ` · ${page}/${doc.pages ?? '?'}` : ''}
+          </div>
+          <button className="r-ibtn" onClick={() => setFind('')} aria-label="Search">
+            <Icon name="search" />
+          </button>
+          <button className="r-ibtn" onClick={() => setSheet('contents')} aria-label="Contents and marks">
+            <Icon name="list" />
+          </button>
+          <button className="r-ibtn" onClick={() => setSheet('more')} aria-label="More">
+            <Icon name="more" size={22} stroke={2.6} />
+          </button>
+        </div>
+      )}
+
+      {liquid && <div className="r-fade" style={{ opacity: chrome || listen ? 1 : 0.55 }} />}
+
+      <div className={`r-dock${chrome || listen ? '' : ' hide'}`}>
+        {listen && (
+          <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
+            <ListenBar root={flowRef.current} scroller={scroller} startAt={listenFrom} onPlaying={setListening} docId={id} key={flowReady} />
+          </div>
+        )}
+        <div className="r-dock-row">
+          <button className="pill" onClick={() => setClockMode((m) => (m === 'time' ? 'left' : 'time'))} style={{ padding: '0 16px', gap: 8 }} aria-label="Clock / time left">
+            <Icon name="clock" size={19} />
+            <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{clockMode === 'time' ? now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : `${minutesLeft}m`}</span>
+          </button>
+          {(liquid || isPdf) && content?.type !== 'sheet' ? (
+            <Segmented
+              value={listen ? 'listen' : 'read'}
+              onChange={toggleListen}
+              options={[
+                { value: 'read', label: 'Read' },
+                { value: 'listen', label: 'Listen' },
+              ]}
+            />
+          ) : null}
+          <button className="pill round" onClick={cycleTheme} onContextMenu={(e) => (e.preventDefault(), setSheet('type'))} aria-label="Theme">
+            <Icon name={dark ? 'moon' : 'sun'} size={20} />
+          </button>
+          <button className="pill round" onClick={() => setSheet('type')} aria-label="Typography">
+            <TypeGlyph size={20} />
+          </button>
+        </div>
+        <button className="r-chev" onClick={() => setChrome(false)} aria-label="Hide controls">
+          <Icon name="down" size={20} />
+        </button>
+      </div>
+
+      <SelectionMenu
+        rect={selRect}
+        onDefine={() => {
+          const w = selectionText().split(/\s+/).slice(0, 5).join(' ');
+          clearSel();
+          setLookup(w);
+        }}
+        onHighlight={liquid ? addHighlight : undefined}
+        onListen={liquid ? listenFromSelection : undefined}
+        onCopy={() => {
+          navigator.clipboard?.writeText(selectionText());
+          clearSel();
+          toast('Copied');
+        }}
+        onShare={() => {
+          shareText(`“${selectionText()}” — ${doc.name}`);
+          clearSel();
+        }}
+      />
+      <LookupCard word={lookup} onClose={() => setLookup(null)} />
+      <ZoomViewer src={zoom?.src ?? null} mask={zoom?.mask} ratio={zoom?.ratio} onClose={() => setZoom(null)} />
+
+      <TypeSheet open={sheet === 'type'} onClose={() => setSheet(null)} isPdf={isPdf} mode={mode} onMode={switchMode} />
+      <ContentsSheet
+        open={sheet === 'contents'}
+        onClose={() => setSheet(null)}
+        toc={toc}
+        marks={bookmarks}
+        highlights={highlights}
+        onAddMark={() => {
+          setSheet(null);
+          addBookmark();
+        }}
+        onGo={(t) => {
+          setSheet(null);
+          if (t.page && isPdf) goProgress(0, t.page);
+          else flowRef.current?.querySelector(`#${CSS.escape(t.anchor)}`)?.scrollIntoView({ block: 'start' });
+        }}
+        onGoMark={(b) => {
+          setSheet(null);
+          goProgress(b.progress, (b as Bookmark & { page?: number }).page);
+        }}
+        onGoHighlight={(h) => {
+          setSheet(null);
+          if (!liquid) switchMode('liquid');
+          setTimeout(() => flowRef.current?.querySelector(`mark.hl[data-id="${h.id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 200);
+        }}
+        onDeleteMark={async (b) => {
+          await db.del('marks', `${id}:b:${b.id}`);
+          setBookmarks((l) => l.filter((x) => x.id !== b.id));
+        }}
+        onDeleteHighlight={async (h) => {
+          await db.del('marks', `${id}:h:${h.id}`);
+          setHighlights((l) => l.filter((x) => x.id !== h.id));
+        }}
+      />
+      <MoreSheet open={sheet === 'more'} onClose={() => setSheet(null)} actions={moreActions} onAction={onMore} title={doc.name} />
+      <Sheet open={sheet === 'info'} onClose={() => setSheet(null)} title="About this file">
+        <div className="sheet-body">
+          {[
+            ['name', doc.fileName],
+            ['type', KIND_LABEL[doc.kind]],
+            ['size', `${(doc.size / 1024).toFixed(0)} KB`],
+            ['pages', doc.pages ? String(doc.pages) : '—'],
+            ['author', doc.author ?? '—'],
+            ['added', new Date(doc.addedAt).toLocaleString()],
+            ['time read', `${Math.round((doc.readMs ?? 0) / 60000)} min`],
+            ['progress', `${Math.round(progress * 100)}%`],
+          ].map(([k, v]) => (
+            <div className="row" key={k}>
+              <span className="mono muted" style={{ width: 90, fontSize: 12 }}>
+                {k}
+              </span>
+              <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{v}</span>
+            </div>
+          ))}
+        </div>
+      </Sheet>
+      <Sheet open={sheet === 'ocr'} onClose={() => setSheet(null)} title="Recognised text">
+        <div className="sheet-body">
+          {ocrText?.busy ? (
+            <div style={{ padding: '20px 0 30px', display: 'grid', gap: 14, justifyItems: 'center' }}>
+              <PixelLoader grid={4} size={6} label="reading the page" />
+              <PixelBar value={ocrText.p} />
+            </div>
+          ) : (
+            <>
+              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'var(--serif)', fontSize: 16, lineHeight: 1.5, userSelect: 'text', WebkitUserSelect: 'text' }}>{ocrText?.text || 'No text found.'}</pre>
+              {!!ocrText?.text && content?.type === 'image' && (
+                <div style={{ display: 'flex', gap: 8, padding: '6px 0 12px' }}>
+                  <button
+                    className="pill"
+                    onClick={async () => {
+                      const blob = new Blob([ocrText.text], { type: 'text/plain' });
+                      await importFile(blob, `${doc.name} (text).txt`);
+                      setSheet(null);
+                      toast('Saved to your shelf');
+                    }}
+                  >
+                    Save as document
+                  </button>
+                  <button
+                    className="pill ghost"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(ocrText.text);
+                      toast('Copied');
+                    }}
+                  >
+                    Copy
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </Sheet>
+    </div>
+  );
+}

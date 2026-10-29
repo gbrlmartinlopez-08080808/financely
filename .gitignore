@@ -1,35 +1,17 @@
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
-.yarn/install-state.gz
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
+node_modules
+dist
 .DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# local env files
-.env*.local
+*.log
 .env
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+android/.gradle
+android/build
+android/app/build
+android/local.properties
+android/.idea
+android/capacitor-cordova-android-plugins
+android/app/src/main/assets/public
+public/ocr
+public/pdfjs
+android/quire-release.jks
+android/keystore.properties
+*.jks

@@ -1,0 +1,278 @@
+import * as db from './db';
+import { detectKind, titleFromFile } from './formats/detect';
+import { drawPixel, KIND_PIXEL } from './pixels';
+import { saveDoc, getState } from './store';
+import type { DocKind, DocMeta, LiquidDoc } from './types';
+
+export type Content =
+  | { type: 'pdf'; data: ArrayBuffer }
+  | { type: 'flow'; liquid: LiquidDoc }
+  | { type: 'sheet'; sheets: { name: string; rows: string[][] }[] }
+  | { type: 'image'; url: string; blob: Blob }
+  | { type: 'media'; url: string; kind: 'audio' | 'video' }
+  | { type: 'code'; text: string; ext: string }
+  | { type: 'binary'; size: number; hex: string };
+
+// ------------------------------------------------------------------ covers
+
+const COVER_W = 360;
+const COVER_H = 520;
+
+function hash(s: string) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+const PALETTES = [
+  { bg: '#f4f3ef', ink: '#141414', sub: '#8b8a86' },
+  { bg: '#151515', ink: '#f1f0ec', sub: '#7d7c78' },
+  { bg: '#dcd9d2', ink: '#151515', sub: '#6f6d68' },
+  { bg: '#e9e4d8', ink: '#2b2a26', sub: '#8d877a' },
+  { bg: '#cfd4cf', ink: '#1c1f1c', sub: '#6b726b' },
+  { bg: '#d6d9df', ink: '#191b20', sub: '#6c707a' },
+];
+
+function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number, maxLines: number) {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let cur = '';
+  for (const w of words) {
+    const t = cur ? cur + ' ' + w : w;
+    if (ctx.measureText(t).width > maxW && cur) {
+      lines.push(cur);
+      cur = w;
+    } else cur = t;
+    if (lines.length >= maxLines) break;
+  }
+  if (cur && lines.length < maxLines) lines.push(cur);
+  if (lines.length === maxLines && words.join(' ').length > lines.join(' ').length) lines[maxLines - 1] = lines[maxLines - 1].replace(/\s*\S*$/, '') + '…';
+  return lines;
+}
+
+/** A typographic cover for files that do not carry one. */
+export async function generatedCover(title: string, kind: DocKind, author?: string): Promise<Blob> {
+  await document.fonts.ready;
+  const c = document.createElement('canvas');
+  c.width = COVER_W;
+  c.height = COVER_H;
+  const ctx = c.getContext('2d')!;
+  const h = hash(title);
+  const pal = PALETTES[h % PALETTES.length];
+  ctx.fillStyle = pal.bg;
+  ctx.fillRect(0, 0, COVER_W, COVER_H);
+  // dotted grid
+  ctx.fillStyle = pal.sub;
+  ctx.globalAlpha = 0.28;
+  for (let y = 24; y < COVER_H; y += 16) for (let x = 24; x < COVER_W; x += 16) ctx.fillRect(x, y, 1.5, 1.5);
+  ctx.globalAlpha = 1;
+  // big pixel glyph
+  ctx.fillStyle = pal.ink;
+  drawPixel(ctx, KIND_PIXEL[kind] ?? 'block', 30, 34, 44);
+  // label
+  ctx.font = '500 13px "JetBrains Mono", monospace';
+  ctx.fillStyle = pal.sub;
+  ctx.textBaseline = 'top';
+  ctx.fillText(`.${kind}`, COVER_W - 30 - ctx.measureText(`.${kind}`).width, 40);
+  // title near the top so it peeks out of the acrylic pocket
+  ctx.fillStyle = pal.ink;
+  ctx.font = '700 34px "JetBrains Mono", monospace';
+  const lines = wrap(ctx, title.toLowerCase(), COVER_W - 60, 4);
+  let y = 104;
+  for (const l of lines) {
+    ctx.fillText(l, 30, y);
+    y += 40;
+  }
+  ctx.font = '400 13px "JetBrains Mono", monospace';
+  ctx.fillStyle = pal.sub;
+  ctx.fillText(author ? author.slice(0, 34) : '— quire', 30, COVER_H - 46);
+  return new Promise((r) => c.toBlob((b) => r(b!), 'image/png'));
+}
+
+async function imageCover(blob: Blob): Promise<Blob | undefined> {
+  try {
+    const bmp = await createImageBitmap(blob);
+    const scale = Math.min(1, 480 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(bmp.width * scale);
+    c.height = Math.round(bmp.height * scale);
+    c.getContext('2d')!.drawImage(bmp, 0, 0, c.width, c.height);
+    bmp.close();
+    return await new Promise((r) => c.toBlob((b) => r(b ?? undefined), 'image/jpeg', 0.85));
+  } catch {
+    return undefined;
+  }
+}
+
+// ------------------------------------------------------------------ import
+
+export async function importFile(file: Blob, name: string, opts: { kind?: DocKind; title?: string; open?: boolean } = {}): Promise<DocMeta> {
+  const buf = await file.arrayBuffer();
+  const head = new Uint8Array(buf.slice(0, 16));
+  const kind = opts.kind ?? detectKind(name, file.type, head);
+  const id = db.uid();
+  const mime = file.type || mimeFor(kind, name);
+  await db.put('files', id, new Blob([buf], { type: mime }));
+  let title = opts.title ?? titleFromFile(name);
+  let author: string | undefined;
+  let pages: number | undefined;
+  let cover: Blob | undefined;
+  try {
+    if (kind === 'pdf') {
+      const { pdfCover } = await import('./formats/pdf');
+      const r = await pdfCover(buf);
+      cover = r.cover ?? undefined;
+      pages = r.pages;
+      if (r.title) title = r.title;
+      author = r.author;
+    } else if (kind === 'epub') {
+      const { epubMeta } = await import('./formats/flow');
+      const r = await epubMeta(buf);
+      if (r.title) title = r.title;
+      author = r.author;
+      if (r.cover) cover = await imageCover(r.cover);
+    } else if (kind === 'image' || kind === 'scan') {
+      cover = await imageCover(file);
+    }
+  } catch (e) {
+    console.warn('metadata failed', e);
+  }
+  if (!cover) cover = await generatedCover(title, kind, author);
+  const coverId = id + ':cover';
+  await db.put('blobs', coverId, cover);
+  const now = Date.now();
+  const meta: DocMeta = {
+    id,
+    name: title,
+    fileName: name,
+    kind,
+    mime,
+    size: buf.byteLength,
+    addedAt: now,
+    openedAt: now,
+    progress: 0,
+    pages,
+    author,
+    coverId,
+    readMs: 0,
+  };
+  await saveDoc(meta);
+  return meta;
+}
+
+function mimeFor(kind: DocKind, name: string) {
+  const ext = name.split('.').pop()?.toLowerCase();
+  const map: Record<string, string> = {
+    pdf: 'application/pdf',
+    epub: 'application/epub+zip',
+    md: 'text/markdown',
+    txt: 'text/plain',
+    html: 'text/html',
+    csv: 'text/csv',
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    webp: 'image/webp',
+    gif: 'image/gif',
+    svg: 'image/svg+xml',
+    mp3: 'audio/mpeg',
+    m4a: 'audio/mp4',
+    wav: 'audio/wav',
+    ogg: 'audio/ogg',
+    mp4: 'video/mp4',
+    webm: 'video/webm',
+  };
+  return (ext && map[ext]) || (kind === 'text' ? 'text/plain' : 'application/octet-stream');
+}
+
+export async function getFile(id: string): Promise<Blob | undefined> {
+  return db.get<Blob>('files', id);
+}
+
+const coverCache = new Map<string, string>();
+export async function coverUrl(meta: DocMeta): Promise<string | undefined> {
+  if (!meta.coverId) return undefined;
+  const hit = coverCache.get(meta.coverId);
+  if (hit) return hit;
+  const b = await db.get<Blob>('blobs', meta.coverId);
+  if (!b) return undefined;
+  const u = URL.createObjectURL(b);
+  coverCache.set(meta.coverId, u);
+  return u;
+}
+
+// ------------------------------------------------------------------ load
+
+export async function loadContent(meta: DocMeta): Promise<Content> {
+  const blob = await getFile(meta.id);
+  if (!blob) throw new Error('The file for this document is missing.');
+  const buf = await blob.arrayBuffer();
+  const f = await import('./formats/flow');
+  switch (meta.kind) {
+    case 'pdf':
+      return { type: 'pdf', data: buf };
+    case 'epub':
+      return { type: 'flow', liquid: await f.epubToLiquid(buf) };
+    case 'docx':
+      return { type: 'flow', liquid: await f.docxToLiquid(buf) };
+    case 'markdown':
+      return { type: 'flow', liquid: f.markdownToLiquid(buf) };
+    case 'html':
+      return { type: 'flow', liquid: f.htmlToLiquid(buf) };
+    case 'text':
+      return { type: 'flow', liquid: f.textToLiquid(buf) };
+    case 'rtf':
+      return { type: 'flow', liquid: f.rtfToLiquid(buf) };
+    case 'odt':
+      return { type: 'flow', liquid: await f.odtToLiquid(buf) };
+    case 'slides':
+      return { type: 'flow', liquid: await f.slidesToLiquid(buf, meta.fileName) };
+    case 'scan': {
+      const cached = await db.get<string>('cache', meta.id + ':ocr');
+      const imgs = await Promise.all((meta.scanPages ?? []).map((p) => db.get<Blob>('blobs', p)));
+      const urls = imgs.filter(Boolean).map((b) => URL.createObjectURL(b!));
+      let html = cached ?? '';
+      html += urls.map((u, i) => `<figure class="scanpage"><img src="${u}" alt="Page ${i + 1}"/><figcaption>scan · page ${i + 1}</figcaption></figure>`).join('');
+      return { type: 'flow', liquid: f.finalize(html, urls) };
+    }
+    case 'sheet':
+      return { type: 'sheet', sheets: await f.readSheets(buf, meta.fileName) };
+    case 'image': {
+      const url = URL.createObjectURL(blob);
+      return { type: 'image', url, blob };
+    }
+    case 'audio':
+    case 'video':
+      return { type: 'media', url: URL.createObjectURL(blob), kind: meta.kind };
+    case 'code':
+      return { type: 'code', text: f.decodeText(buf), ext: meta.fileName.split('.').pop() ?? '' };
+    default: {
+      const bytes = new Uint8Array(buf.slice(0, 512));
+      const hex = Array.from(bytes)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join(' ');
+      return { type: 'binary', size: buf.byteLength, hex };
+    }
+  }
+}
+
+export function docById(id: string) {
+  return getState().docs.find((d) => d.id === id);
+}
+
+export function formatSize(n: number) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+export function ago(t: number) {
+  const s = (Date.now() - t) / 1000;
+  if (s < 60) return 'now';
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  const d = Math.floor(s / 86400);
+  if (d < 7) return `${d}d ago`;
+  if (d < 60) return `${Math.floor(d / 7)}w ago`;
+  return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
