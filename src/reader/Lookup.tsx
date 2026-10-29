@@ -225,7 +225,8 @@ export function SelectionMenu({
   onShare: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const top = rect ? (rect.top > 140 ? rect.top - 58 : rect.bottom + 14) : 0;
+  // above the words when there is room; otherwise below, clear of the selection handles
+  const top = rect ? (rect.top > 150 ? rect.top - 56 : Math.min(window.innerHeight - 120, rect.bottom + 46)) : 0;
   const centre = rect ? rect.left + rect.width / 2 : 0;
   // keep the whole menu on screen, however near the edge the word is
   useLayoutEffect(() => {

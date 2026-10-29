@@ -146,7 +146,7 @@ export function ContentsSheet({
               <div key={b.id} style={{ display: 'flex', alignItems: 'center' }}>
                 <button className="mark-item" onClick={() => onGoMark(b)}>
                   <span style={{ fontSize: 15 }}>{b.label}</span>
-                  <small>bookmark · {Math.round(b.progress * 100)}%</small>
+                  <small>{b.auto ? 'where you stopped' : 'bookmark'} · {Math.round(b.progress * 100)}%</small>
                 </button>
                 <button className="chip" onClick={() => onDeleteMark(b)} aria-label="Delete bookmark">
                   <Icon name="close" size={16} />

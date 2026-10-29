@@ -69,50 +69,37 @@ export const ASCII = {
                      \`---\``,
 };
 
-/** Seedling that grows with the streak (0..6 stages). */
-export function plantStage(streak: number): string {
-  const stages = [
-    String.raw`
-
-
-        .
-   _____|_____`,
-    String.raw`
-
-        ,
-        |
-   _____|_____`,
-    String.raw`
-
-       \,/
-        |
-   _____|_____`,
-    String.raw`
-       \ /
-      \_|_/
-        |
-   _____|_____`,
-    String.raw`
-      .\|/.
-     \_\|/_/
-      \_|_/
-        |
-   _____|_____`,
-    String.raw`
-     .\\|//.
-    \\_\|/_//
-   \_\_\|/_/_/
-       \|/
-        |
-   _____|_____`,
-    String.raw`
-    * .\\|//. *
-   \\\_\\|//_///
-  \_\_\_\|/_/_/_/
-     \_\_|_/_/
-        |||
-   _____|||_____`,
-  ];
-  const i = streak <= 0 ? 0 : streak < 2 ? 1 : streak < 4 ? 2 : streak < 7 ? 3 : streak < 14 ? 4 : streak < 30 ? 5 : 6;
-  return stages[i];
+/**
+ * Seedling that grows with the number of days you have read (8 stages).
+ * Every stage is drawn on the same fixed grid and centred row by row, so the stem never drifts
+ * and the picture only ever gets taller.
+ */
+const PLANT_W = 33;
+const PLANT_H = 12;
+const STAGES: string[][] = [
+  [],
+  [','],
+  ['\\,/'],
+  ['\\ | /', ' \\|/ '],
+  ['.\\ | /.', '_\\_\\|/_/_', '  \\|/  '],
+  ['*', '.\\ | /.', '\\_\\ | /_/', '_\\_\\\\|//_/_', '   \\|/   '],
+  ['_', '_(@)_', '.|.', '.\\ | /.', '\\_\\_\\ | /_/_/', '_\\_\\_\\\\|//_/_/_', '    \\|/    '],
+  ['*  _  *', ' _(@)_ ', '*.|.*', '.\\\\ | //.', '\\_\\_\\ | /_/_/', '_\\_\\_\\\\|//_/_/_', '\\_\\_\\_\\\\|//_/_/_/', '     \\|/     '],
+];
+const centre = (row: string) => {
+  const gap = PLANT_W - row.length;
+  const left = Math.floor(gap / 2);
+  return ' '.repeat(left) + row + ' '.repeat(gap - left);
+};
+export function plantStage(days: number): string {
+  const i = days <= 0 ? 0 : days < 2 ? 1 : days < 4 ? 2 : days < 7 ? 3 : days < 12 ? 4 : days < 20 ? 5 : days < 35 ? 6 : 7;
+  const rows = STAGES[i].map(centre);
+  const stem = Math.floor(PLANT_W / 2);
+  const ground = '_'.repeat(PLANT_W);
+  const g = i === 0 ? ground.slice(0, stem) + '.' + ground.slice(stem + 1) : ground.slice(0, stem) + '|' + ground.slice(stem + 1);
+  const blank = ' '.repeat(PLANT_W);
+  const stemRows = i >= 3 ? [centre('|'), centre('|')].slice(0, i >= 5 ? 2 : 1) : [];
+  const body = [...rows, ...stemRows, g];
+  while (body.length < PLANT_H) body.unshift(blank);
+  return body.join('\n');
 }

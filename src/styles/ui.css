@@ -1196,3 +1196,14 @@
 :root[data-app-theme='dark'] .ob-mark {
   filter: invert(1);
 }
+
+.ascii-card.globe pre.plant,
+.ascii-card pre.plant,
+.ob-card pre.plant {
+  font-size: 15px;
+  line-height: 1.12;
+  color: #d9d9d4;
+  display: block;
+  margin: 0 auto;
+  width: fit-content;
+}

@@ -1,7 +1,7 @@
 // The quote card: a line from the user's own documents when we can find a good one, otherwise a classic.
 import { dayKey } from './store';
 import type { DocMeta } from './types';
-import type { Harvest } from './harvest';
+import { isGuide, type Harvest } from './harvest';
 
 export interface Quote {
   text: string;
@@ -30,7 +30,7 @@ const hash = (s: string) => {
 export function pickQuote(docs: DocMeta[], harvest: Record<string, Harvest>, salt = ''): Quote {
   const seed = hash(dayKey() + salt);
   const own = docs
-    .filter((d) => harvest[d.id]?.quotes.length)
+    .filter((d) => !isGuide(d) && harvest[d.id]?.quotes.length)
     .sort((a, b) => b.openedAt - a.openedAt)
     .slice(0, 6);
   if (own.length) {

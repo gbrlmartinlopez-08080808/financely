@@ -70,7 +70,7 @@ function Globe({ lights, view, onToggle }: { lights: ReturnType<typeof lightsFor
       role="img"
       aria-label="A rotating globe. Each day you have read lights one place on it."
     >
-      {view === 'globe' ? <pre ref={pre} /> : <pre>{plantStage(lights.length)}</pre>}
+      {view === 'globe' ? <pre ref={pre} /> : <pre className="plant">{plantStage(lights.length)}</pre>}
       <span className="sig mono">{view === 'globe' ? 'drag to spin · tap for seedling' : 'tap for the globe'}</span>
     </div>
   );

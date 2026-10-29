@@ -69,7 +69,7 @@ function WhyStage() {
   return (
     <>
       <Card>
-        <pre aria-hidden>{art}</pre>
+        <pre className="plant" aria-hidden>{art}</pre>
       </Card>
       <ul className="ob-why">
         {WHY.slice(0, lines).map((w) => (

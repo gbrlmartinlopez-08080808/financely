@@ -727,3 +727,7 @@
   padding-right: 1em;
   user-select: none;
 }
+
+.r-ibtn.on svg path {
+  fill: currentColor;
+}

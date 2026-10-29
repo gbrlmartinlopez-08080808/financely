@@ -20,6 +20,8 @@ import { fontById } from '../lib/fonts';
 
 const LQ_VERSION = 'lq8';
 
+const AUTO_MARK_MS = 120_000; // read for two minutes in total and the app keeps your place
+
 export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () => void; onConvert: (doc: DocMeta, root?: HTMLElement | null) => void }) {
   const id = doc.id;
   const settings = useStore((s) => s.settings);
@@ -209,25 +211,70 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     setStatusBar(dark, theme.bg);
   }, [dark, theme.bg]);
 
-  // ---------------------------------------------------------------- reading time
+  // ---------------------------------------------------------------- reading time (+ learns your pace, keeps a place-holder bookmark)
   useEffect(() => {
     let last = Date.now();
     let lastAct = Date.now();
+    let session = 0;
+    let lastProg = progRef.current;
+    let lastPage = live.current.page;
+    let accMs = 0;
+    let accWords = 0;
+    let accPages = 0;
     const act = () => (lastAct = Date.now());
     const el = scroller;
     el?.addEventListener('scroll', act, { passive: true });
     window.addEventListener('pointerdown', act);
-    const tick = () => {
+    const tick = (final = false) => {
       const n = Date.now();
       const active = document.visibilityState === 'visible' && (n - lastAct < 120_000 || listeningRef.current);
-      if (active) addReading(Math.min(n - last, 30_000), id);
+      const st = live.current;
+      if (active) {
+        const dt = Math.min(n - last, 30_000);
+        addReading(dt, id);
+        session += dt;
+        // --- learn the reader's own speed (smoothly: each minute of evidence moves it a fifth of the way)
+        const dp = progRef.current - lastProg;
+        const dPages = st.page - lastPage;
+        if (!st.isPdf || st.liquid) {
+          if (dp >= 0 && dp < 0.15) {
+            accMs += dt;
+            accWords += dp * wordsRef.current;
+          }
+        } else if (dPages >= 0 && dPages <= 3) {
+          accMs += dt;
+          accPages += dPages;
+        }
+        if (accMs >= 60_000 && (!st.isPdf || st.liquid) && wordsRef.current > 500) {
+          if (accWords >= 60) {
+            const sample = Math.max(60, Math.min(900, accWords / (accMs / 60_000)));
+            updateSettings({ wpm: Math.round(settingsRef.current.wpm * 0.8 + sample * 0.2) });
+          }
+          accMs = 0;
+          accWords = 0;
+        } else if (accMs >= 150_000 && st.isPdf && !st.liquid) {
+          if (accPages >= 1) {
+            const sample = Math.max(15, Math.min(900, accMs / 1000 / accPages));
+            updateSettings({ secPerPage: Math.round(settingsRef.current.secPerPage * 0.8 + sample * 0.2) });
+          }
+          accMs = 0;
+          accPages = 0;
+        }
+        // --- once you have really been reading, keep a bookmark where you are
+        if (!final && (liveDoc.current.readMs ?? 0) + session >= AUTO_MARK_MS) autoMark.current();
+      }
+      lastProg = progRef.current;
+      lastPage = st.page;
       last = n;
       setNow(new Date());
     };
-    const t = setInterval(tick, 15_000);
+    const t = setInterval(() => tick(), 15_000);
+    const hide = () => document.visibilityState === 'hidden' && tick();
+    document.addEventListener('visibilitychange', hide);
     return () => {
       clearInterval(t);
-      tick();
+      tick(true);
+      document.removeEventListener('visibilitychange', hide);
       el?.removeEventListener('scroll', act);
       window.removeEventListener('pointerdown', act);
     };
@@ -239,6 +286,12 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   const lastY = useRef(0);
   const barRef = useRef<HTMLDivElement>(null);
   const progRef = useRef(doc.progress);
+  const autoMark = useRef<() => void>(() => {});
+  const liveDoc = useRef(doc);
+  liveDoc.current = doc;
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const wordsRef = useRef(0);
   const progT = useRef(0);
   const setProg = useCallback((p: number) => {
     progRef.current = p;
@@ -360,18 +413,37 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   // ---------------------------------------------------------------- selection
   useEffect(() => {
     let t = 0;
+    let raf = 0;
+    const measure = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !sel.rangeCount || !scroller) return setSelRect(null);
+      const r = sel.getRangeAt(0);
+      if (!scroller.contains(r.commonAncestorContainer)) return setSelRect(null);
+      const b = r.getBoundingClientRect();
+      if (!b.width && !b.height) return;
+      setSelRect((old) => (old && Math.abs(old.top - b.top) < 1 && Math.abs(old.left - b.left) < 1 && Math.abs(old.width - b.width) < 1 ? old : b));
+    };
+    // wait for the selection (and its drag handles) to settle before showing the menu
     const on = () => {
       clearTimeout(t);
-      t = window.setTimeout(() => {
-        const sel = window.getSelection();
-        if (!sel || sel.isCollapsed || !sel.rangeCount || !scroller) return setSelRect(null);
-        const r = sel.getRangeAt(0);
-        if (!scroller.contains(r.commonAncestorContainer)) return setSelRect(null);
-        setSelRect(r.getBoundingClientRect());
-      }, 160);
+      t = window.setTimeout(measure, 220);
+    };
+    // keep the menu attached to the words while the page scrolls
+    const follow = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        if (!window.getSelection()?.isCollapsed) measure();
+      });
     };
     document.addEventListener('selectionchange', on);
-    return () => document.removeEventListener('selectionchange', on);
+    scroller?.addEventListener('scroll', follow, { passive: true });
+    return () => {
+      clearTimeout(t);
+      cancelAnimationFrame(raf);
+      document.removeEventListener('selectionchange', on);
+      scroller?.removeEventListener('scroll', follow);
+    };
   }, [scroller]);
 
   const selectionText = () => window.getSelection()?.toString().trim() ?? '';
@@ -404,6 +476,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
 
   const close = () => {
     clearTimeout(saveT.current);
+    if ((liveDoc.current.readMs ?? 0) >= AUTO_MARK_MS) autoMark.current();
     if (scroller && liquid && !isPdf) {
       const max = scroller.scrollHeight - scroller.clientHeight;
       const prog = max > 0 ? scroller.scrollTop / max : 0;
@@ -506,7 +579,9 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     setListenFrom(s ? Number(s.dataset.i) : 0);
   };
 
-  const addBookmark = async () => {
+  /** Where you are right now, as a bookmark (auto = the single "where you stopped" one). */
+  const makeMark = (auto: boolean): Bookmark => {
+    const prog = progRef.current;
     let label = '';
     if (isPdf) label = `Page ${page}`;
     if (liquid && scroller && flowRef.current) {
@@ -515,12 +590,30 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
       const t = (el?.textContent ?? '').trim();
       if (t) label = (isPdf ? `p.${page} · ` : '') + (t.length > 70 ? t.slice(0, 70) + '…' : t);
     }
-    const b: Bookmark = { id: db.uid(), docId: id, progress: isPdf && !liquid ? page / (doc.pages || 1) : progress, label: label || `${Math.round(progress * 100)}%`, at: Date.now() };
-    if (isPdf) (b as Bookmark & { page?: number }).page = page;
+    const b: Bookmark = { id: auto ? 'auto' : db.uid(), docId: id, progress: isPdf && !liquid ? page / (doc.pages || 1) : prog, label: label || `${Math.round(prog * 100)}%`, at: Date.now() };
+    if (isPdf) b.page = page;
+    if (auto) b.auto = true;
+    return b;
+  };
+  const putMark = async (b: Bookmark) => {
     await db.put('marks', `${id}:b:${b.id}`, b);
-    setBookmarks((l) => [...l, b].sort((x, y) => x.progress - y.progress));
+    setBookmarks((l) => [...l.filter((x) => x.id !== b.id), b].sort((x, y) => x.progress - y.progress));
+  };
+  // a bookmark you placed within a hair of where you are counts as "this spot"
+  const hereMark = bookmarks.find((b) => !b.auto && (isPdf && !liquid ? b.page === page : Math.abs(b.progress - progress) < 0.012));
+  const addBookmark = async () => {
     tap('medium');
+    if (hereMark) {
+      await db.del('marks', `${id}:b:${hereMark.id}`);
+      setBookmarks((l) => l.filter((x) => x.id !== hereMark.id));
+      toast('Bookmark removed');
+      return;
+    }
+    await putMark(makeMark(false));
     toast('Bookmarked');
+  };
+  autoMark.current = () => {
+    if (flowReady || (isPdf && !liquid)) putMark(makeMark(true)).catch(() => {});
   };
 
   const goProgress = (p: number, pg?: number) => {
@@ -666,13 +759,14 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     if (!flowReady || !flowRef.current) return 0;
     return (flowRef.current.textContent ?? '').split(/\s+/).length;
   }, [flowReady]);
-  const minutesLeft = liquid ? Math.max(1, Math.round((words * (1 - progress)) / 230)) : Math.max(1, Math.round(((doc.pages ?? 1) - page + 1) * 1.8));
+  wordsRef.current = words;
+  const minutesLeft = liquid || !isPdf ? Math.max(1, Math.round((words * (1 - progress)) / settings.wpm)) : Math.max(1, Math.round((((doc.pages ?? 1) - page + 1) * settings.secPerPage) / 60));
 
   const moreActions: MoreAction[] = [
+    { id: 'contents', label: 'Contents & bookmarks', icon: 'list' },
     { id: 'ask', label: 'Ask this document', icon: 'ask', right: 'free ai' },
     { id: 'find', label: 'Search in document', icon: 'search' },
-    { id: 'contents', label: 'Contents & marks', icon: 'list' },
-    { id: 'bookmark', label: 'Bookmark this spot', icon: 'bookmark' },
+    { id: 'bookmark', label: hereMark ? 'Remove bookmark here' : 'Bookmark this spot', icon: 'bookmark' },
     { id: 'mode', label: liquid ? 'Original pages' : 'Liquid view', icon: liquid ? 'page' : 'liquid', hidden: !isPdf },
     { id: 'thumbs', label: thumbs ? 'Hide page thumbnails' : 'Page thumbnails', icon: 'sidebar', hidden: !isPdf || liquid },
     { id: 'ocr', label: 'Recognise text (OCR)', pixel: 'scan', hidden: !(content?.type === 'image' || (isPdf && liquid && scanned.length > 0)), right: isPdf ? `${scanned.length} scanned` : undefined },
@@ -815,8 +909,8 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
           <button className="r-ibtn" onClick={() => setFind('')} aria-label="Search">
             <Icon name="search" />
           </button>
-          <button className="r-ibtn" onClick={() => setSheet('contents')} aria-label="Contents and marks">
-            <Icon name="list" />
+          <button className={`r-ibtn${hereMark ? ' on' : ''}`} onClick={addBookmark} aria-label={hereMark ? 'Remove bookmark' : 'Bookmark this spot'}>
+            <Icon name="bookmark" />
           </button>
           <button className="r-ibtn" onClick={() => setSheet('more')} aria-label="More">
             <Icon name="more" size={22} stroke={2.6} />

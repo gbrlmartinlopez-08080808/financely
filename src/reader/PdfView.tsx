@@ -35,9 +35,10 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
   const queue = useRef(new Set<number>());
   const busy = useRef(false);
   const findQ = useRef('');
+  const gesturing = useRef(false); // true while fingers are pinching: no canvas work, so the gesture stays at 60fps
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
-  const pending = useRef<{ real: number; cx: number; cy: number; sl: number; st: number } | null>(null);
+  const pending = useRef<{ real: number; cx: number; cy: number; sl: number; st: number; ex: number; ey: number } | null>(null);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -187,10 +188,10 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
   };
 
   const pump = useCallback(async () => {
-    if (busy.current) return;
+    if (busy.current || gesturing.current) return;
     busy.current = true;
     try {
-      while (queue.current.size && alive.current) {
+      while (queue.current.size && alive.current && !gesturing.current) {
         const sc = scroller;
         const mid = sc ? sc.scrollTop + sc.clientHeight / 2 : 0;
         let best = -1;
@@ -208,7 +209,7 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
         await new Promise((r) => requestAnimationFrame(() => r(null)));
       }
       // sharp detail for what's on screen, once the base pages are in
-      while (hiQueue.current.size && !queue.current.size && alive.current) {
+      while (hiQueue.current.size && !queue.current.size && alive.current && !gesturing.current) {
         const i = hiQueue.current.values().next().value as number;
         hiQueue.current.delete(i);
         await drawHi(i);
@@ -268,8 +269,8 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
     const p = pending.current;
     if (p && scroller) {
       pending.current = null;
-      scroller.scrollLeft = (p.sl + p.cx) * p.real - p.cx;
-      scroller.scrollTop = (p.st + p.cy) * p.real - p.cy;
+      scroller.scrollLeft = (p.sl + p.cx) * p.real - p.ex;
+      scroller.scrollTop = (p.st + p.cy) * p.real - p.ey;
     }
     const t = window.setTimeout(() => {
       visible.current.forEach((i) => {
@@ -332,84 +333,133 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
     if (initialPage > 1) pageEls.current[initialPage - 1]?.scrollIntoView({ block: 'start' });
   }, [sizes, scroller, initialPage]);
 
-  // ---- pinch zoom + double tap: the gesture only moves a CSS transform; layout happens once at the end
+  // ---- pinch zoom + double tap: the gesture only moves a CSS transform; layout happens once at the end.
+  // The content follows the fingers (scale AND pan), stretches softly past the limits, snaps to "fit width"
+  // when you come back close to it, and no canvas is drawn until the fingers lift.
   useEffect(() => {
     const el = scroller;
     const inner = wrap.current;
     if (!el || !inner) return;
+    const MIN = 0.6;
+    const MAX = 5;
     let start: { d: number; cx: number; cy: number; sl: number; st: number } | null = null;
-    let scale = 1;
+    let live = { scale: 1, dx: 0, dy: 0 };
     let raf = 0;
     let lastTap = 0;
+    let lastTapAt = { x: 0, y: 0 };
     const dist = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-    const commit = (factor: number, cx: number, cy: number, sl: number, st: number) => {
-      const next = Math.max(0.6, Math.min(5, zoomRef.current * factor));
-      const real = next / zoomRef.current;
+    const mid = (t: TouchList, r: DOMRect) => ({ x: (t[0].clientX + t[1].clientX) / 2 - r.left, y: (t[0].clientY + t[1].clientY) / 2 - r.top });
+    // total zoom after applying a relative factor, with rubber-band resistance outside [MIN, MAX]
+    const soft = (factor: number) => {
+      const z = zoomRef.current * factor;
+      if (z < MIN) return (MIN * Math.pow(z / MIN, 0.45)) / zoomRef.current;
+      if (z > MAX) return (MAX * Math.pow(z / MAX, 0.45)) / zoomRef.current;
+      return factor;
+    };
+    const clampTotal = (factor: number) => {
+      let z = Math.max(MIN, Math.min(MAX, zoomRef.current * factor));
+      if (Math.abs(z - 1) < 0.07) z = 1;
+      return z / zoomRef.current;
+    };
+    const paint = () => {
+      raf = 0;
+      inner.style.transform = `translate(${live.dx}px, ${live.dy}px) scale(${live.scale})`;
+    };
+    const commit = (factor: number, cx: number, cy: number, sl: number, st: number, ex = cx, ey = cy) => {
+      const real = clampTotal(factor);
+      gesturing.current = false;
       if (Math.abs(real - 1) < 0.01) {
+        inner.style.transition = '';
         inner.style.transform = '';
         inner.style.willChange = '';
+        el.scrollLeft = sl + cx - ex;
+        el.scrollTop = st + cy - ey;
+        pumpRef.current();
         return;
       }
-      pending.current = { real, cx, cy, sl, st };
-      setZoom(next);
+      // (ex, ey) is where the fingers ended up: the point that was under them stays under them
+      pending.current = { real, cx, cy, sl, st, ex, ey };
+      setZoom(Math.round(zoomRef.current * real * 1000) / 1000);
+    };
+    const settle = (factor: number, s: NonNullable<typeof start>, ex: number, ey: number) => {
+      const real = clampTotal(factor);
+      if (Math.abs(real - factor) < 0.015) return commit(factor, s.cx, s.cy, s.sl, s.st, ex, ey);
+      // spring back from the rubber band, then commit
+      inner.style.transition = 'transform 0.16s cubic-bezier(0.2, 0.8, 0.2, 1)';
+      inner.style.transform = `translate(${ex - s.cx}px, ${ey - s.cy}px) scale(${real})`;
+      window.setTimeout(() => {
+        inner.style.transition = '';
+        commit(real, s.cx, s.cy, s.sl, s.st, ex, ey);
+      }, 170);
     };
     const ts = (e: TouchEvent) => {
       if (e.touches.length === 2) {
         const r = el.getBoundingClientRect();
-        start = {
-          d: dist(e.touches),
-          cx: (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left,
-          cy: (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top,
-          sl: el.scrollLeft,
-          st: el.scrollTop,
-        };
+        const m = mid(e.touches, r);
+        start = { d: dist(e.touches), cx: m.x, cy: m.y, sl: el.scrollLeft, st: el.scrollTop };
+        live = { scale: 1, dx: 0, dy: 0 };
+        gesturing.current = true;
+        inner.style.transition = '';
         inner.style.transformOrigin = `${start.cx + start.sl}px ${start.cy + start.st}px`;
         inner.style.willChange = 'transform';
       } else if (e.touches.length === 1) {
         const now = Date.now();
-        if (now - lastTap < 280) {
+        const x = e.touches[0].clientX;
+        const y = e.touches[0].clientY;
+        if (now - lastTap < 300 && Math.hypot(x - lastTapAt.x, y - lastTapAt.y) < 40) {
           const r = el.getBoundingClientRect();
-          const cx = e.touches[0].clientX - r.left;
-          const cy = e.touches[0].clientY - r.top;
+          const cx = x - r.left;
+          const cy = y - r.top;
           const sl = el.scrollLeft;
           const st = el.scrollTop;
-          const want = zoomRef.current > 1.05 ? 1 / zoomRef.current : 2 / zoomRef.current;
-          const real = Math.max(0.6, Math.min(5, zoomRef.current * want)) / zoomRef.current;
+          const want = zoomRef.current > 1.05 ? 1 / zoomRef.current : 2.2 / zoomRef.current;
+          const real = clampTotal(want);
+          gesturing.current = true;
           // glide to the new size, then re-lay-out once
           inner.style.transformOrigin = `${cx + sl}px ${cy + st}px`;
           inner.style.willChange = 'transform';
-          inner.style.transition = 'transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1)';
+          inner.style.transition = 'transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1)';
           inner.style.transform = `scale(${real})`;
           window.setTimeout(() => {
             inner.style.transition = '';
             commit(real, cx, cy, sl, st);
-          }, 250);
+          }, 270);
           lastTap = 0;
-        } else lastTap = now;
+        } else {
+          lastTap = now;
+          lastTapAt = { x, y };
+        }
       }
     };
     const tm = (e: TouchEvent) => {
       if (!start || e.touches.length !== 2) return;
       e.preventDefault();
-      scale = Math.max(0.5 / zoomRef.current, Math.min(5 / zoomRef.current, dist(e.touches) / start.d));
-      if (!raf)
-        raf = requestAnimationFrame(() => {
-          raf = 0;
-          inner.style.transform = `scale(${scale})`;
-        });
+      const r = el.getBoundingClientRect();
+      const m = mid(e.touches, r);
+      live = { scale: soft(dist(e.touches) / start.d), dx: m.x - start.cx, dy: m.y - start.cy };
+      if (!raf) raf = requestAnimationFrame(paint);
     };
-    const te = () => {
+    const te = (e: TouchEvent) => {
       if (!start) return;
+      // lifting one finger of two ends the pinch; the other finger must not start a drag from a stale baseline
       const s = start;
       start = null;
       cancelAnimationFrame(raf);
       raf = 0;
-      if (Math.abs(scale - 1) > 0.02) commit(scale, s.cx, s.cy, s.sl, s.st);
+      const r = el.getBoundingClientRect();
+      const ex = s.cx + live.dx;
+      const ey = s.cy + live.dy;
+      void r;
+      void e;
+      if (Math.abs(live.scale - 1) > 0.015 || Math.abs(live.dx) + Math.abs(live.dy) > 4) settle(live.scale, s, ex, ey);
       else {
+        gesturing.current = false;
+        inner.style.transition = '';
         inner.style.transform = '';
         inner.style.willChange = '';
+        pumpRef.current();
       }
-      scale = 1;
+      live = { scale: 1, dx: 0, dy: 0 };
     };
     el.addEventListener('touchstart', ts, { passive: true });
     el.addEventListener('touchmove', tm, { passive: false });

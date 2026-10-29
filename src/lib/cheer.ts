@@ -102,7 +102,7 @@ export function cheer(ctx: CheerCtx): { main: string; fun?: string } {
   const reached = m >= goalM;
   if (rand() < (reached ? 1 : 0.38)) {
     const authors = [...new Set(ctx.docs.map((d) => d.author).filter((a): a is string => !!a && a.length > 3 && a.length < 38 && !/[0-9@]|\.(com|org|net)|arxiv|unknown|admin|user/i.test(a)))];
-    const words = ctx.docs.flatMap((d) => (ctx.harvest[d.id]?.words ?? []).slice(0, 6));
+    const words = ctx.docs.filter((d) => d.name !== 'Welcome to Quire').flatMap((d) => (ctx.harvest[d.id]?.words ?? []).slice(0, 6));
     const unread = ctx.docs.filter((d) => !d.finished && d.progress > 0.02).sort((a, b) => b.openedAt - a.openedAt)[0];
     const dusty = ctx.docs.find((d) => Date.now() - d.openedAt > 3 * 864e5 && d.progress > 0.02 && !d.finished);
     const pool: string[] = [];

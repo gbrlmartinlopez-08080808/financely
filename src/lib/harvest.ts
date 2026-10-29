@@ -4,6 +4,9 @@ import * as db from './db';
 import { loadContent } from './library';
 import type { DocMeta } from './types';
 
+/** The built-in welcome guide is the app's own manual, never a source of quotes or favourite words. */
+export const isGuide = (d: DocMeta) => d.name === 'Welcome to Quire' || d.fileName === 'Welcome to Quire.md';
+
 export interface Harvest {
   quotes: string[];
   words: string[];
@@ -135,7 +138,7 @@ export async function harvestDoc(doc: DocMeta): Promise<Harvest | null> {
 /** Harvest a few recent documents (one at a time so the UI never stalls). */
 export async function harvestRecent(docs: DocMeta[], limit = 4): Promise<Record<string, Harvest>> {
   const out: Record<string, Harvest> = {};
-  const candidates = docs.filter((d) => !['image', 'audio', 'video', 'sheet', 'code', 'unknown'].includes(d.kind)).slice(0, 12);
+  const candidates = docs.filter((d) => !isGuide(d) && !['image', 'audio', 'video', 'sheet', 'code', 'unknown'].includes(d.kind)).slice(0, 12);
   let computed = 0;
   for (const d of candidates) {
     const cached = await db.get<Harvest>('kv', KEY(d.id));

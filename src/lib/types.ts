@@ -59,6 +59,9 @@ export interface Bookmark {
   progress: number;
   label: string;
   at: number;
+  page?: number;
+  /** placed by the app when you stop reading (one per document, always the latest) */
+  auto?: boolean;
 }
 
 export type ReaderTheme = 'paper' | 'white' | 'dusk' | 'night';
@@ -76,6 +79,8 @@ export interface Settings {
   justify: boolean;
   haptics: boolean;
   dailyGoal: number; // minutes
+  wpm: number; // learned reading speed in liquid/text views (words per minute)
+  secPerPage: number; // learned seconds per page in page view
   ttsRate: number;
   ttsVoice?: string;
   ttsPitch: number;
@@ -98,6 +103,8 @@ export const DEFAULT_SETTINGS: Settings = {
   justify: true,
   haptics: true,
   dailyGoal: 15,
+  wpm: 230,
+  secPerPage: 100,
   ttsRate: 1,
   ttsPitch: 1,
   focusListen: true,
