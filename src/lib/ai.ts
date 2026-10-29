@@ -68,7 +68,7 @@ export async function ask(opts: { title: string; passages: string[]; question: s
   const system =
     `You are a careful reading companion inside a reading app. The reader is looking at the document “${title}”. ` +
     `Answer using the excerpts below. If the excerpts do not contain the answer, say so briefly and offer what you do know, clearly marked as general knowledge. ` +
-    `Be concise (usually under 120 words), plain language, no preamble. Use short lists only when they help. Math can be written in plain text.\n\nEXCERPTS:\n${context}`;
+    `Be concise (usually under 120 words), plain language, no preamble. Use short lists only when they help. Write every formula in LaTeX: inline between single dollar signs like $x^2$, and displayed equations between double dollar signs on their own line. Never write maths as plain text or in code blocks.\n\nEXCERPTS:\n${context}`;
   const body = {
     model: 'openai',
     messages: [{ role: 'system', content: system }, ...history.slice(-6), { role: 'user', content: question }],

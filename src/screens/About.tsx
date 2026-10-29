@@ -1,0 +1,83 @@
+import { APP_VERSION, PRIVACY_URL, SUPPORT_EMAIL } from '../lib/config';
+import { openExternal } from '../lib/native';
+import { Sheet } from '../ui/kit';
+
+const LIBS: [string, string][] = [
+  ['PDF.js', 'Apache-2.0 · Mozilla'],
+  ['Tesseract.js + Tesseract OCR', 'Apache-2.0'],
+  ['Capacitor', 'MIT · Ionic'],
+  ['React', 'MIT · Meta'],
+  ['KaTeX', 'MIT'],
+  ['marked', 'MIT'],
+  ['mammoth.js', 'BSD-2-Clause'],
+  ['JSZip', 'MIT'],
+  ['jsPDF', 'MIT'],
+  ['SheetJS Community Edition', 'Apache-2.0'],
+  ['d3-geo, topojson (build time)', 'ISC · BSD-3-Clause'],
+];
+const FONTS: [string, string][] = [
+  ['EB Garamond, Literata, Source Serif 4, Lora, Crimson Pro, Merriweather', 'SIL Open Font License 1.1'],
+  ['Inter, JetBrains Mono, IBM Plex Mono, Atkinson Hyperlegible, Noto Serif/Mono', 'SIL Open Font License 1.1'],
+  ['OpenDyslexic', 'SIL Open Font License 1.1'],
+];
+
+export function About({ open, onClose }: { open: boolean; onClose: () => void }) {
+  return (
+    <Sheet open={open} onClose={onClose} title="About Quire" onBackBtn={onClose}>
+      <div className="sheet-body about" style={{ paddingBottom: 18 }}>
+        <p className="mono muted" style={{ textAlign: 'center', margin: '-4px 0 14px', fontSize: 12 }}>
+          version {APP_VERSION} · free · no ads · no accounts · no tracking
+        </p>
+
+        <div className="section-label">your data</div>
+        <p>Your library, notes, highlights and reading history live only on this phone. Quire has no account system and no analytics.</p>
+        <p>
+          The internet is used only when you ask for it: looking up a word (the word is sent to Wikipedia / Wiktionary / dictionaryapi.dev), saving a web link (the page is fetched), and the optional <b>Ask</b> feature (your question and a few short excerpts go to Pollinations’ open AI service, only after you opt in).
+        </p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="pill sm ghost" onClick={() => openExternal(PRIVACY_URL)}>
+            Privacy policy
+          </button>
+          <button className="pill sm ghost" onClick={() => openExternal(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Quire feedback')}`)}>
+            Contact
+          </button>
+        </div>
+
+        <div className="section-label">sources</div>
+        <p>
+          Definitions, word origins and article summaries come from <b>Wiktionary</b> and <b>Wikipedia</b>, licensed{' '}
+          <a href="https://creativecommons.org/licenses/by-sa/4.0/" onClick={(e) => (e.preventDefault(), openExternal('https://creativecommons.org/licenses/by-sa/4.0/'))}>
+            CC BY-SA 4.0
+          </a>
+          . Pictures belong to their authors (see the linked article). The reading globe uses Natural Earth data (public domain).
+        </p>
+
+        <div className="section-label">open source</div>
+        {LIBS.map(([n, l]) => (
+          <div className="row" key={n} style={{ minHeight: 40 }}>
+            <span className="grow" style={{ fontSize: 14 }}>
+              {n}
+            </span>
+            <span className="mono muted" style={{ fontSize: 11 }}>
+              {l}
+            </span>
+          </div>
+        ))}
+        <div className="section-label">fonts</div>
+        {FONTS.map(([n, l]) => (
+          <div className="row" key={n} style={{ minHeight: 40, alignItems: 'flex-start', padding: '8px 0' }}>
+            <span className="grow" style={{ fontSize: 13.5 }}>
+              {n}
+            </span>
+            <span className="mono muted" style={{ fontSize: 10.5, maxWidth: 120, textAlign: 'right' }}>
+              {l}
+            </span>
+          </div>
+        ))}
+        <p className="muted" style={{ fontSize: 12, marginTop: 14 }}>
+          Full licence texts are available from each project. All trademarks belong to their owners.
+        </p>
+      </div>
+    </Sheet>
+  );
+}

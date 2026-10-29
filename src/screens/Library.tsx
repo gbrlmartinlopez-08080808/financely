@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore, removeDoc, patchDoc, streakInfo, dayKey, COUNT_MS } from '../lib/store';
-import { coverUrl, blurredCoverUrl, ago, formatSize, getFile, refreshCover } from '../lib/library';
+import { coverUrl, ago, formatSize, getFile, refreshCover } from '../lib/library';
 import { KIND_LABEL } from '../lib/formats/detect';
 import type { DocMeta } from '../lib/types';
 import { Icon } from '../ui/Icon';
@@ -20,29 +20,11 @@ export function useCover(doc?: DocMeta) {
   return url;
 }
 
-function useBlur(doc?: DocMeta) {
-  const [url, setUrl] = useState<string>();
-  useEffect(() => {
-    let alive = true;
-    if (doc) blurredCoverUrl(doc).then((u) => alive && setUrl(u));
-    return () => {
-      alive = false;
-    };
-  }, [doc?.coverId]); // eslint-disable-line react-hooks/exhaustive-deps
-  return url;
-}
-
-function Pocket({ doc, active, onClick }: { doc: DocMeta; active: boolean; onClick: () => void }) {
-  const blur = useBlur(doc);
+function Pocket({ doc, near, onClick }: { doc: DocMeta; near: boolean; onClick: () => void }) {
   return (
-    <button className="pocket-wrap" onClick={onClick} aria-label={`Open ${doc.name}`} data-active={active ? '1' : undefined}>
+    <button className="pocket-wrap" onClick={onClick} aria-label={`Open ${doc.name}`} data-near={near ? '1' : undefined}>
       <Cover doc={doc} className="cover" />
       <div className="pocket">
-        {blur && (
-          <div className="pk-blur">
-            <img src={blur} alt="" />
-          </div>
-        )}
         <Screws />
         {doc.progress > 0.005 && (
           <div className="pocket-progress">
@@ -241,7 +223,7 @@ export function Library({
                 <div className="slot" key={d.id}>
                   <Pocket
                     doc={d}
-                    active={recent.indexOf(d) === active}
+                    near={Math.abs(recent.indexOf(d) - active) <= 1}
                     onClick={() => {
                       const i = recent.indexOf(d);
                       if (i === active) onOpen(d.id);
@@ -503,6 +485,7 @@ function DocMenu({ doc, onClose, onOpen, onConvert }: { doc: DocMeta | null; onC
                 className="action danger"
                 onClick={async () => {
                   if (!confirm) return setConfirm(true);
+                  if (d.uri) (await import('../lib/linked')).ignoreUri(d.uri);
                   await removeDoc(d.id);
                   toast('Removed from shelf');
                   onClose();
@@ -511,7 +494,7 @@ function DocMenu({ doc, onClose, onOpen, onConvert }: { doc: DocMeta | null; onC
                 <span className="ic">
                   <Icon name="trash" />
                 </span>
-                {confirm ? 'Tap again to remove' : 'Remove'}
+                {confirm ? 'Tap again to remove' : d.uri ? 'Remove from shelf' : 'Remove'}
               </button>
             </div>
           )}

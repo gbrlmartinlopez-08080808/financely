@@ -32,6 +32,10 @@ export interface DocMeta {
   coverId?: string; // key in blobs store
   readMs: number;
   url?: string; // source link for saved web pages
+  uri?: string; // Android document URI: the file stays where it is (nothing is copied)
+  folder?: string; // linked folder this file came from
+  modified?: number;
+  enriched?: boolean; // real cover / title read from the file
   finished?: boolean;
   /** For scans: ids of page images. */
   scanPages?: string[];

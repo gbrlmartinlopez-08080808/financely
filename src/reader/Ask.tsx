@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { ask, chunk, type Msg } from '../lib/ai';
 import { Icon } from '../ui/Icon';
 import { PixelLoader, Sheet } from '../ui/kit';
+import { SUPPORT_EMAIL } from '../lib/config';
+import { openExternal } from '../lib/native';
+import { renderRich } from '../lib/formats/flow';
 
 const QUICK = ['Summarise this', 'Key ideas', 'Explain it simply', 'Quiz me'];
 
@@ -94,11 +97,25 @@ export function AskSheet({
                   </div>
                 </div>
               )}
-              {msgs.map((m, i) => (
-                <div key={i} className={`ask-msg ${m.role}`}>
-                  {m.content}
-                </div>
-              ))}
+              {msgs.map((m, i) =>
+                m.role === 'assistant' ? (
+                  <div key={i} className="ask-wrap">
+                    <div className="ask-msg assistant rich" dangerouslySetInnerHTML={{ __html: renderRich(m.content, true) }} />
+                    <button
+                      className="ask-report"
+                      onClick={() =>
+                        openExternal(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Quire: problem with an AI answer')}&body=${encodeURIComponent(`Question: ${msgs[i - 1]?.content ?? ''}\n\nAnswer: ${m.content}\n\nWhat was wrong:\n`)}`)
+                      }
+                    >
+                      Report this answer
+                    </button>
+                  </div>
+                ) : (
+                  <div key={i} className={`ask-msg ${m.role}`}>
+                    {m.content}
+                  </div>
+                ),
+              )}
               {busy && (
                 <div className="ask-msg assistant">
                   <PixelLoader size={4} gap={2} label="thinking" />

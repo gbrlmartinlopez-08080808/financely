@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore, streakInfo, dayKey, updateSettings, COUNT_MS } from '../lib/store';
 import { plantStage } from '../lib/ascii';
 import { lightsFor, renderGlobe } from '../lib/globe';
-import * as db from '../lib/db';
 import { Icon } from '../ui/Icon';
 import { Pixel, Ruler, Sheet } from '../ui/kit';
 import { Ring } from './Library';
-import { AsciiCover } from '../reader/OtherViews';
+import { cheer, displayName } from '../lib/cheer';
+import { harvestRecent, type Harvest } from '../lib/harvest';
+import { pickQuote, quoteArt } from '../lib/quotes';
 import { onBack, tap } from '../lib/native';
 
 const MESSAGES: [number, string][] = [
@@ -81,14 +82,14 @@ export function StatsBubble({ open, onClose }: { open: boolean; onClose: () => v
   const [full, setFull] = useState(false);
   const [goalOpen, setGoalOpen] = useState(false);
   const [view, setView] = useState<'globe' | 'plant'>('globe');
-  const [coverBlob, setCoverBlob] = useState<Blob>();
+  const [harvest, setHarvest] = useState<Record<string, Harvest>>({});
+  const [nameDraft, setNameDraft] = useState('');
   const [mounted, setMounted] = useState(open);
   const [closing, setClosing] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const drag = useRef<{ y: number; dy: number } | null>(null);
   const info = streakInfo(days);
   const goal = settings.dailyGoal * 60_000;
-  const current = docs.find((d) => !d.finished && d.progress > 0) ?? docs[0];
 
   useEffect(() => {
     if (open) {
@@ -114,9 +115,16 @@ export function StatsBubble({ open, onClose }: { open: boolean; onClose: () => v
     });
   }, [open, full, onClose]);
 
+  // quotes & favourite words from your own documents (computed once, cached)
   useEffect(() => {
-    if (open && full && current?.coverId) db.get<Blob>('blobs', current.coverId).then(setCoverBlob);
-  }, [open, full, current?.coverId]);
+    if (!open) return;
+    let alive = true;
+    const t = setTimeout(() => harvestRecent(docs).then((h) => alive && setHarvest(h)), 350);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [open, docs.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const readingDays = useMemo(
     () =>
@@ -128,6 +136,10 @@ export function StatsBubble({ open, onClose }: { open: boolean; onClose: () => v
   const lights = useMemo(() => lightsFor(readingDays, dayKey()), [readingDays]);
   const msg = [...MESSAGES].reverse().find(([n]) => info.current >= n)?.[1] ?? MESSAGES[0][1];
   const todayDone = info.today >= COUNT_MS;
+  const words = cheer({ name: settings.name, todayMs: info.today, goalMs: goal, days, streak: info.current, docs, harvest });
+  const quote = useMemo(() => pickQuote(docs, harvest), [docs, harvest]);
+  const art = useMemo(() => quoteArt(quote), [quote]);
+  const needsName = !displayName(settings.name);
 
   const grid = useMemo(() => {
     const cells: { key: string; l: number; today: boolean; future: boolean }[] = [];
@@ -193,6 +205,22 @@ export function StatsBubble({ open, onClose }: { open: boolean; onClose: () => v
         </div>
 
         <div className="bubble-body">
+          <div className="bubble-hello" aria-live="polite">
+            <p className="main">{words.main}</p>
+            {words.fun && <p className="fun">{words.fun}</p>}
+            {needsName && (
+              <form
+                className="namefield"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (nameDraft.trim()) updateSettings({ name: nameDraft.trim() });
+                }}
+              >
+                <input value={nameDraft} onChange={(e) => setNameDraft(e.target.value.slice(0, 24))} placeholder="what should I call you?" maxLength={24} aria-label="Your name" />
+                {nameDraft.trim() && <button>Save</button>}
+              </form>
+            )}
+          </div>
           <Globe lights={lights} view={view} onToggle={() => setView((v) => (v === 'globe' ? 'plant' : 'globe'))} />
           <div className="bubble-cap">
             <b className="mono">
@@ -252,18 +280,12 @@ export function StatsBubble({ open, onClose }: { open: boolean; onClose: () => v
                   </div>
                 </div>
               </div>
-              {current && coverBlob && (
-                <div className="ascii-card" style={{ marginTop: 10 }}>
-                  <AsciiCover blob={coverBlob} cols={44} />
-                  <div className="msg">
-                    now reading — {current.name.length > 40 ? current.name.slice(0, 40) + '…' : current.name}
-                    <br />
-                    <span style={{ opacity: 0.6 }}>
-                      {Math.round(current.progress * 100)}% · {Math.round((current.readMs ?? 0) / 60000)} min so far
-                    </span>
-                  </div>
+              <div className="ascii-card quote" style={{ marginTop: 10 }}>
+                <pre aria-label={`${quote.text} — ${quote.from}`}>{art}</pre>
+                <div className="msg" style={{ textAlign: 'center' }}>
+                  {quote.own ? 'a line from your own shelf' : 'for the days you’d rather not read'}
                 </div>
-              )}
+              </div>
               <div style={{ height: 26 }} />
             </>
           )}

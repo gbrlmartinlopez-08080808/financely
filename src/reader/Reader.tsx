@@ -834,7 +834,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
         )}
         <div className="r-dock-row compact">
           <button className="timechip" onClick={() => setClockMode((m) => (m === 'time' ? 'left' : 'time'))} aria-label="Clock / time left">
-            <Icon name="clock" size={14} />
+            <Icon name="clock" size={15} />
             <span>{clockMode === 'time' ? now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : `${minutesLeft}m left`}</span>
           </button>
           {(liquid || isPdf) && content?.type !== 'sheet' ? (
@@ -849,10 +849,10 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
             />
           ) : null}
           <button className="pill round sm" onClick={cycleTheme} onContextMenu={(e) => (e.preventDefault(), setSheet('type'))} aria-label="Theme">
-            <Icon name={dark ? 'moon' : 'sun'} size={17} />
+            <Icon name={dark ? 'moon' : 'sun'} size={20} />
           </button>
           <button className="pill round sm" onClick={() => setSheet('type')} aria-label="Typography">
-            <TypeGlyph size={17} />
+            <TypeGlyph size={20} />
           </button>
         </div>
         <button className="r-chev" onClick={() => setChrome(false)} aria-label="Hide controls">

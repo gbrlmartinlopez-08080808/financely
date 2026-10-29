@@ -154,6 +154,13 @@
   font-size: 12px;
   color: #b9b8b3;
 }
+.lk-credit {
+  margin-right: auto;
+  align-self: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: #6d6c68;
+}
 .lk-foot {
   display: flex;
   justify-content: flex-end;
@@ -636,56 +643,59 @@
   box-shadow: 0 0 0 1px var(--r-line);
 }
 
-/* ------------------------------------------------------------------ compact reader dock */
+/* ------------------------------------------------------------------ reader dock */
 .r-dock {
-  padding-bottom: calc(var(--safe-b) + 6px);
+  padding-bottom: calc(var(--safe-b) + 8px);
 }
 .r-dock-row.compact {
-  gap: 6px;
+  gap: 8px;
 }
 .r-dock .pill.round.sm {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   padding: 0;
 }
 .timechip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 36px;
-  padding: 0 12px;
+  gap: 6px;
+  height: 38px;
+  padding: 0 13px;
   border-radius: 999px;
   font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 500;
-  color: color-mix(in srgb, var(--r-ink) 72%, transparent);
-  background: color-mix(in srgb, var(--r-ink) 8%, transparent);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--r-ink);
+  background: color-mix(in srgb, var(--r-bg) 58%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--r-ink) 12%, transparent), 0 4px 14px rgba(0, 0, 0, 0.06);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .timechip:active {
-  background: color-mix(in srgb, var(--r-ink) 14%, transparent);
+  background: color-mix(in srgb, var(--r-bg) 40%, transparent);
 }
 .r-dock .seg.compact {
-  padding: 3px;
+  padding: 4px;
 }
 .r-dock .seg.compact .seg-thumb {
-  top: 3px;
-  bottom: 3px;
-  left: 3px;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
 }
 .r-dock .seg.compact button {
   min-width: 0;
-  height: 30px;
-  padding: 0 13px;
-  font-size: 12.5px;
+  height: 36px;
+  padding: 0 16px;
+  font-size: 13.5px;
 }
 .r-ibtn {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
 }
 .r-chev {
-  height: 18px;
+  height: 20px;
   margin-top: 2px;
 }
 
@@ -696,7 +706,7 @@
   right: 10px;
   bottom: calc(var(--safe-b) + 10px);
   z-index: 52;
-  height: min(60vh, 520px);
+  height: min(66vh, 580px);
   display: flex;
   flex-direction: column;
   background: var(--surface);
@@ -1123,4 +1133,125 @@
 }
 .lookup {
   max-height: 76vh;
+}
+
+.ask-wrap {
+  align-self: flex-start;
+  max-width: 94%;
+  display: grid;
+  gap: 4px;
+}
+.ask-msg.rich {
+  white-space: normal;
+  max-width: 100%;
+}
+.ask-msg.rich p {
+  margin: 0 0 0.6em;
+}
+.ask-msg.rich p:last-child {
+  margin-bottom: 0;
+}
+.ask-msg.rich ul,
+.ask-msg.rich ol {
+  margin: 0.2em 0 0.6em;
+  padding-left: 1.3em;
+}
+.ask-msg.rich code {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  background: var(--line);
+  padding: 0.1em 0.35em;
+  border-radius: 5px;
+}
+.ask-msg.rich .math-display {
+  overflow-x: auto;
+  padding: 0.2em 0;
+}
+.ask-msg.rich .katex {
+  font-size: 1.05em;
+}
+.ask-report {
+  justify-self: start;
+  margin-left: 6px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 2px 0 6px;
+}
+
+.bubble-hello {
+  padding: 8px 10px 10px;
+}
+.bubble-hello .main {
+  margin: 0;
+  font-size: 15.5px;
+  line-height: 1.35;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.bubble-hello .fun {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
+  font-style: italic;
+}
+.namefield {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.namefield input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px dashed var(--line-2);
+  background: transparent;
+  padding: 0 14px;
+  font-size: 13px;
+  outline: none;
+  user-select: text;
+}
+.namefield input:focus {
+  border-style: solid;
+  border-color: var(--ink);
+}
+.namefield button {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.ascii-card.quote {
+  padding: 22px 8px 16px;
+}
+.ascii-card.quote pre {
+  font-size: 10.5px;
+  line-height: 1.22;
+  text-align: left;
+  display: block;
+  width: max-content;
+  margin: 0 auto;
+  color: #e9e9e4;
+}
+.ascii-card.quote .msg {
+  font-size: 11px;
+  opacity: 0.55;
+  margin-top: 12px;
+}
+
+.about p {
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.about a {
+  color: inherit;
+  text-underline-offset: 3px;
 }

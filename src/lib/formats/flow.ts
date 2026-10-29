@@ -62,9 +62,9 @@ export function textToLiquid(buf: ArrayBuffer): LiquidDoc {
 const mathBlock: TokenizerAndRendererExtension = {
   name: 'mathBlock',
   level: 'block',
-  start: (src: string) => src.match(/\$\$/)?.index,
+  start: (src: string) => src.match(/\$\$|\\\[/)?.index,
   tokenizer(src: string) {
-    const m = /^\$\$([\s\S]+?)\$\$/.exec(src);
+    const m = /^\$\$([\s\S]+?)\$\$/.exec(src) ?? /^\\\[([\s\S]+?)\\\]/.exec(src);
     if (m) return { type: 'mathBlock', raw: m[0], text: m[1].trim() };
     return undefined;
   },
@@ -85,9 +85,9 @@ const mathInline: TokenizerAndRendererExtension = {
 };
 marked.use({ extensions: [mathBlock, mathInline], gfm: true });
 
-export function markdownToLiquid(buf: ArrayBuffer): LiquidDoc {
-  const src = decoder(buf).replace(/^---\n[\s\S]*?\n---\n/, ''); // drop front-matter
-  const raw = marked.parse(src, { async: false }) as string;
+/** Markdown + LaTeX → sanitised HTML (used for documents and for AI answers). */
+export function renderRich(src: string, breaks = false): string {
+  const raw = marked.parse(src, { async: false, breaks }) as string;
   // Sanitise first (our placeholders survive because data-* is re-added below), then render math.
   const doc = new DOMParser().parseFromString(raw, 'text/html');
   const holders: { el: Element; tex: string; display: boolean }[] = [];
@@ -108,7 +108,12 @@ export function markdownToLiquid(buf: ArrayBuffer): LiquidDoc {
       return escapeHtml(h.tex);
     }
   });
-  return finalize(html);
+  return html;
+}
+
+export function markdownToLiquid(buf: ArrayBuffer): LiquidDoc {
+  const src = decoder(buf).replace(/^---\n[\s\S]*?\n---\n/, ''); // drop front-matter
+  return finalize(renderRich(src));
 }
 
 // ------------------------------------------------------------------ html

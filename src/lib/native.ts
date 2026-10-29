@@ -24,11 +24,50 @@ export interface IncomingFile {
   name: string;
   mime: string;
 }
+export interface LinkedFile {
+  uri: string;
+  name: string;
+  mime: string;
+  size: number;
+  modified: number;
+}
 interface IncomingPlugin {
+  pickFiles(): Promise<{ files: LinkedFile[] }>;
+  pickFolder(): Promise<{ uri?: string; name?: string }>;
+  listFolder(o: { uri: string }): Promise<{ files: LinkedFile[] }>;
+  readUri(o: { uri: string; name: string }): Promise<{ path: string }>;
+  setNativeSelectionMenu(o: { enabled: boolean }): Promise<void>;
   getPending(): Promise<{ files: IncomingFile[] }>;
   addListener(event: 'file', cb: (f: { files: IncomingFile[] }) => void): Promise<PluginListenerHandle>;
 }
 const Incoming = registerPlugin<IncomingPlugin>('Incoming');
+
+export const pickFilesNative = () => Incoming.pickFiles().then((r) => r.files ?? []);
+export const pickFolderNative = () => Incoming.pickFolder();
+export const listFolderNative = (uri: string) => Incoming.listFolder({ uri }).then((r) => r.files ?? []);
+export async function readUriBlob(uri: string, name: string, mime: string): Promise<Blob> {
+  const { path } = await Incoming.readUri({ uri, name });
+  const res = await fetch(Capacitor.convertFileSrc(path));
+  if (!res.ok) throw new Error('Couldn’t open that file — it may have been moved or deleted.');
+  const b = await res.blob();
+  return new Blob([b], { type: mime || b.type });
+}
+
+/** Android's own Copy / Select-all popup: off while reading (we show our own menu), on inside text boxes. */
+export function manageSelectionMenu() {
+  if (!isNative) return;
+  let on = false;
+  const set = (v: boolean) => {
+    if (v === on) return;
+    on = v;
+    Incoming.setNativeSelectionMenu({ enabled: v }).catch(() => {});
+  };
+  set(false);
+  Incoming.setNativeSelectionMenu({ enabled: false }).catch(() => {});
+  const editable = (t: EventTarget | null) => t instanceof HTMLElement && (t.matches('input, textarea, [contenteditable="true"]') || !!t.closest('input, textarea'));
+  document.addEventListener('focusin', (e) => set(editable(e.target)));
+  document.addEventListener('focusout', () => set(false));
+}
 
 export async function readIncoming(f: IncomingFile): Promise<Blob> {
   const res = await fetch(Capacitor.convertFileSrc(f.path));
@@ -143,5 +182,6 @@ export async function initBackButton() {
 }
 
 export async function openExternal(url: string) {
-  window.open(url, '_blank', 'noopener');
+  if (/^(mailto|tel):/i.test(url)) location.href = url;
+  else window.open(url, '_blank', 'noopener');
 }

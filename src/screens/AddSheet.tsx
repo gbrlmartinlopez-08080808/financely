@@ -9,6 +9,7 @@ export function AddSheet({
   open,
   onClose,
   onFiles,
+  onFolder,
   onScan,
   onLink,
   onPaste,
@@ -18,6 +19,7 @@ export function AddSheet({
   open: boolean;
   onClose: () => void;
   onFiles: () => void;
+  onFolder?: () => void;
   onScan: () => void;
   onLink: (url: string) => void;
   onPaste: (text: string, title: string) => void;
@@ -54,8 +56,17 @@ export function AddSheet({
                 <Pixel name="page" size={16} />
               </span>
               Files from your phone
-              <span className="r">any file</span>
+              <span className="r">opened in place</span>
             </button>
+            {onFolder && (
+              <button className="action" onClick={() => (onClose(), onFolder())}>
+                <span className="ic">
+                  <Pixel name="stack" size={16} />
+                </span>
+                Link a folder
+                <span className="r">stays up to date</span>
+              </button>
+            )}
             <button className="action" onClick={() => setMode('link')}>
               <span className="ic">
                 <Icon name="globe" size={20} />

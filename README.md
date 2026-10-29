@@ -2,7 +2,7 @@
 
 A calm, ad-free, paywall-free reader for Android (and the web) that opens almost anything: PDF, EPUB, DOCX, ODT, RTF, Markdown, HTML, TXT, PPTX, XLSX/CSV, images, audio, video and source code.
 
-**Install:** download [`releases/Quire-1.1.apk`](releases/Quire-1.1.apk) on your phone and open it. Allow “Install unknown apps” for your browser or file manager when asked (on Xiaomi/HyperOS you may also have to confirm a security prompt).
+**Install:** download [`releases/Quire-1.2.apk`](releases/Quire-1.2.apk) on your phone and open it. Allow “Install unknown apps” for your browser or file manager when asked (on Xiaomi/HyperOS you may also have to confirm a security prompt).
 
 ## What it does
 
@@ -18,7 +18,9 @@ A calm, ad-free, paywall-free reader for Android (and the web) that opens almost
 - **Fonts.** Twelve bundled typefaces; star four favourites for quick switching.
 - **Open with Quire.** Registered for “Open with…” and the Share sheet for every file type.
 
-Everything is stored on the device (IndexedDB). Only word lookups use the network.
+Everything is stored on the device (IndexedDB); files can be opened in place without copying. Only word lookups, saved links and the optional Ask feature use the network.
+
+**Publishing:** see [`PUBLISHING.md`](PUBLISHING.md), [`PRIVACY.md`](PRIVACY.md) and [`store/`](store/) (listing text, screenshots, feature graphic).
 
 ## Develop
 

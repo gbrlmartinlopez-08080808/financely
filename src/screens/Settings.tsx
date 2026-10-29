@@ -4,8 +4,11 @@ import * as db from '../lib/db';
 import { Icon } from '../ui/Icon';
 import { Ruler, Segmented, Sheet, Toggle, toast } from '../ui/kit';
 import { isNative } from '../lib/native';
+import { getFolders, linkFolder, rescanAll, unlinkFolder, type LinkedFolder } from '../lib/linked';
 import { formatSize } from '../lib/library';
 import { FontsSheet } from '../reader/sheets';
+import { About } from './About';
+import { APP_VERSION } from '../lib/config';
 import { fontById } from '../lib/fonts';
 
 export function Settings({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -14,9 +17,13 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
   const [usage, setUsage] = useState<string>('');
   const [name, setName] = useState(s.name);
   const [fonts, setFonts] = useState(false);
+  const [about, setAbout] = useState(false);
+  const [folders, setFolders] = useState<LinkedFolder[]>([]);
+  const [scanning, setScanning] = useState(false);
   useEffect(() => {
     if (!open) return;
     setName(s.name);
+    if (isNative) getFolders().then(setFolders);
     navigator.storage?.estimate?.().then((e) => setUsage(e.usage ? formatSize(e.usage) : ''));
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -43,8 +50,13 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
           </span>
           <input
             value={name}
-            onChange={(e) => setName(e.target.value.replace(/\s+/g, '').slice(0, 20))}
-            onBlur={() => updateSettings({ name: name || 'reader' })}
+            onChange={(e) => {
+              const v = e.target.value.replace(/^@+/, '').slice(0, 24);
+              setName(v);
+              updateSettings({ name: v.trim() || 'reader' });
+            }}
+            placeholder="your name"
+            maxLength={24}
             style={{ flex: 1, border: 0, outline: 0, background: 'transparent', fontSize: 16, fontWeight: 600, height: 44 }}
             aria-label="Your name"
           />
@@ -109,6 +121,68 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
         </div>
 
         <div className="section-label">files</div>
+        {isNative && (
+          <>
+            {folders.map((f) => (
+              <div className="row" key={f.uri}>
+                <Icon name="book" />
+                <div className="grow">
+                  <div className="row-label" style={{ fontSize: 15 }}>
+                    {f.name}
+                  </div>
+                  <div className="row-sub">linked · {docs.filter((d) => d.folder === f.uri).length} documents</div>
+                </div>
+                <button
+                  className="pill sm ghost"
+                  onClick={async () => {
+                    await unlinkFolder(f.uri);
+                    setFolders(await getFolders());
+                    toast('Folder unlinked (your files are untouched)');
+                  }}
+                >
+                  Unlink
+                </button>
+              </div>
+            ))}
+            <div className="row">
+              <Icon name="plus" />
+              <div className="grow">
+                <div className="row-label">Link a folder</div>
+                <div className="row-sub">Documents inside appear in your library without being copied. Android won’t allow linking the Downloads folder itself — use Add → Files for those.</div>
+              </div>
+              <button
+                className="pill sm"
+                onClick={async () => {
+                  const r = await linkFolder();
+                  setFolders(await getFolders());
+                  if (r.folder) toast(`${r.added} documents added`);
+                }}
+              >
+                Choose
+              </button>
+            </div>
+            {folders.length > 0 && (
+              <div className="row">
+                <Icon name="convert" />
+                <div className="grow">
+                  <div className="row-label">Rescan folders</div>
+                </div>
+                <button
+                  className="pill sm ghost"
+                  disabled={scanning}
+                  onClick={async () => {
+                    setScanning(true);
+                    const n = await rescanAll();
+                    setScanning(false);
+                    toast(n ? `${n} new documents` : 'Up to date');
+                  }}
+                >
+                  {scanning ? 'Scanning…' : 'Scan now'}
+                </button>
+              </div>
+            )}
+          </>
+        )}
         <div className="row">
           <Icon name="book" />
           <div className="grow">
@@ -139,8 +213,16 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
             Clear cache
           </button>
         </div>
+        <button className="row" style={{ width: '100%', textAlign: 'left' }} onClick={() => setAbout(true)}>
+          <Icon name="info" />
+          <div className="grow">
+            <div className="row-label">About, privacy & licences</div>
+            <div className="row-sub">What leaves the phone, sources and open-source credits</div>
+          </div>
+          <Icon name="right" size={18} />
+        </button>
         <div style={{ textAlign: 'center', padding: '26px 0 10px' }} className="mono muted">
-          <div style={{ fontSize: 11 }}>quire 1.1 · free · no ads · no accounts · no tracking</div>
+          <div style={{ fontSize: 11 }}>quire {APP_VERSION} · free · no ads · no accounts · no tracking</div>
           <div style={{ fontSize: 10.5, marginTop: 6, lineHeight: 1.5 }}>
             Your library stays on this phone.
             <br />
@@ -149,6 +231,7 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
         </div>
       </div>
       <FontsSheet open={fonts} onClose={() => setFonts(false)} />
+      <About open={about} onClose={() => setAbout(false)} />
     </Sheet>
   );
 }

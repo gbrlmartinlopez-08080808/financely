@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { define, origin, wiki, normalizeWord, sameSubject, type Definition, type Origin, type WikiCard } from '../lib/lookup';
 import { onBack, openExternal, tap } from '../lib/native';
@@ -152,6 +152,7 @@ export function LookupCard({ word, onClose }: { word: string | null; onClose: ()
           )}
         </div>
         <div className="lk-foot">
+          <span className="lk-credit">{tab === 'define' || tab === 'origin' ? 'Wiktionary · CC BY-SA 4.0' : 'Wikipedia · CC BY-SA 4.0'}</span>
           <button onClick={() => openExternal(moreUrl)}>
             More <Icon name="right" size={14} />
           </button>
@@ -179,11 +180,19 @@ export function SelectionMenu({
   onCopy: () => void;
   onShare: () => void;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const top = rect ? (rect.top > 140 ? rect.top - 58 : rect.bottom + 14) : 0;
+  const centre = rect ? rect.left + rect.width / 2 : 0;
+  // keep the whole menu on screen, however near the edge the word is
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !rect) return;
+    const w = el.offsetWidth;
+    el.style.left = `${Math.max(w / 2 + 8, Math.min(window.innerWidth - w / 2 - 8, centre))}px`;
+  }, [rect, centre]);
   if (!rect) return null;
-  const top = rect.top > 140 ? rect.top - 58 : rect.bottom + 14;
-  const left = Math.max(10, Math.min(window.innerWidth - 10, rect.left + rect.width / 2));
   return createPortal(
-    <div className="selmenu" style={{ top, left }} onMouseDown={(e) => e.preventDefault()} onTouchStart={(e) => e.stopPropagation()}>
+    <div ref={ref} className="selmenu" style={{ top, left: centre }} onMouseDown={(e) => e.preventDefault()} onTouchStart={(e) => e.stopPropagation()}>
       <button onClick={onDefine}>Define</button>
       {onHighlight && <button onClick={onHighlight}>Highlight</button>}
       {onListen && <button onClick={onListen}>Listen</button>}

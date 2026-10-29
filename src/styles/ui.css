@@ -159,7 +159,8 @@
   display: flex;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
-  padding: 44px 0 10px;
+  padding: 44px 0 52px;
+  margin-bottom: -34px;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
@@ -211,29 +212,20 @@
   bottom: 0;
   height: 62%;
   border-radius: 12px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.46), rgba(255, 255, 255, 0.3));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.28));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.95),
     inset 0 0 0 1px rgba(255, 255, 255, 0.6),
-    0 0 0 1px rgba(0, 0, 0, 0.06),
-    0 18px 40px -12px rgba(0, 0, 0, 0.25);
+    0 0 0 1px rgba(0, 0, 0, 0.05),
+    0 22px 38px -18px rgba(0, 0, 0, 0.2),
+    0 6px 14px -6px rgba(0, 0, 0, 0.08);
   overflow: hidden;
 }
-/* a pre-blurred copy of the cover sits exactly where the cover shows through the acrylic */
-.pocket .pk-blur {
-  position: absolute;
-  left: 7%;
-  right: 7%;
-  top: -61.3%;
-  height: 141.9%;
-  overflow: hidden;
-  opacity: 0.9;
-}
-.pocket .pk-blur img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+/* live frosting, but only on the cards you can actually see (keeps scrolling light) */
+.pocket-wrap[data-near] .pocket {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.46), rgba(255, 255, 255, 0.26));
+  -webkit-backdrop-filter: blur(9px) saturate(1.05);
+  backdrop-filter: blur(9px) saturate(1.05);
 }
 .pocket::before {
   content: '';
@@ -284,6 +276,7 @@
 }
 
 .hero-text {
+  position: relative;
   text-align: center;
   padding: 26px 30px 6px;
   min-height: 124px;

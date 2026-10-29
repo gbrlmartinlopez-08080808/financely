@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { init, useStore, updateSettings } from './lib/store';
 import { importFile, importText } from './lib/library';
-import { initBackButton, listenIncoming, readIncoming, setStatusBar, tap } from './lib/native';
+import { initBackButton, isNative, listenIncoming, manageSelectionMenu, readIncoming, setStatusBar, tap } from './lib/native';
+import { linkFolder, linkPickedFiles, rescanAll } from './lib/linked';
 import type { DocMeta } from './lib/types';
 import { Library } from './screens/Library';
 import { Reader } from './reader/Reader';
@@ -34,6 +35,7 @@ export default function App() {
   useEffect(() => {
     init();
     initBackButton();
+    manageSelectionMenu();
   }, []);
 
   // app theme (light / dark / system)
@@ -109,6 +111,30 @@ export default function App() {
     return () => off();
   }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // keep linked folders fresh (new files appear, deleted ones go)
+  useEffect(() => {
+    if (ready && isNative) rescanAll().then((n) => n && toast(`${n} new document${n === 1 ? '' : 's'} found`));
+  }, [ready]);
+
+  const pickFiles = async () => {
+    if (!isNative) return fileIn.current?.click();
+    try {
+      const added = await linkPickedFiles();
+      if (added.length === 1) setOpenId(added[0].id);
+      else if (added.length) toast(`Added ${added.length} files — nothing was copied`);
+    } catch (e) {
+      toast((e as Error).message || 'Couldn’t open the file picker');
+    }
+  };
+  const pickFolder = async () => {
+    try {
+      const r = await linkFolder();
+      if (r.folder) toast(r.added ? `Linked “${r.folder.name}” · ${r.added} documents` : `Linked “${r.folder.name}” · nothing new`);
+    } catch (e) {
+      toast((e as Error).message || 'Couldn’t read that folder');
+    }
+  };
+
   // first run: put the welcome guide on the shelf
   useEffect(() => {
     if (!ready || onboarded) return;
@@ -172,7 +198,8 @@ export default function App() {
       <AddSheet
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        onFiles={() => fileIn.current?.click()}
+        onFiles={pickFiles}
+        onFolder={isNative ? pickFolder : undefined}
         onScan={() => camIn.current?.click()}
         onLink={saveLink}
         onPaste={async (text, title) => {

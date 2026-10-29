@@ -150,14 +150,17 @@ export async function importText(text: string, title?: string): Promise<DocMeta>
 
 // ------------------------------------------------------------------ import
 
-export async function importFile(file: Blob, name: string, opts: { kind?: DocKind; title?: string; open?: boolean } = {}): Promise<DocMeta> {
+export interface Extracted {
+  title: string;
+  author?: string;
+  pages?: number;
+  cover?: Blob;
+}
+
+/** Title, author, page count and a cover from the file itself (falls back gracefully per format). */
+export async function extractMeta(file: Blob, name: string, kind: DocKind, titleHint?: string): Promise<Extracted> {
   const buf = await file.arrayBuffer();
-  const head = new Uint8Array(buf.slice(0, 16));
-  const kind = opts.kind ?? detectKind(name, file.type, head);
-  const id = db.uid();
-  const mime = file.type || mimeFor(kind, name);
-  await db.put('files', id, new Blob([buf], { type: mime }));
-  let title = opts.title ?? titleFromFile(name);
+  let title = titleHint ?? titleFromFile(name);
   let author: string | undefined;
   let pages: number | undefined;
   let cover: Blob | undefined;
@@ -167,12 +170,12 @@ export async function importFile(file: Blob, name: string, opts: { kind?: DocKin
       const r = await pdfCover(buf);
       cover = r.cover ?? undefined;
       pages = r.pages;
-      if (r.title) title = r.title;
+      if (r.title && !titleHint) title = r.title;
       author = r.author;
     } else if (kind === 'epub') {
       const { epubMeta } = await import('./formats/flow');
       const r = await epubMeta(buf);
-      if (r.title) title = r.title;
+      if (r.title && !titleHint) title = r.title;
       author = r.author;
       if (r.cover) cover = await imageCover(r.cover);
     } else if (kind === 'image' || kind === 'scan') {
@@ -182,13 +185,24 @@ export async function importFile(file: Blob, name: string, opts: { kind?: DocKin
   } catch (e) {
     console.warn('metadata failed', e);
   }
-  if (!cover) cover = await generatedCover(title, kind, author);
+  return { title, author, pages, cover };
+}
+
+export async function importFile(file: Blob, name: string, opts: { kind?: DocKind; title?: string; open?: boolean } = {}): Promise<DocMeta> {
+  const buf = await file.arrayBuffer();
+  const head = new Uint8Array(buf.slice(0, 16));
+  const kind = opts.kind ?? detectKind(name, file.type, head);
+  const id = db.uid();
+  const mime = file.type || mimeFor(kind, name);
+  await db.put('files', id, new Blob([buf], { type: mime }));
+  const x = await extractMeta(new Blob([buf], { type: mime }), name, kind, opts.title);
+  const cover = x.cover ?? (await generatedCover(x.title, kind, x.author));
   const coverId = id + ':cover';
   await db.put('blobs', coverId, cover);
   const now = Date.now();
   const meta: DocMeta = {
     id,
-    name: title,
+    name: x.title,
     fileName: name,
     kind,
     mime,
@@ -196,8 +210,8 @@ export async function importFile(file: Blob, name: string, opts: { kind?: DocKin
     addedAt: now,
     openedAt: now,
     progress: 0,
-    pages,
-    author,
+    pages: x.pages,
+    author: x.author,
     coverId,
     readMs: 0,
   };
@@ -231,6 +245,11 @@ function mimeFor(kind: DocKind, name: string) {
 }
 
 export async function getFile(id: string): Promise<Blob | undefined> {
+  const doc = getState().docs.find((d) => d.id === id);
+  if (doc?.uri) {
+    const { readLinked } = await import('./linked');
+    return readLinked(doc);
+  }
   return db.get<Blob>('files', id);
 }
 

@@ -1,4 +1,4 @@
-name: Android APK
+name: Android build
 
 on:
   push:
@@ -6,8 +6,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  apk:
+  build:
     runs-on: ubuntu-latest
+    env:
+      KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -21,8 +23,21 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npx cap sync android
-      - run: cd android && ./gradlew assembleRelease --no-daemon
+      # Optional: sign with your own upload key (add the four secrets described in PUBLISHING.md)
+      - name: Prepare signing key
+        if: env.KS_B64 != ''
+        run: |
+          echo "$KS_B64" | base64 -d > android/upload.jks
+          cat > android/keystore.properties <<PROPS
+          storeFile=../upload.jks
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          PROPS
+      - run: cd android && ./gradlew assembleRelease bundleRelease --no-daemon
       - uses: actions/upload-artifact@v4
         with:
-          name: Quire-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
+          name: Quire-android
+          path: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/bundle/release/app-release.aab
