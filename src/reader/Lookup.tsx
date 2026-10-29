@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { define, origin, wiki, normalizeWord, sameSubject, type Definition, type Origin, type WikiCard } from '../lib/lookup';
+import { define, origin, wiki, normalizeWord, sameSubject, type Definition, type Origin, type WikiCard, type WikiImage } from '../lib/lookup';
+import { texToHtml } from '../lib/mathtext';
 import { onBack, openExternal, tap } from '../lib/native';
 import { Icon } from '../ui/Icon';
 import { PixelLoader } from '../ui/kit';
@@ -16,7 +17,8 @@ export function LookupCard({ word, onClose }: { word: string | null; onClose: ()
   const [failed, setFailed] = useState<Record<Tab, boolean>>({ define: false, origin: false, wiki: false });
   const [attempt, setAttempt] = useState(0);
   const [closing, setClosing] = useState(false);
-  const [imgOk, setImgOk] = useState(true);
+  const [bad, setBad] = useState<Set<string>>(new Set());
+  const [zoomImg, setZoomImg] = useState<WikiImage | null>(null);
   const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
 
   useEffect(() => {
@@ -25,7 +27,8 @@ export function LookupCard({ word, onClose }: { word: string | null; onClose: ()
     setEty(undefined);
     setWk(undefined);
     setClosing(false);
-    setImgOk(true);
+    setBad(new Set());
+    setZoomImg(null);
     const multi = /\s/.test(w);
     setTab(multi ? 'wiki' : 'define');
     setFailed({ define: false, origin: false, wiki: false });
@@ -53,8 +56,9 @@ export function LookupCard({ word, onClose }: { word: string | null; onClose: ()
   }, [w]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!w) return null;
-  const heroImg = wk?.thumb && (tab === 'wiki' || sameSubject(w, wk)) ? wk.thumb : undefined;
-  const title = wk?.title && tab === 'wiki' ? wk.title : def?.word ?? w;
+  const gallery = wk && (tab === 'wiki' || sameSubject(w, wk)) ? wk.images.filter((i) => !bad.has(i.src)) : [];
+  const rawTitle = wk?.title && tab === 'wiki' ? wk.title : def?.word ?? w;
+  const title = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1);
   const loading = (tab === 'define' && def === undefined) || (tab === 'origin' && ety === undefined) || (tab === 'wiki' && wk === undefined);
   const moreUrl = tab === 'wiki' && wk ? wk.url : tab === 'origin' ? `https://en.wiktionary.org/wiki/${encodeURIComponent(w)}#Etymology` : `https://en.wiktionary.org/wiki/${encodeURIComponent(w)}`;
 
@@ -63,11 +67,7 @@ export function LookupCard({ word, onClose }: { word: string | null; onClose: ()
       <div className={`scrim${closing ? ' out' : ''}`} style={{ background: 'rgba(0,0,0,.08)' }} onClick={close} />
       <div className={`lookup${closing ? ' out' : ''}`} role="dialog" aria-label={`Lookup ${w}`}>
         <div className="lk-word">{w.toLowerCase()}</div>
-        {heroImg && imgOk && (
-          <div className="lk-img">
-            <img src={heroImg} alt="" onError={() => setImgOk(false)} />
-          </div>
-        )}
+        {gallery.length > 0 && <Gallery key={`${w}-${tab === 'wiki'}`} images={gallery} onOpen={setZoomImg} onBroken={(src) => setBad((b) => new Set(b).add(src))} />}
         <div className="lk-title">
           <h2>{title}</h2>
           {tab === 'define' && def?.phonetic && <span className="lk-sub mono">{def.phonetic}</span>}
@@ -112,8 +112,8 @@ export function LookupCard({ word, onClose }: { word: string | null; onClose: ()
                     <ol>
                       {m.defs.slice(0, 3).map((d, i) => (
                         <li key={i}>
-                          {d.d}
-                          {d.ex && <em> “{d.ex}”</em>}
+                          <span dangerouslySetInnerHTML={{ __html: texToHtml(d.d) }} />
+                          {d.ex && <em dangerouslySetInnerHTML={{ __html: ` “${texToHtml(d.ex)}”` }} />}
                         </li>
                       ))}
                     </ol>
@@ -139,27 +139,71 @@ export function LookupCard({ word, onClose }: { word: string | null; onClose: ()
                   </div>
                 )}
                 {ety.text.map((p, i) => (
-                  <p key={i}>{p}</p>
+                  <p key={i} dangerouslySetInnerHTML={{ __html: texToHtml(p) }} />
                 ))}
               </>
             ) : (
               <p className="lk-muted">No etymology found for “{w}”.</p>
             )
           ) : wk ? (
-            <p>{wk.extract}</p>
+            wk.html ? (
+              <div className="lk-rich" dangerouslySetInnerHTML={{ __html: wk.html }} />
+            ) : (
+              <p className="lk-muted">No article for “{w}”, but here are pictures from Wikimedia Commons.</p>
+            )
           ) : (
             <p className="lk-muted">Nothing on Wikipedia for “{w}”.</p>
           )}
         </div>
         <div className="lk-foot">
-          <span className="lk-credit">{tab === 'define' || tab === 'origin' ? 'Wiktionary · CC BY-SA 4.0' : 'Wikipedia · CC BY-SA 4.0'}</span>
+          <span className="lk-credit">{tab === 'define' || tab === 'origin' ? 'Wiktionary · CC BY-SA 4.0' : 'Wikipedia · CC BY-SA 4.0 · pictures: Wikimedia'}</span>
           <button onClick={() => openExternal(moreUrl)}>
             More <Icon name="right" size={14} />
           </button>
         </div>
       </div>
+      <ZoomViewer src={zoomImg ? zoomImg.full ?? zoomImg.src : null} onClose={() => setZoomImg(null)} />
     </>,
     document.body,
+  );
+}
+
+/** Swipeable pictures from the article (or Wikimedia Commons), with author + licence underneath. */
+function Gallery({ images, onOpen, onBroken }: { images: WikiImage[]; onOpen: (i: WikiImage) => void; onBroken: (src: string) => void }) {
+  const [idx, setIdx] = useState(0);
+  const cur = images[Math.min(idx, images.length - 1)];
+  return (
+    <div className="lk-gal">
+      <div
+        className="lk-strip"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          let best = 0;
+          let bd = Infinity;
+          Array.from(el.children).forEach((c, i) => {
+            const d = Math.abs((c as HTMLElement).offsetLeft - el.scrollLeft - 14);
+            if (d < bd) {
+              bd = d;
+              best = i;
+            }
+          });
+          setIdx(best);
+        }}
+      >
+        {images.map((im) => (
+          <button key={im.src} className="lk-slide" onClick={() => onOpen(im)} aria-label={`Open picture: ${im.title}`}>
+            <img src={im.src} alt={im.title} loading="lazy" draggable={false} onError={() => onBroken(im.src)} />
+          </button>
+        ))}
+      </div>
+      {images.length > 1 && <span className="lk-count mono">{Math.min(idx, images.length - 1) + 1}/{images.length}</span>}
+      {cur && (
+        <div className="lk-cap">
+          {cur.title.length > 52 ? cur.title.slice(0, 52) + '…' : cur.title}
+          {cur.credit ? <span> · {cur.credit}</span> : null}
+        </div>
+      )}
+    </div>
   );
 }
 

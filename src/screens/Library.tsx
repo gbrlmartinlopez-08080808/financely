@@ -396,7 +396,7 @@ function DocMenu({ doc, onClose, onOpen, onConvert }: { doc: DocMeta | null; onC
     <Sheet open={!!doc} onClose={onClose} title={d ? <span className="mono" style={{ fontSize: 15 }}>{d.name.length > 26 ? d.name.slice(0, 26) + '…' : d.name}</span> : ''}>
       {d && (
         <div className="sheet-body">
-          <div className="mono muted" style={{ fontSize: 12, textAlign: 'center', marginTop: -6, marginBottom: 10 }}>
+          <div className="mono muted" style={{ fontSize: 12, textAlign: 'center', marginTop: 2, marginBottom: 12 }}>
             {d.fileName} · {formatSize(d.size)}
           </div>
           {renaming ? (

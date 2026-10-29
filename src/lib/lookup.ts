@@ -3,6 +3,7 @@
 //   origin      → Wiktionary etymology (Greek/Latin roots pulled out as chips)
 //   encyclopedia + picture → Wikipedia (+ Wikimedia images)
 import * as db from './db';
+import { wikiHtmlToRich } from './mathtext';
 
 const HDRS = { 'Api-User-Agent': 'Quire/1.1 (personal reading app)' };
 
@@ -17,19 +18,29 @@ export interface Origin {
   text: string[]; // paragraphs
   roots: { lang: string; form: string; gloss?: string }[];
 }
+export interface WikiImage {
+  src: string; // ~640px thumbnail
+  full?: string; // original file
+  title: string;
+  w: number;
+  h: number;
+  credit?: string;
+}
 export interface WikiCard {
   title: string;
   description?: string;
-  extract: string;
+  extract: string; // plain text
+  html: string; // sanitised summary with typeset maths
   thumb?: string;
+  images: WikiImage[];
   url: string;
 }
 
 async function cached<T>(key: string, fn: () => Promise<T>): Promise<T> {
-  const hit = await db.get<{ v: T; at: number }>('kv', 'lk2:' + key).catch(() => undefined);
+  const hit = await db.get<{ v: T; at: number }>('kv', 'lk3:' + key).catch(() => undefined);
   if (hit && Date.now() - hit.at < 30 * 864e5) return hit.v;
   const v = await fn();
-  if (v) db.put('kv', 'lk2:' + key, { v, at: Date.now() }).catch(() => {});
+  if (v) db.put('kv', 'lk3:' + key, { v, at: Date.now() }).catch(() => {});
   return v;
 }
 
@@ -202,8 +213,7 @@ async function queryWiki(params: Record<string, string>): Promise<WikiPage | nul
     piprop: 'thumbnail',
     pithumbsize: '760',
     exintro: '1',
-    explaintext: '1',
-    exsentences: '6',
+    exlimit: 'max',
     ...params,
   });
   const r = await fetch(`https://en.wikipedia.org/w/api.php?${qs}`, { headers: HDRS });
@@ -214,7 +224,72 @@ async function queryWiki(params: Record<string, string>): Promise<WikiPage | nul
   return pages[0] ?? null;
 }
 
-/** Wikipedia article (with picture) for a word or phrase; exact title first, then best search hit. */
+const NOT_PICTURES = /(logo|icon|flag_of|commons-|wiki(?:media|data|pedia|source|quote|books|versity|news|voyage|species)|question_book|ambox|edit-|increase2|decrease2|steady2|crystal_clear|folder|nuvola|padlock|symbol_|portal|stub|disambig|oojs|redirect|information_icon|lock-|searchtool|merge-|split-|text_document|gnome|p_vip|star_|speaker_icon|loudspeaker|audio|button|arrow|blank|pending|wikt|ooui|vote|check_mark|cross_|red_pencil|cscr|translation|semi-protection)/i;
+
+const plain = (h?: string) => (h ? h.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim() : '');
+
+interface RawInfo {
+  title: string;
+  imageinfo?: {
+    thumburl?: string;
+    thumbwidth?: number;
+    thumbheight?: number;
+    url?: string;
+    width?: number;
+    height?: number;
+    mime?: string;
+    extmetadata?: Record<string, { value?: string }>;
+  }[];
+}
+
+function toImages(pages: Record<string, RawInfo> | undefined, first?: string): WikiImage[] {
+  const out: WikiImage[] = [];
+  for (const p of Object.values(pages ?? {})) {
+    const ii = p.imageinfo?.[0];
+    if (!ii?.thumburl || !/^image\/(jpeg|png|webp|gif|svg\+xml|tiff)/.test(ii.mime ?? '')) continue;
+    if (NOT_PICTURES.test(p.title)) continue;
+    const w = ii.width ?? ii.thumbwidth ?? 0;
+    const h = ii.height ?? ii.thumbheight ?? 0;
+    if (Math.max(w, h) < 260 || Math.min(w, h) < 120) continue; // icons & slivers
+    if (/svg/.test(ii.mime ?? '') && Math.max(w, h) < 380) continue;
+    const meta = ii.extmetadata ?? {};
+    const artist = plain(meta.Artist?.value).slice(0, 60);
+    const lic = plain(meta.LicenseShortName?.value);
+    out.push({
+      src: ii.thumburl,
+      full: ii.url,
+      title: p.title.replace(/^File:/, '').replace(/\.[a-z]+$/i, '').replace(/_/g, ' '),
+      w: ii.thumbwidth ?? w,
+      h: ii.thumbheight ?? h,
+      credit: [artist, lic].filter(Boolean).join(' · ') || undefined,
+    });
+  }
+  // lead picture first, then the biggest remaining
+  out.sort((a, b) => (a.src === first ? -1 : b.src === first ? 1 : b.w * b.h - a.w * a.h));
+  const seen = new Set<string>();
+  return out.filter((i) => (seen.has(i.src) ? false : (seen.add(i.src), true))).slice(0, 12);
+}
+
+const IMG_PROPS = { prop: 'imageinfo', iiprop: 'url|size|mime|extmetadata', iiurlwidth: '640', origin: '*', format: 'json', action: 'query' };
+
+async function articleImages(title: string, lead?: string): Promise<WikiImage[]> {
+  const qs = new URLSearchParams({ ...IMG_PROPS, generator: 'images', titles: title, gimlimit: '50' });
+  const r = await fetch(`https://en.wikipedia.org/w/api.php?${qs}`, { headers: HDRS });
+  if (!r.ok) return [];
+  const j = (await r.json()) as { query?: { pages?: Record<string, RawInfo> } };
+  return toImages(j.query?.pages, lead);
+}
+
+/** Wikimedia Commons search: pictures for topics whose article has few or none. */
+async function commonsImages(term: string): Promise<WikiImage[]> {
+  const qs = new URLSearchParams({ ...IMG_PROPS, generator: 'search', gsrsearch: `${term} filetype:bitmap|drawing`, gsrnamespace: '6', gsrlimit: '14' });
+  const r = await fetch(`https://commons.wikimedia.org/w/api.php?${qs}`, { headers: HDRS });
+  if (!r.ok) return [];
+  const j = (await r.json()) as { query?: { pages?: Record<string, RawInfo> } };
+  return toImages(j.query?.pages);
+}
+
+/** Wikipedia article (with a gallery of pictures); exact title first, then best search hit. */
 export async function wiki(term: string, exactOnly = false): Promise<WikiCard | null> {
   return cached(`wiki:${exactOnly ? 'x:' : ''}${term.toLowerCase()}`, async () => {
     const cap = term.charAt(0).toUpperCase() + term.slice(1);
@@ -224,12 +299,32 @@ export async function wiki(term: string, exactOnly = false): Promise<WikiCard | 
       page = (await queryWiki({ generator: 'search', gsrsearch: term, gsrlimit: '2', gsrnamespace: '0' }).catch(() => null)) ?? page;
     }
     if (!page && !exactOnly) page = await queryWiki({ generator: 'search', gsrsearch: term, gsrlimit: '1', gsrnamespace: '0' });
-    if (!page) return null;
+
+    let images: WikiImage[] = [];
+    if (page) {
+      images = await articleImages(page.title, page.thumbnail?.source).catch(() => []);
+      // the lead picture is always allowed, even if the filters above would have dropped it
+      if (page.thumbnail?.source && !images.some((i) => i.src === page!.thumbnail!.source)) {
+        images.unshift({ src: page.thumbnail.source, title: page.title, w: 640, h: 480 });
+      }
+    }
+    if (images.length < 3 && !exactOnly) {
+      const more = await commonsImages(page?.title ?? term).catch(() => []);
+      const have = new Set(images.map((i) => i.title));
+      images = [...images, ...more.filter((m) => !have.has(m.title))].slice(0, 12);
+    }
+    if (!page && !images.length) return null;
+    if (!page) {
+      return { title: cap, extract: '', html: '', images, url: `https://commons.wikimedia.org/w/index.php?search=${encodeURIComponent(term)}&ns6=1` };
+    }
+    const rich = wikiHtmlToRich(page.extract ?? '');
     return {
       title: page.title,
       description: page.description,
-      extract: (page.extract ?? '').trim(),
-      thumb: page.thumbnail?.source,
+      extract: rich.text,
+      html: rich.html,
+      thumb: images[0]?.src ?? page.thumbnail?.source,
+      images,
       url: page.canonicalurl ?? page.fullurl ?? `https://en.wikipedia.org/wiki/${encodeURIComponent(page.title)}`,
     };
   });
