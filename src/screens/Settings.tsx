@@ -213,6 +213,14 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
             Clear cache
           </button>
         </div>
+        <button className="row" style={{ width: '100%', textAlign: 'left' }} onClick={() => { onClose(); updateSettings({ onboarded: false }); }}>
+          <Icon name="ask" />
+          <div className="grow">
+            <div className="row-label">Replay the introduction</div>
+            <div className="row-sub">The short tour of everything Quire does</div>
+          </div>
+          <Icon name="right" size={18} />
+        </button>
         <button className="row" style={{ width: '100%', textAlign: 'left' }} onClick={() => setAbout(true)}>
           <Icon name="info" />
           <div className="grow">

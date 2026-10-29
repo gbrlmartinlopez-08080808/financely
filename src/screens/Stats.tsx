@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore, streakInfo, dayKey, updateSettings, COUNT_MS } from '../lib/store';
+import { GLYPHS, fmtMs, glyphFor } from '../lib/glyphs';
 import { plantStage } from '../lib/ascii';
 import { lightsFor, renderGlobe } from '../lib/globe';
 import { Icon } from '../ui/Icon';
@@ -75,8 +76,48 @@ function Globe({ lights, view, onToggle }: { lights: ReturnType<typeof lightsFor
   );
 }
 
+
+/** Hours of the day along the bottom, minutes read in each hour as thin bars. */
+function DayChart({ date, ms, hours }: { date: Date; ms: number; hours?: number[] }) {
+  const max = Math.max(1, ...(hours ?? [0]));
+  const peak = hours ? hours.indexOf(Math.max(...hours)) : -1;
+  const W = 300;
+  const H = 70;
+  const bw = W / 24;
+  const hr = (h: number) => (h === 0 ? '12a' : h < 12 ? `${h}a` : h === 12 ? '12p' : `${h - 12}p`);
+  return (
+    <div className="daychart" aria-live="polite">
+      <div className="daychart-head">
+        <b className="mono">{date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</b>
+        <span className="mono">{ms >= 1000 ? fmtMs(ms) : 'rest day'}</span>
+      </div>
+      {hours && ms >= 1000 ? (
+        <>
+          <svg viewBox={`0 0 ${W} ${H + 16}`} role="img" aria-label={`Reading time by hour. Busiest around ${hr(peak)}.`}>
+            <line x1="0" x2={W} y1={H} y2={H} stroke="currentColor" strokeOpacity=".25" />
+            {hours.map((v, h) => {
+              const bh = v > 0 ? Math.max(3, (v / max) * (H - 14)) : 0;
+              return v > 0 ? <rect key={h} x={h * bw + 2} y={H - bh} width={bw - 4} height={bh} rx="2" fill="currentColor" opacity={h === peak ? 1 : 0.45} /> : <circle key={h} cx={h * bw + bw / 2} cy={H - 1.5} r="1" fill="currentColor" opacity=".3" />;
+            })}
+            {[0, 6, 12, 18, 24].map((h) => (
+              <text key={h} x={h === 24 ? W : h * bw} y={H + 13} textAnchor={h === 0 ? 'start' : h === 24 ? 'end' : 'middle'} fontSize="9" fill="currentColor" opacity=".55" fontFamily="var(--mono)">
+                {h === 24 ? '12a' : hr(h)}
+              </text>
+            ))}
+          </svg>
+          <p className="mono daychart-note">mostly around {hr(peak)} · {Math.round(hours[peak] / 60000)} min</p>
+        </>
+      ) : (
+        <p className="mono daychart-note">{ms >= 1000 ? 'no hour-by-hour detail was kept for this day.' : 'nothing read — the shelf waited.'}</p>
+      )}
+    </div>
+  );
+}
+
 export function StatsBubble({ open, onClose }: { open: boolean; onClose: () => void }) {
   const days = useStore((s) => s.days);
+  const hours = useStore((s) => s.hours);
+  const [pick, setPick] = useState<string | null>(null);
   const docs = useStore((s) => s.docs);
   const settings = useStore((s) => s.settings);
   const [full, setFull] = useState(false);
@@ -142,17 +183,18 @@ export function StatsBubble({ open, onClose }: { open: boolean; onClose: () => v
   const needsName = !displayName(settings.name);
 
   const grid = useMemo(() => {
-    const cells: { key: string; l: number; today: boolean; future: boolean }[] = [];
+    const cells: { key: string; ms: number; date: Date; today: boolean; future: boolean }[] = [];
     const end = new Date();
     const start = new Date();
     start.setDate(end.getDate() - 7 * 17 - ((end.getDay() + 6) % 7));
     for (let d = new Date(start); cells.length < 18 * 7; d.setDate(d.getDate() + 1)) {
       const k = dayKey(d);
       const ms = days[k] ?? 0;
-      cells.push({ key: k, l: ms <= 0 ? 0 : ms < COUNT_MS ? 1 : ms < goal ? 2 : ms < goal * 2 ? 3 : 4, today: k === dayKey(), future: d > end });
+      cells.push({ key: k, ms, date: new Date(d), today: k === dayKey(), future: d > end });
     }
     return cells;
-  }, [days, goal]);
+  }, [days]);
+  const sel = grid.find((c) => c.key === (pick ?? dayKey())) ?? grid[grid.length - 1];
 
   if (!mounted) return null;
   const finished = docs.filter((d) => d.finished).length;
@@ -258,11 +300,36 @@ export function StatsBubble({ open, onClose }: { open: boolean; onClose: () => v
                     18 weeks
                   </span>
                 </div>
-                <div className="cal-grid">
-                  {grid.map((c) => (
-                    <i key={c.key} data-l={c.l} className={c.today ? 'today' : ''} style={{ opacity: c.future ? 0 : 1 }} title={c.key} />
-                  ))}
+                <div className="cal-grid" role="grid" aria-label="Reading days">
+                  {grid.map((c) => {
+                    const g = glyphFor(c.ms);
+                    return (
+                      <button
+                        key={c.key}
+                        data-l={g.level}
+                        className={`${c.today ? 'today' : ''}${c.key === sel.key ? ' sel' : ''}`}
+                        style={{ visibility: c.future ? 'hidden' : 'visible' }}
+                        aria-label={`${c.date.toDateString()}: ${fmtMs(c.ms)}`}
+                        onClick={() => {
+                          tap('select');
+                          setPick(c.key === pick ? null : c.key);
+                        }}
+                      >
+                        {g.ch}
+                      </button>
+                    );
+                  })}
                 </div>
+                <div className="cal-legend mono" aria-hidden>
+                  <span>·&nbsp;none</span>
+                  {[...GLYPHS].reverse().map((g) => (
+                    <span key={g.ch}>
+                      {g.ch}&nbsp;{g.label}
+                    </span>
+                  ))}
+                  <span>min</span>
+                </div>
+                <DayChart date={sel.date} ms={sel.ms} hours={hours[sel.key]} />
               </div>
               <div className="tiles">
                 <div className="tile">

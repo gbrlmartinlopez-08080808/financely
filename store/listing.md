@@ -46,3 +46,6 @@ Contains an optional AI feature that sends your question and short excerpts to a
 `3-page-mode.png` and `4-liquid-mode.png` show excerpts of **"Mamba: Linear-Time Sequence Modeling with Selective State Spaces"** by Albert Gu and Tri Dao (arXiv:2312.00752), licensed **CC BY 4.0** — https://creativecommons.org/licenses/by/4.0/ — shown here to demonstrate the PDF reader. No changes were made to the text beyond on-screen reflow. Other screenshots use public-domain text (Alice's Adventures in Wonderland), the app's own welcome guide, and generated sample covers.
 
 Screenshot order: 1 library · 2 reading globe · 3 page mode (research paper) · 4 liquid mode (same paper) · 5 word lookup · 6 fonts · 7 ask (AI answer with formula).
+
+## Banners (feature graphic alternatives, 1024×500)
+`store/banners/banner-1-welcome.png`, `banner-2-save-anything.png`, `banner-3-look-up.png`, `banner-4-streak.png` — pick one for Play (the original `store/feature-graphic.png` also works). Screenshots 8 (streak calendar) and 9 (welcome) were added; Play accepts up to 8 phone screenshots, so drop whichever you like least (e.g. 6-fonts).

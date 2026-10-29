@@ -10,6 +10,7 @@ import { StatsBubble } from './screens/Stats';
 import { AddSheet } from './screens/AddSheet';
 import { importUrl, looksLikeUrl } from './lib/links';
 import { Settings } from './screens/Settings';
+import { Onboarding, type Finish } from './screens/Onboarding';
 import { ConvertSheet } from './screens/Convert';
 import { ScanSheet } from './screens/Scan';
 import { PixelLoader, Toasts, toast } from './ui/kit';
@@ -142,12 +143,14 @@ export default function App() {
     }
   };
 
-  // first run: put the welcome guide on the shelf
-  useEffect(() => {
-    if (!ready || onboarded) return;
+  // end of the introduction: the welcome guide goes on the shelf (once), then whatever they chose
+  const finishIntro = async (f: Finish) => {
     updateSettings({ onboarded: true });
-    if (docs.length === 0) importFile(new Blob([welcome], { type: 'text/markdown' }), 'Welcome to Quire.md', { title: 'Welcome to Quire' });
-  }, [ready, onboarded]); // eslint-disable-line react-hooks/exhaustive-deps
+    let guide = docs.find((d) => d.name === 'Welcome to Quire');
+    if (!guide) guide = await importFile(new Blob([welcome], { type: 'text/markdown' }), 'Welcome to Quire.md', { title: 'Welcome to Quire' });
+    if (f === 'guide') setOpenId(guide.id);
+    else if (f === 'add') setAddOpen(true);
+  };
 
   // drag & drop on desktop
   useEffect(() => {
@@ -171,6 +174,8 @@ export default function App() {
         <PixelLoader grid={4} size={7} />
       </div>
     );
+
+  if (!onboarded) return <Onboarding onDone={finishIntro} />;
 
   const openDoc = docs.find((d) => d.id === openId);
 

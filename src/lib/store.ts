@@ -8,9 +8,10 @@ interface State {
   docs: DocMeta[];
   settings: Settings;
   days: Record<string, number>; // yyyy-mm-dd -> ms read
+  hours: Record<string, number[]>; // yyyy-mm-dd -> ms read in each hour of that day
 }
 
-let state: State = { ready: false, docs: [], settings: DEFAULT_SETTINGS, days: {} };
+let state: State = { ready: false, docs: [], settings: DEFAULT_SETTINGS, days: {}, hours: {} };
 const listeners = new Set<() => void>();
 
 function set(patch: Partial<State>) {
@@ -31,10 +32,11 @@ export function useStore<T>(sel: (s: State) => T): T {
 export const getState = () => state;
 
 export async function init() {
-  const [docs, settings, dayEntries] = await Promise.all([
+  const [docs, settings, dayEntries, hours] = await Promise.all([
     db.all<DocMeta>('docs'),
     db.get<Settings>('kv', 'settings'),
     db.entries<number>('days'),
+    db.get<Record<string, number[]>>('kv', 'hours'),
   ]);
   const merged: Settings = { ...DEFAULT_SETTINGS, ...settings };
   merged.font = migrateFontId(merged.font);
@@ -50,6 +52,7 @@ export async function init() {
     docs: sortDocs(docs),
     settings: merged,
     days: Object.fromEntries(dayEntries),
+    hours: hours ?? {},
   });
 }
 
@@ -95,11 +98,17 @@ export function updateSettings(patch: Partial<Settings>) {
 export const dayKey = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
+let hoursT = 0;
 export async function addReading(ms: number, docId?: string) {
   if (ms <= 0) return;
   const k = dayKey();
   const days = { ...state.days, [k]: (state.days[k] ?? 0) + ms };
-  set({ days });
+  const h = new Date().getHours();
+  const row = [...(state.hours[k] ?? new Array(24).fill(0))];
+  row[h] += ms;
+  set({ days, hours: { ...state.hours, [k]: row } });
+  clearTimeout(hoursT);
+  hoursT = window.setTimeout(() => db.put('kv', 'hours', state.hours), 1500);
   await db.put('days', k, days[k]);
   if (docId) {
     const d = state.docs.find((x) => x.id === docId);
