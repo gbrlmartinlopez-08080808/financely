@@ -153,9 +153,9 @@ Category *Utility/Reference*. Answer **No** to violence, sex, gambling, drugs, p
 
 ## First-launch samples (2.5)
 Two files ship inside the app (`public/samples/`) and are added once on first run, next to the welcome guide:
-- **Little Brother** by Cory Doctorow — CC BY-NC-SA 3.0 (https://craphound.com/littlebrother/download/)
+- **Ulysses** by James Joyce (1922) — public domain in the US and most countries; the EPUB is Project Gutenberg's (ebook #4300) and keeps its licence text unchanged (https://www.gutenberg.org/ebooks/4300)
 - **The impact of life-saving interventions on fertility** by David Roodman — CC BY-NC-SA 4.0 (arXiv:2007.11388)
-Both licences allow free, non-commercial redistribution with credit and share-alike; credit is in Settings → About. **The app must stay free and ad-free** (no in-app purchases) while these are bundled. If you ever monetise, remove them (`src/lib/samples.ts`, `public/samples/`, the `addSamples` call in `src/App.tsx`).
+The paper's licence allows free, non-commercial redistribution with credit and share-alike; credit for both is in Settings → About. **The app must stay free and ad-free** (no in-app purchases) while the paper is bundled. If you ever monetise, remove them (`src/lib/samples.ts`, `public/samples/`, the `addSamples` call in `src/App.tsx`).
 
 ## Website (docs/)
 `docs/index.html` is a one-page site for Play review and for users: what the app does, screenshots, a plain-language privacy table, why each permission is requested (including the media-playback foreground service), credits, and the support email. `docs/privacy.html` is generated from `PRIVACY.md` (`npm run privacy`).

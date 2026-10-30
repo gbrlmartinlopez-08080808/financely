@@ -319,6 +319,13 @@ export default function App() {
     await db.put('kv', 'rate', { at: Date.now(), asks: (seen?.asks ?? 0) + 1, done: sent });
   };
 
+  // people who already finished the introduction get the current set of samples once, too
+  useEffect(() => {
+    if (!ready || !onboarded) return;
+    const t = setTimeout(() => addSamples(Date.now() - 5000), 3000);
+    return () => clearTimeout(t);
+  }, [ready, onboarded]);
+
   // the guided tour of the home screen, once, after the introduction
   useEffect(() => {
     if (!ready || !onboarded || !idle || tour || rate) return;

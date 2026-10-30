@@ -2114,3 +2114,114 @@
   font-weight: 700;
   font-size: 14px;
 }
+
+/* selection tick */
+.tickbox .tb-box {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  transition: fill 0.18s, stroke 0.18s;
+}
+.tickbox .tb-mark rect {
+  fill: var(--bg);
+  opacity: 0;
+  transform: scale(0.4);
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 0.12s, transform 0.18s var(--spring);
+}
+.tickbox.on .tb-box {
+  fill: currentColor;
+}
+.tickbox.on .tb-mark rect {
+  opacity: 1;
+  transform: none;
+}
+
+/* confirmation sheet */
+.confirm {
+  text-align: center;
+  padding-bottom: 18px;
+}
+.confirm .bin {
+  position: relative;
+  margin: 4px auto 14px;
+  width: max-content;
+  padding: 12px 22px 8px;
+  background: var(--dark-card, #0a0a0a);
+  color: #e8e7e3;
+  border-radius: 20px;
+  overflow: hidden;
+}
+.confirm .bin pre {
+  margin: 0;
+  font: 13px/1.15 var(--mono);
+  text-align: left;
+}
+.confirm .bin .drop {
+  position: absolute;
+  left: 50%;
+  top: -4px;
+  margin-left: -1.5ch;
+  font-size: 13px;
+  color: #f2c94c;
+  text-shadow: 0 0 8px rgba(242, 201, 76, 0.7);
+  animation: drop 1.6s steps(7) infinite;
+}
+@keyframes drop {
+  0% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  70% {
+    transform: translateY(34px);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+}
+.confirm h3 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+.confirm p {
+  margin: 0 auto 12px;
+  max-width: 30em;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.confirm ul {
+  list-style: none;
+  margin: 0 auto 14px;
+  padding: 10px 14px;
+  max-width: 26em;
+  background: var(--surface-2);
+  border-radius: 14px;
+  font-size: 12px;
+  text-align: left;
+  line-height: 1.7;
+}
+.confirm li::before {
+  content: '· ';
+  color: var(--muted);
+}
+.confirm li.more {
+  color: var(--muted);
+}
+.confirm-row {
+  display: flex;
+  gap: 10px;
+}
+.confirm-row .pill {
+  flex: 1;
+  justify-content: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .confirm .bin .drop {
+    animation: none;
+  }
+}

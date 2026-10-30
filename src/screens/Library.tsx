@@ -3,6 +3,7 @@ import { useStore, removeDoc, patchDoc, streakInfo, dayKey, COUNT_MS } from '../
 import { coverUrl, coverInfo, ago, formatSize, getFile, refreshCover } from '../lib/library';
 import { KIND_LABEL } from '../lib/formats/detect';
 import type { DocMeta } from '../lib/types';
+import { ConfirmSheet, Tick } from '../ui/Confirm';
 import { Icon } from '../ui/Icon';
 import { Pixel, Screws, Sheet, toast } from '../ui/kit';
 import { ASCII } from '../lib/ascii';
@@ -386,30 +387,26 @@ export function Library({
           </button>
         </div>
       )}
-      <Sheet open={confirmDel} onClose={() => setConfirmDel(false)} title={`Remove ${picked?.size ?? 0} from your shelf?`}>
-        <div className="sheet-body">
-          <p className="muted" style={{ marginTop: 0, fontSize: 14 }}>
-            Books and files you added are deleted from Frogity. Files you opened in place (from your phone’s storage) stay exactly where they are — only the shelf entry goes. Bookmarks and highlights for these are removed too.
-          </p>
-          <button
-            className="pill danger"
-            style={{ width: '100%' }}
-            onClick={async () => {
-              const ids = [...(picked ?? [])];
-              for (const id of ids) {
-                const d = docs.find((x) => x.id === id);
-                if (d?.uri) (await import('../lib/linked')).ignoreUri(d.uri);
-                await removeDoc(id);
-              }
-              setConfirmDel(false);
-              setPicked(null);
-              toast(`Removed ${ids.length}`);
-            }}
-          >
-            Remove {picked?.size}
-          </button>
-        </div>
-      </Sheet>
+      <ConfirmSheet
+        open={confirmDel}
+        onClose={() => setConfirmDel(false)}
+        title={`Remove ${picked?.size ?? 0} ${picked?.size === 1 ? 'book' : 'books'}?`}
+        body="Files you added are deleted from Frogity, with their bookmarks and highlights. Files you opened from your phone’s storage stay where they are; only their place on the shelf goes."
+        names={[...(picked ?? [])].map((id) => docs.find((x) => x.id === id)?.name ?? '').filter(Boolean)}
+        total={picked?.size}
+        confirmLabel={`Remove ${picked?.size ?? ''}`}
+        onConfirm={async () => {
+          const ids = [...(picked ?? [])];
+          for (const id of ids) {
+            const d = docs.find((x) => x.id === id);
+            if (d?.uri) (await import('../lib/linked')).ignoreUri(d.uri);
+            await removeDoc(id);
+          }
+          setConfirmDel(false);
+          setPicked(null);
+          toast(`Removed ${ids.length}`);
+        }}
+      />
       <div className="dock" style={picked ? { display: 'none' } : undefined}>
         <button className="pill" onClick={onAdd} style={{ paddingLeft: 16 }}>
           <Icon name="plus" size={18} /> Add
@@ -451,7 +448,7 @@ function ShelfRow({ doc, onOpen, onMenu, picked }: { doc: DocMeta; onOpen: () =>
     >
       {picked !== undefined && (
         <span className={`tick${picked ? ' on' : ''}`} aria-hidden>
-          <Pixel name={picked ? 'boxon' : 'box'} size={26} />
+          <Tick on={!!picked} />
         </span>
       )}
       <Cover doc={doc} className="thumb" />
@@ -601,21 +598,30 @@ function DocMenu({ doc, onClose, onOpen, onConvert, onSelect }: { doc: DocMeta |
               </button>
               <button
                 className="action danger"
-                onClick={async () => {
-                  if (!confirm) return setConfirm(true);
-                  if (d.uri) (await import('../lib/linked')).ignoreUri(d.uri);
-                  await removeDoc(d.id);
-                  toast('Removed from shelf');
-                  onClose();
-                }}
+                onClick={() => setConfirm(true)}
               >
                 <span className="ic">
                   <Icon name="trash" />
                 </span>
-                {confirm ? 'Tap again to delete' : d.uri ? 'Remove from shelf' : 'Delete from Frogity'}
+                {d.uri ? 'Remove from shelf' : 'Delete from Frogity'}
               </button>
             </div>
           )}
+          <ConfirmSheet
+            open={confirm}
+            onClose={() => setConfirm(false)}
+            title={d.uri ? 'Remove from your shelf?' : 'Delete this file?'}
+            body={d.uri ? 'The file stays where it is on your phone; only its place on your shelf, with bookmarks and highlights, goes.' : 'The copy inside Frogity, with its bookmarks and highlights, is deleted. Originals you opened from other apps are untouched.'}
+            names={[d.name]}
+            confirmLabel={d.uri ? 'Remove' : 'Delete'}
+            onConfirm={async () => {
+              if (d.uri) (await import('../lib/linked')).ignoreUri(d.uri);
+              await removeDoc(d.id);
+              toast(d.uri ? 'Removed from shelf' : 'Deleted');
+              setConfirm(false);
+              onClose();
+            }}
+          />
         </div>
       )}
     </Sheet>

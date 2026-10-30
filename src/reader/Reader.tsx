@@ -6,6 +6,7 @@ import type { Bookmark, DocMeta, Highlight, TocEntry } from '../lib/types';
 import { openPdf, pdfOutline, type PDFDocumentProxy } from '../lib/formats/pdf';
 import { blocksToHtml, pdfToLiquid, type LBlock } from '../lib/formats/liquidPdf';
 import { onBack, setStatusBar, shareFile, shareText, tap } from '../lib/native';
+import { ConfirmSheet } from '../ui/Confirm';
 import { Icon, TypeGlyph } from '../ui/Icon';
 import { PixelBar, PixelLoader, Segmented, Sheet, toast } from '../ui/kit';
 import { PdfView, type PdfViewHandle } from './PdfView';
@@ -1134,25 +1135,20 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
         />
       )}
       <MoreSheet open={sheet === 'more'} onClose={() => setSheet(null)} actions={moreActions} onAction={onMore} title={doc.name} />
-      <Sheet open={sheet === 'remove'} onClose={() => setSheet(null)} title={doc.uri ? 'Remove from shelf?' : 'Delete this file?'}>
-        <div className="sheet-body">
-          <p className="muted" style={{ marginTop: 0, fontSize: 14 }}>
-            {doc.uri ? 'The file stays where it is on your phone; only its place on your shelf (with bookmarks and highlights) goes.' : 'The copy inside Frogity, its bookmarks and highlights are deleted. Originals you opened from other apps are untouched.'}
-          </p>
-          <button
-            className="pill danger"
-            style={{ width: '100%' }}
-            onClick={async () => {
-              if (doc.uri) (await import('../lib/linked')).ignoreUri(doc.uri);
-              await removeDoc(id);
-              toast('Removed');
-              onClose();
-            }}
-          >
-            {doc.uri ? 'Remove from shelf' : 'Delete'}
-          </button>
-        </div>
-      </Sheet>
+      <ConfirmSheet
+        open={sheet === 'remove'}
+        onClose={() => setSheet(null)}
+        title={doc.uri ? 'Remove from your shelf?' : 'Delete this file?'}
+        body={doc.uri ? 'The file stays where it is on your phone; only its place on your shelf, with bookmarks and highlights, goes.' : 'The copy inside Frogity, with its bookmarks and highlights, is deleted. Originals you opened from other apps are untouched.'}
+        names={[doc.name]}
+        confirmLabel={doc.uri ? 'Remove' : 'Delete'}
+        onConfirm={async () => {
+          if (doc.uri) (await import('../lib/linked')).ignoreUri(doc.uri);
+          await removeDoc(id);
+          toast(doc.uri ? 'Removed from shelf' : 'Deleted');
+          onClose();
+        }}
+      />
       <Sheet open={sheet === 'info'} onClose={() => setSheet(null)} title="About this file">
         <div className="sheet-body">
           {[
