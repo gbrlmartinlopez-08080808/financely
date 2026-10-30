@@ -780,19 +780,15 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
         const key = `${id}:${LQ_VERSION}`;
         const cached = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', key);
         if (!cached) throw new Error('Open liquid view first');
-        const out: LBlock[] = [];
-        let done = 0;
-        const total = cached.blocks.filter((b) => b.t === 'img' && b.kind === 'scan').length;
-        let text = '';
-        for (const b of cached.blocks) {
-          if (b.t === 'img' && b.kind === 'scan') {
-            const r = await readImage(b.blob, (p) => !silent && setOcrText({ text, busy: true, p: (done + p) / Math.max(1, total) }));
-            done++;
-            if (silent) reportScan(id, doc.name, done, total);
-            text += r.text + '\n\n';
-            for (const para of r.text.split(/\n\n+/)) if (para.trim()) out.push({ t: 'p', html: para.replace(/&/g, '&amp;').replace(/</g, '&lt;'), page: b.page });
-          } else out.push(b);
-        }
+        const { ocrBlocks } = await import('../lib/ocrpage');
+        const data = await (await getFile(id))?.arrayBuffer();
+        if (!data) throw new Error('The file is not available');
+        const res = await ocrBlocks(data, cached.blocks, (d, total) => {
+          if (silent) reportScan(id, doc.name, d, total);
+          else setOcrText({ text: '', busy: true, p: d / Math.max(1, total) });
+        });
+        const out = res.blocks;
+        const text = out.flatMap((b) => (b.t === 'p' || b.t === 'h' ? [b.html.replace(/<[^>]+>/g, '')] : [])).join('\n\n');
         await db.put('cache', key, { blocks: out, scanned: [] });
         flowRef.current.innerHTML = blocksToHtml(out, urls.current);
         delete flowRef.current.dataset.wrapped;

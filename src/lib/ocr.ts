@@ -11,6 +11,7 @@ interface Slot {
   p: Promise<Worker>;
   cb: ((p: number, status: string) => void) | null;
   busy: boolean;
+  psm?: number;
 }
 const slots: Slot[] = [];
 const waiters: ((s: Slot) => void)[] = [];
@@ -25,6 +26,7 @@ function makeSlot(): Slot {
       corePath: base,
       langPath: base,
       gzip: false,
+      cacheMethod: 'none', // the model ships inside the app: no second copy in storage, and no stale one
       workerBlobURL: false,
       logger: (m: { progress: number; status: string }) => slot.cb?.(m.progress, m.status),
     });
@@ -60,7 +62,16 @@ export interface OcrWord {
   x1: number;
   y1: number;
 }
+export interface OcrLine {
+  text: string;
+  conf: number;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
 export interface OcrResult {
+  lines: OcrLine[];
   text: string;
   html: string;
   confidence: number;
@@ -81,12 +92,17 @@ export function mergeParas(paras: string[]): string[] {
 }
 
 /** Recognise one image. Returns plain text and paragraph HTML. */
-export async function recognize(img: Blob | HTMLCanvasElement, onProgress?: (p: number, status: string) => void): Promise<OcrResult> {
+/** `psm`: 3 = find the layout itself (default), 6 = one block of text, 7 = one line. */
+export async function recognize(img: Blob | HTMLCanvasElement, onProgress?: (p: number, status: string) => void, psm = 3): Promise<OcrResult> {
   const slot = await acquire();
   let data: Awaited<ReturnType<Worker['recognize']>>['data'];
   try {
     slot.cb = onProgress ?? null;
     const w = await slot.p;
+    if (slot.psm !== psm) {
+      await w.setParameters({ tessedit_pageseg_mode: String(psm) as never });
+      slot.psm = psm;
+    }
     ({ data } = await w.recognize(img as Blob, {}, { text: true, blocks: true }));
   } catch (e) {
     // a worker that failed to start must not stay in the pool
@@ -106,6 +122,10 @@ export async function recognize(img: Blob | HTMLCanvasElement, onProgress?: (p: 
     }
   }
   const words: OcrWord[] = [];
+  const lines: OcrLine[] = [];
+  for (const b of data.blocks ?? [])
+    for (const p of b.paragraphs ?? [])
+      for (const l of p.lines ?? []) if (l.text.trim()) lines.push({ text: l.text.replace(/\s+/g, ' ').trim(), conf: l.confidence, x0: l.bbox.x0, y0: l.bbox.y0, x1: l.bbox.x1, y1: l.bbox.y1 });
   for (const b of data.blocks ?? [])
     for (const p of b.paragraphs ?? [])
       for (const l of p.lines ?? [])
@@ -134,7 +154,7 @@ export async function recognize(img: Blob | HTMLCanvasElement, onProgress?: (p: 
   if (!paras.length && data.text.trim()) paras.push(...data.text.split(/\n\s*\n/).map((t) => t.replace(/\s*\n\s*/g, ' ').trim()).filter(Boolean));
   paras.splice(0, paras.length, ...mergeParas(paras));
   const html = paras.map((p) => `<p>${escapeHtml(p)}</p>`).join('');
-  return { text: paras.join('\n\n'), html, confidence: data.confidence, words, w: iw, h: ih };
+  return { lines, text: paras.join('\n\n'), html, confidence: data.confidence, words, w: iw, h: ih };
 }
 
 /**
@@ -144,6 +164,13 @@ export async function recognize(img: Blob | HTMLCanvasElement, onProgress?: (p: 
  */
 export async function prepareCanvas(blob: Blob, maxSide = 2400): Promise<HTMLCanvasElement> {
   const bmp = await createImageBitmap(blob);
+  const out = flattenSource(bmp, maxSide);
+  bmp.close();
+  return out;
+}
+
+/** The same preparation for anything already drawn (a rendered PDF page, a canvas). */
+export function flattenSource(bmp: { width: number; height: number } & CanvasImageSource, maxSide = 2400): HTMLCanvasElement {
   const longest = Math.max(bmp.width, bmp.height);
   const scale = longest > maxSide ? maxSide / longest : longest < 1400 ? Math.min(1.6, 1800 / longest) : 1;
   const w = Math.round(bmp.width * scale);
@@ -154,7 +181,6 @@ export async function prepareCanvas(blob: Blob, maxSide = 2400): Promise<HTMLCan
   const ctx = c.getContext('2d', { willReadFrequently: true })!;
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(bmp, 0, 0, w, h);
-  bmp.close();
   const id = ctx.getImageData(0, 0, w, h);
   const d = id.data;
   const n = w * h;

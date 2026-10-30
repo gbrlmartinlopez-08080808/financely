@@ -5,9 +5,10 @@ import * as db from './db';
 import { getFile } from './library';
 import { openPdf } from './formats/pdf';
 import { pdfToLiquid, type LBlock } from './formats/liquidPdf';
+import { mapLimit } from './ocrpage';
 import type { DocMeta } from './types';
 
-export const LQ_VERSION = 'lq8';
+export const LQ_VERSION = 'lq9';
 
 export interface ScanJob {
   id: string;
@@ -72,21 +73,6 @@ const done = (doc: DocMeta, status: 'done' | 'none') => {
 };
 const finish = (doc: DocMeta) => window.dispatchEvent(new CustomEvent('frogity:scan', { detail: { id: doc.id, title: doc.name } }));
 
-/** Runs `fn` over the items with a few at a time (the OCR pool decides how many really run at once). */
-async function mapLimit<T, R>(items: T[], limit: number, fn: (x: T, i: number) => Promise<R>): Promise<R[]> {
-  const out = new Array<R>(items.length);
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, async () => {
-      while (next < items.length) {
-        const i = next++;
-        out[i] = await fn(items[i], i);
-      }
-    }),
-  );
-  return out;
-}
-
 /** A photo or screenshot: read its text once, keep where every word sits so the reader can select it. */
 async function runImage(doc: DocMeta) {
   const remembered = await db.get<string>('kv', `scan:${doc.id}`);
@@ -141,7 +127,7 @@ async function run(doc: DocMeta) {
   const key = `${doc.id}:${LQ_VERSION}`;
   const cached = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', key);
   if (remembered === 'text') return;
-  if (remembered === 'done' || (cached && cached.scanned.length === 0 && cached.blocks.some((b) => b.t === 'p') && remembered)) {
+  if (remembered === 'done2') {
     jobs.set(doc.id, { id: doc.id, title: doc.name, status: 'done', progress: 1, done: 1, total: 1, startedAt: Date.now() });
     return emit();
   }
@@ -178,7 +164,7 @@ async function run(doc: DocMeta) {
 
   if (cached && cached.scanned.length === 0 && !cached.blocks.some((b) => b.t === 'img' && b.kind === 'scan')) {
     // recognised before this version existed
-    await db.put('kv', `scan:${doc.id}`, cached.blocks.some((b) => b.t === 'p') ? 'done' : 'none');
+    await db.put('kv', `scan:${doc.id}`, cached.blocks.some((b) => b.t === 'p') ? 'done2' : 'none');
     return set(doc.id, { status: cached.blocks.some((b) => b.t === 'p') ? 'done' : 'none', progress: 1 });
   }
   set(doc.id, { status: 'running', progress: 0.02 });
@@ -187,33 +173,17 @@ async function run(doc: DocMeta) {
     // phase 1 (30%): turn every page into a picture block
     blocks = (await pdfToLiquid(buf, (_b, p) => set(doc.id, { progress: 0.02 + 0.28 * (p.page / p.pages), done: 0, total: p.pages }))).blocks;
   }
-  // phase 2 (70%): read each picture (two at a time on phones that can)
-  const { readImage, OCR_POOL } = await import('./ocr');
-  const pics = blocks.filter((b): b is Extract<LBlock, { t: 'img' }> => b.t === 'img' && b.kind === 'scan');
-  const total = pics.length;
-  let doneN = 0;
-  const reads = await mapLimit(pics, OCR_POOL, async (b) => {
-    const r = await readImage(b.blob);
-    doneN++;
-    set(doc.id, { done: doneN, total, progress: 0.3 + 0.7 * (doneN / Math.max(1, total)) });
-    return r;
-  });
-  let chars = 0;
-  const out: LBlock[] = [];
-  let k = 0;
-  for (const b of blocks) {
-    if (b.t === 'img' && b.kind === 'scan') {
-      const r = reads[k++];
-      chars += r.text.length;
-      for (const para of r.text.split(/\n\n+/)) if (para.trim()) out.push({ t: 'p', html: para.replace(/&/g, '&amp;').replace(/</g, '&lt;'), page: b.page });
-    } else out.push(b);
-  }
+  // phase 2 (70%): find the columns and pictures on each page, read the text blocks, keep diagrams as pictures
+  const { ocrBlocks } = await import('./ocrpage');
+  const res = await ocrBlocks(buf, blocks, (d, total) => set(doc.id, { done: d, total, progress: 0.3 + 0.7 * (d / Math.max(1, total)) }));
+  const out = res.blocks;
+  const chars = res.chars;
   if (chars < 60) {
     await db.put('kv', `scan:${doc.id}`, 'none');
     return set(doc.id, { status: 'none', progress: 1 });
   }
   await db.put('cache', key, { blocks: out, scanned: [] });
-  await db.put('kv', `scan:${doc.id}`, 'done');
+  await db.put('kv', `scan:${doc.id}`, 'done2');
   set(doc.id, { status: 'done', progress: 1 });
   window.dispatchEvent(new CustomEvent('frogity:scan', { detail: { id: doc.id, title: doc.name } }));
 }
