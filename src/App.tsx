@@ -18,6 +18,7 @@ import { refreshReminder } from './lib/reminders';
 import { importUrl, looksLikeUrl } from './lib/links';
 import { Settings } from './screens/Settings';
 import { RateSheet } from './screens/RateSheet';
+import { addSamples } from './lib/samples';
 import { Onboarding, type Finish } from './screens/Onboarding';
 import { ConvertSheet } from './screens/Convert';
 import { ScanSheet } from './screens/Scan';
@@ -266,6 +267,7 @@ export default function App() {
     updateSettings({ onboarded: true });
     let guide = docs.find(isGuide);
     if (!guide) guide = await importFile(new Blob([welcome], { type: 'text/markdown' }), 'Welcome to Frogity.md', { title: 'Welcome to Frogity' });
+    addSamples(guide.openedAt); // a famous novel and an economics paper, in the background
     if (f === 'guide') setOpenId(guide.id);
     else if (f === 'add') setAddOpen(true);
   };

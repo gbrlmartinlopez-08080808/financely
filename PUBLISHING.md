@@ -150,3 +150,9 @@ Category *Utility/Reference*. Answer **No** to violence, sex, gambling, drugs, p
 ## 2.1–2.2 additions
 - **Forms**: PDFs that look like forms get an auto-fill sheet (detected on-device, nothing uploaded). Details and signature are stored locally only.
 - **Background listening**: a foreground service (`FOREGROUND_SERVICE_MEDIA_PLAYBACK`) with a media notification keeps read-aloud playing with the screen off. Declare the foreground-service use (media playback) in Play Console and note the notification permission in Data safety.
+
+## First-launch samples (2.5)
+Two files ship inside the app (`public/samples/`) and are added once on first run, next to the welcome guide:
+- **Little Brother** by Cory Doctorow — CC BY-NC-SA 3.0 (https://craphound.com/littlebrother/download/)
+- **The impact of life-saving interventions on fertility** by David Roodman — CC BY-NC-SA 4.0 (arXiv:2007.11388)
+Both licences allow free, non-commercial redistribution with credit and share-alike; credit is in Settings → About. **The app must stay free and ad-free** (no in-app purchases) while these are bundled. If you ever monetise, remove them (`src/lib/samples.ts`, `public/samples/`, the `addSamples` call in `src/App.tsx`).

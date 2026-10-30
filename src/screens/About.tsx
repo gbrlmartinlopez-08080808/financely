@@ -56,6 +56,9 @@ export function About({ open, onClose }: { open: boolean; onClose: () => void })
           </a>
           . Pictures belong to their authors (see the linked article). The reading globe uses Natural Earth data (public domain). Free books come from Project Gutenberg, the Internet Archive and arXiv; each work’s licence is its source’s own.
         </p>
+        <p>
+          The two samples on your first shelf are shared by their authors under Creative Commons: <i>Little Brother</i> by Cory Doctorow (CC BY-NC-SA 3.0, craphound.com) and <i>The impact of life-saving interventions on fertility</i> by David Roodman (CC BY-NC-SA 4.0, arXiv:2007.11388). Both are for non-commercial sharing with credit; you can delete them like any other file.
+        </p>
 
         <div className="section-label">open source</div>
         {LIBS.map(([n, l]) => (
