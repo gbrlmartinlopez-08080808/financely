@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { SOURCES, archivePdf, featuredNow, fetchFile, peek, search, type Item, type SourceId } from '../lib/catalog';
+import { SOURCES, archivePdf, featuredNow, fetchFile, fetchThumb, peek, search, type Item, type SourceId } from '../lib/catalog';
 import { importFile } from '../lib/library';
-import { patchDoc } from '../lib/store';
 import { onBack, openExternal, tap } from '../lib/native';
 import { Icon } from '../ui/Icon';
 import { PixelLoader, toast } from '../ui/kit';
@@ -15,7 +14,7 @@ export function Discover({ onClose, onOpen }: { onClose: () => void; onOpen: (id
   const [next, setNext] = useState<number | undefined>();
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [adding, setAdding] = useState<string | null>(null);
+  const [adding, setAdding] = useState<Set<string>>(new Set()); // several books can be on their way at once
   const [added, setAdded] = useState<Record<string, string>>({}); // item id → doc id
   const seq = useRef(0);
   const src = SOURCES.find((s) => s.id === source)!;
@@ -65,22 +64,27 @@ export function Discover({ onClose, onOpen }: { onClose: () => void; onOpen: (id
   }, [source, query]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const add = async (it: Item) => {
-    if (adding) return;
-    setAdding(it.id);
+    if (adding.has(it.id)) return;
+    setAdding((a) => new Set(a).add(it.id));
     tap('medium');
     try {
+      // the thumbnail is fetched while the file's address is being worked out and while it downloads
+      const thumb = fetchThumb(it.cover);
       let g = it.get;
       if (!g && it.source === 'archive') g = await archivePdf(it.id.slice(1));
       if (!g) throw new Error('No free file for this one.');
-      const blob = await fetchFile(g);
-      const meta = await importFile(blob, g.name, { title: it.title });
-      if (it.author && !meta.author) await patchDoc(meta.id, { author: it.author });
+      const [blob, cover] = await Promise.all([fetchFile(g), thumb]);
+      const meta = await importFile(blob, g.name, { title: it.title, author: it.author, cover });
       setAdded((a) => ({ ...a, [it.id]: meta.id }));
       toast('Added to your shelf');
     } catch (e) {
       toast((e as Error).message || 'Couldn’t download that');
     } finally {
-      setAdding(null);
+      setAdding((a) => {
+        const n = new Set(a);
+        n.delete(it.id);
+        return n;
+      });
     }
   };
 
@@ -167,8 +171,8 @@ export function Discover({ onClose, onOpen }: { onClose: () => void; onOpen: (id
                         Open
                       </button>
                     ) : (
-                      <button className="get" disabled={!!adding} onClick={() => add(it)}>
-                        {adding === it.id ? <PixelLoader size={3} gap={2} /> : 'Add'}
+                      <button className="get" disabled={adding.has(it.id)} onClick={() => add(it)}>
+                        {adding.has(it.id) ? <PixelLoader size={3} gap={2} /> : 'Add'}
                       </button>
                     )
                   ) : null}

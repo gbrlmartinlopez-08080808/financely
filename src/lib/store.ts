@@ -74,8 +74,8 @@ export async function saveDoc(doc: DocMeta) {
   await db.put('docs', doc.id, doc);
   const others = state.docs.filter((d) => d.id !== doc.id);
   set({ docs: sortDocs([...others, doc]) });
-  // a new PDF is looked at straight away: if it is a scan, its text is read in the background
-  if (isNew && doc.kind === 'pdf') import('./scan').then((m) => m.queueScan(doc));
+  // a new PDF, picture or scan is looked at straight away: any text in it is read in the background
+  if (isNew && ['pdf', 'image', 'scan'].includes(doc.kind)) import('./scan').then((m) => m.queueScan(doc));
 }
 
 export async function patchDoc(id: string, patch: Partial<DocMeta>, resort = false) {

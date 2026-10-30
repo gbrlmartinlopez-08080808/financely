@@ -1,4 +1,4 @@
-# Store listing — Frogity (v2.3)
+# Store listing — Frogity (v2.4)
 
 **Title (≤30):** Frogity – Reader & PDF
 

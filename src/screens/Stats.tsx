@@ -115,7 +115,7 @@ function DayChart({ date, ms, hours, ice }: { date: Date; ms: number; hours?: nu
   );
 }
 
-export function StatsBubble({ open, onClose, reward, onRewardDone }: { open: boolean; onClose: () => void; reward?: string | null; onRewardDone?: () => void }) {
+export function StatsBubble({ open, onClose, reward, onRewardDone, demo }: { open: boolean; onClose: () => void; reward?: string | null; onRewardDone?: () => void; demo?: number | null }) {
   const days = useStore((s) => s.days);
   const hours = useStore((s) => s.hours);
   const frozen = useStore((s) => s.freeze);
@@ -123,8 +123,8 @@ export function StatsBubble({ open, onClose, reward, onRewardDone }: { open: boo
   const [pick, setPick] = useState<string | null>(null);
   const [scene, setScene] = useState(false);
   useEffect(() => {
-    setScene(!!(open && reward));
-  }, [open, reward]);
+    setScene(!!(open && (reward || demo)));
+  }, [open, reward, demo]);
   const docs = useStore((s) => s.docs);
   const settings = useStore((s) => s.settings);
   const [full, setFull] = useState(false);
@@ -273,10 +273,11 @@ export function StatsBubble({ open, onClose, reward, onRewardDone }: { open: boo
               </form>
             )}
           </div>
-          {scene && reward ? (
+          {scene && (reward || demo) ? (
             <FrogScene
-              count={lights.length}
-              minutes={Math.round((days[reward] ?? 0) / 60000)}
+              key={demo ?? reward}
+              count={demo ?? lights.length}
+              minutes={reward ? Math.round((days[reward] ?? 0) / 60000) : settings.dailyGoal}
               goal={settings.dailyGoal}
               name={settings.name}
               onEnd={() => {
@@ -290,9 +291,9 @@ export function StatsBubble({ open, onClose, reward, onRewardDone }: { open: boo
           )}
           <div className="bubble-cap">
             <b className="mono">
-              {lights.length} light{lights.length === 1 ? '' : 's'} on your map
+              {demo ?? lights.length} light{(demo ?? lights.length) === 1 ? '' : 's'} on your map
             </b>
-            <span>{lights.length ? 'One for every day you reached your goal.' : 'Reach your daily goal to light the first place.'}</span>
+            <span>{demo ?? lights.length ? 'One for every day you reached your goal.' : 'Reach your daily goal to light the first place.'}</span>
             <span className="muted">{info.today >= goal ? 'Today’s light is blinking — it joins the map at midnight.' : `${Math.max(1, Math.ceil((goal - info.today) / 60000))} min to today’s light.`}</span>
           </div>
           <div className="bubble-line mono">
@@ -398,7 +399,8 @@ export function StatsBubble({ open, onClose, reward, onRewardDone }: { open: boo
           <p className="muted" style={{ marginTop: 0, fontSize: 14 }}>
             A day counts toward your streak after one minute of reading or listening. The goal fills the ring.
           </p>
-          <Ruler value={settings.dailyGoal} min={5} max={120} step={5} onChange={(v) => updateSettings({ dailyGoal: v })} format={(v) => `${v} min`} label="Daily goal" />
+          <div className="mono" style={{ fontSize: 28, fontWeight: 700, textAlign: 'center', margin: '14px 0 6px' }}>{settings.dailyGoal} min</div>
+          <p className="muted" style={{ textAlign: 'center', fontSize: 13, margin: 0 }}>You can change it in Settings → advanced.</p>
         </div>
       </Sheet>
     </>

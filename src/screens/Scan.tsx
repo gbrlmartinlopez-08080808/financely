@@ -24,11 +24,9 @@ export function ScanSheet({ files, onClose, onDone }: { files: File[] | null; on
 
   const create = async () => {
     if (!pages.length) return;
-    const { prepareScan, recognize } = await import('../lib/ocr');
+    const { prepareScan } = await import('../lib/ocr');
     const id = db.uid();
     const ids: string[] = [];
-    let html = '';
-    const pageTexts: string[] = [];
     const cleaned: Blob[] = [];
     for (let i = 0; i < pages.length; i++) {
       setBusy({ label: `cleaning page ${i + 1}`, p: i / pages.length });
@@ -37,17 +35,12 @@ export function ScanSheet({ files, onClose, onDone }: { files: File[] | null; on
       const k = `${id}:scan:${i}`;
       await db.put('blobs', k, img);
       ids.push(k);
-      if (ocr) {
-        setBusy({ label: `reading page ${i + 1}/${pages.length}`, p: i / pages.length });
-        const r = await recognize(img, (p) => setBusy({ label: `reading page ${i + 1}/${pages.length}`, p: (i + p) / pages.length }));
-        html += `<section data-page="${i + 1}">${pages.length > 1 ? `<h3>Page ${i + 1}</h3>` : ''}${r.html}</section>`;
-        pageTexts.push(r.text);
-      }
     }
-    setBusy({ label: 'making a searchable pdf', p: 1 });
+    setBusy({ label: 'saving', p: 1 });
     const { imagesToPdf } = await import('../lib/convert');
-    const pdf = await imagesToPdf(cleaned, ocr ? pageTexts : undefined).catch(() => null);
-    if (ocr) await db.put('cache', id + ':ocr', html || `<p>${escapeHtml('No text recognised.')}</p>`);
+    const pdf = await imagesToPdf(cleaned).catch(() => null);
+    // the words are read in the background after the pages are saved (a corner badge shows how far it is)
+    await db.put('kv', `scan:${id}`, ocr ? 'pending' : 'skip');
     await db.put('files', id, pdf ?? cleaned[0]);
     const coverId = id + ':cover';
     const firstCover = await createImageBitmap(cleaned[0]).then(async (b) => {
@@ -78,7 +71,7 @@ export function ScanSheet({ files, onClose, onDone }: { files: File[] | null; on
     await saveDoc(meta);
     pages.forEach((p) => URL.revokeObjectURL(p.url));
     setBusy(null);
-    toast(ocr ? 'Scanned & recognised' : 'Scanned');
+    toast(ocr ? 'Scanned — reading the words in the background' : 'Scanned');
     onDone(id);
   };
 

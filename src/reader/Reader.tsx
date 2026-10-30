@@ -193,6 +193,25 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     };
   }, [pdf]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // a picture's words are read in the background when it is added: pick them up as soon as they are there
+  useEffect(() => {
+    if (content?.type !== 'image') return;
+    let alive = true;
+    const load = async () => {
+      const c = await db.get<{ words: { t: string; x0: number; y0: number; x1: number; y1: number }[]; w: number; h: number; text: string }>('cache', `${id}:imgocr`);
+      if (!alive || !c) return;
+      setImgLayer({ words: c.words, w: c.w, h: c.h });
+      setOcrText((o) => (o?.busy ? o : { text: c.text, busy: false, p: 1 }));
+    };
+    load();
+    const on = (e: Event) => (e as CustomEvent<{ id: string }>).detail.id === id && load();
+    window.addEventListener('frogity:scan', on);
+    return () => {
+      alive = false;
+      window.removeEventListener('frogity:scan', on);
+    };
+  }, [content, id]);
+
   useEffect(() => {
     queueScan(doc); // no-op if it was already looked at when it was added
   }, [doc.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -740,15 +759,20 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
 
   // ---------------------------------------------------------------- OCR (images & scanned PDF pages)
   const runOcr = async (silent = false) => {
-    const { recognize, prepareScan } = await import('../lib/ocr');
+    const { recognize, readImage } = await import('../lib/ocr');
     if (!silent) {
       setSheet('ocr');
       setOcrText({ text: '', busy: true, p: 0 });
     }
     try {
       if (content?.type === 'image') {
-        const img = await prepareScan(content.blob);
-        const r = await recognize(img, (p) => setOcrText((o) => (o ? { ...o, p } : o)));
+        const cached = await db.get<{ words: { t: string; x0: number; y0: number; x1: number; y1: number }[]; w: number; h: number; text: string }>('cache', `${id}:imgocr`);
+        if (cached) {
+          setImgLayer({ words: cached.words, w: cached.w, h: cached.h });
+          return setOcrText({ text: cached.text, busy: false, p: 1 });
+        }
+        const r = await readImage(content.blob, (p) => setOcrText((o) => (o ? { ...o, p } : o)));
+        await db.put('cache', `${id}:imgocr`, { words: r.words, w: r.w, h: r.h, text: r.text });
         setImgLayer({ words: r.words, w: r.w, h: r.h });
         setOcrText({ text: r.text, busy: false, p: 1 });
       } else if (isPdf && flowRef.current) {
@@ -761,7 +785,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
         let text = '';
         for (const b of cached.blocks) {
           if (b.t === 'img' && b.kind === 'scan') {
-            const r = await recognize(b.blob, (p) => !silent && setOcrText({ text, busy: true, p: (done + p) / Math.max(1, total) }));
+            const r = await readImage(b.blob, (p) => !silent && setOcrText({ text, busy: true, p: (done + p) / Math.max(1, total) }));
             done++;
             if (silent) reportScan(id, doc.name, done, total);
             text += r.text + '\n\n';

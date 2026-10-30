@@ -50,20 +50,26 @@ function render(t: number, trailCount: number, shown: number): string {
   if (t >= 0.45 && t < 0.8) sprite = CROUCH;
   if (t >= 0.8) {
     const u = ease(Math.min(1, (t - 0.8) / 1.5));
-    x = 5 + u * 14;
+    x = 5 + u * (trailCount > 20 ? 25 : trailCount > 6 ? 19 : 14); // the more lights, the further it carries them across the sky
     const arc = Math.sin(Math.PI * Math.min(1, (t - 0.8) / 0.9)) * 3;
     const climb = u * 6;
     y = GROUND - 3 - climb - arc + (t > 2.3 ? Math.sin(t * 2.4) * 0.9 : 0);
     sprite = t >= 1.1 ? FLY : SIT;
   }
-  // trail of @ (one per light), a gentle wave behind the frog
-  const total = Math.min(trailCount, 14);
+  // trail of @ (one per light), a gentle wave behind the frog. A long streak is drawn tighter, and in two lines.
+  const total = Math.min(trailCount, 120);
   if (t >= 1.3) {
+    const rows = total > 40 ? 2 : 1;
+    const perRow = Math.ceil(total / rows);
+    const spacing = perRow <= 6 ? 3 : perRow <= 12 ? 2 : 1;
+    const stagger = Math.min(0.16, 2.6 / Math.max(1, total));
     for (let i = 0; i < total; i++) {
-      const born = 1.5 + i * 0.16;
+      const born = 1.5 + i * stagger;
       if (t < born) continue;
-      const tx = x - 2 - (i + 1) * 3 + 1;
-      const ty = y + 1.4 + Math.sin(t * 4 - i * 0.7) * 1.3;
+      const row = i % rows;
+      const k = Math.floor(i / rows);
+      const tx = x - 2 - (k + 1) * spacing + 1;
+      const ty = y + 1.4 + row * 2.2 + Math.sin(t * 4 - k * 0.7) * (spacing === 1 ? 0.9 : 1.3);
       const fresh = i === 0; // the newest light is the one just earned: yellow
       put(tx, ty, '@', fresh ? 'y' : undefined);
     }

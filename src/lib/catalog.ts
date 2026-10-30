@@ -447,12 +447,35 @@ export function prefetch() {
   );
 }
 
-/** Download a file (free). Uses the app's native HTTP, so catalogue sites need no CORS headers. */
+/**
+ * Download a file (free). On the phone the download is done by Android itself, straight to a temporary file, and then
+ * read back through the WebView: much faster for big PDFs than carrying the whole file across the JavaScript bridge.
+ */
+async function nativeDownload(url: string): Promise<Blob | null> {
+  const { Capacitor } = await import('@capacitor/core');
+  if (!Capacitor.isNativePlatform()) return null;
+  const { Filesystem, Directory } = await import('@capacitor/filesystem');
+  const path = `dl/${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  try {
+    const r = await Filesystem.downloadFile({ url, path, directory: Directory.Cache, recursive: true });
+    const res = await fetch(Capacitor.convertFileSrc(r.path ?? ''));
+    return res.ok ? await res.blob() : null;
+  } catch {
+    return null;
+  } finally {
+    Filesystem.deleteFile({ path, directory: Directory.Cache }).catch(() => {});
+  }
+}
+
 export async function fetchFile(g: NonNullable<Item['get']>): Promise<Blob> {
   const urls = [g.url, ...(g.alt ?? [])];
   let last: Error | null = null;
   for (const url of urls) {
     try {
+      if (g.as !== 'jats') {
+        const b = await nativeDownload(url);
+        if (b && b.size >= 800) return b;
+      }
       const r = await fetch(url, { redirect: 'follow' });
       if (!r.ok) throw new Error(`Download failed (${r.status}).`);
       if (g.as === 'jats') {
@@ -468,4 +491,17 @@ export async function fetchFile(g: NonNullable<Item['get']>): Promise<Blob> {
     }
   }
   throw last ?? new Error('Download failed.');
+}
+
+/** A small copy of the catalogue's own thumbnail, used as the cover right away (the browser has usually shown it already). */
+export async function fetchThumb(url?: string): Promise<Blob | undefined> {
+  if (!url) return undefined;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return undefined;
+    const b = await r.blob();
+    return b.size > 1500 && b.size < 1_500_000 && /^image\//.test(b.type) ? b : undefined;
+  } catch {
+    return undefined;
+  }
 }

@@ -784,9 +784,9 @@
   margin: 10px 10px 0;
 }
 .tile {
-  border-radius: 24px;
+  border-radius: 22px;
   background: var(--surface);
-  padding: 18px;
+  padding: 14px 16px;
   box-shadow: var(--shadow);
 }
 .tile .k {
@@ -796,13 +796,13 @@
   text-transform: lowercase;
 }
 .tile .v {
-  font-size: 30px;
+  font-size: 25px;
   font-weight: 750;
   letter-spacing: -0.03em;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 .tile .v small {
-  font-size: 14px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--muted);
   margin-left: 3px;

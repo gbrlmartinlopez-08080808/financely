@@ -33,6 +33,7 @@ export default function App() {
   const [stats, setStats] = useState(false);
   const [reward, setReward] = useState<string | null>(null);
   const [rate, setRate] = useState(false);
+  const [demo, setDemo] = useState<number | null>(null); // testers: play the frog flight for N days
   const [settings, setSettings] = useState(false);
   const [convert, setConvert] = useState<{ doc: DocMeta; root?: HTMLElement | null } | null>(null);
   const [scanFiles, setScanFiles] = useState<File[] | null>(null);
@@ -308,9 +309,17 @@ export default function App() {
         onDiscover={() => setDiscover(true)}
         onSample={() => importFile(new Blob([welcome], { type: 'text/markdown' }), 'Welcome to Frogity.md', { title: 'Welcome to Frogity' }).then((m) => setOpenId(m.id))}
       />
-      <StatsBubble open={stats} onClose={() => (setStats(false), setReward(null))} reward={reward} onRewardDone={() => {}} />
+      <StatsBubble open={stats} onClose={() => (setStats(false), setReward(null), setDemo(null))} reward={reward} demo={demo} onRewardDone={() => setDemo(null)} />
       {openDoc && <Reader key={openDoc.id} doc={openDoc} onClose={() => setOpenId(null)} onConvert={(doc, root) => setConvert({ doc, root })} />}
-      <Settings open={settings} onClose={() => setSettings(false)} />
+      <Settings
+        open={settings}
+        onClose={() => setSettings(false)}
+        onFrogDemo={(n) => {
+          setSettings(false);
+          setDemo(null);
+          setTimeout(() => (setDemo(n), setStats(true)), 320);
+        }}
+      />
       <RateSheet open={rate} onClose={closeRate} streak={streakInfo(getState().days).current} />
       <ConvertSheet doc={convert?.doc ?? null} root={convert?.root} onClose={() => setConvert(null)} onOpenDoc={setOpenId} />
       <ScanSheet

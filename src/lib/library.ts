@@ -190,17 +190,21 @@ export async function extractMeta(file: Blob, name: string, kind: DocKind, title
   return { title, author, pages, cover };
 }
 
-export async function importFile(file: Blob, name: string, opts: { kind?: DocKind; title?: string; open?: boolean } = {}): Promise<DocMeta> {
-  const buf = await file.arrayBuffer();
-  const head = new Uint8Array(buf.slice(0, 16));
+export async function importFile(file: Blob, name: string, opts: { kind?: DocKind; title?: string; author?: string; cover?: Blob; open?: boolean } = {}): Promise<DocMeta> {
+  // no copies of the file in memory: the blob is stored as it is, and only its first bytes are looked at
+  const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
   const kind = opts.kind ?? detectKind(name, file.type, head);
   const id = db.uid();
   const mime = file.type || mimeFor(kind, name);
-  await db.put('files', id, new Blob([buf], { type: mime }));
-  const x = await extractMeta(new Blob([buf], { type: mime }), name, kind, opts.title);
+  const blob = file.type === mime ? file : file.slice(0, file.size, mime);
+  const saved = db.put('files', id, blob);
+  // a cover that came with the book (a catalogue thumbnail) means the slow part, opening the file to draw one, can wait:
+  // the real cover is drawn later in the background (see upgradeCovers)
+  const quick = !!opts.cover && !!opts.title && ['pdf', 'epub'].includes(kind);
+  const x = quick ? { title: opts.title!, author: opts.author, pages: undefined as number | undefined, cover: opts.cover } : await extractMeta(blob, name, kind, opts.title);
   const cover = x.cover ?? (await generatedCover(x.title, kind, x.author));
   const coverId = id + ':cover';
-  await db.put('blobs', coverId, cover);
+  await Promise.all([saved, db.put('blobs', coverId, cover)]);
   const now = Date.now();
   const meta: DocMeta = {
     id,
@@ -208,17 +212,18 @@ export async function importFile(file: Blob, name: string, opts: { kind?: DocKin
     fileName: name,
     kind,
     mime,
-    size: buf.byteLength,
+    size: file.size,
     addedAt: now,
     openedAt: now,
     progress: 0,
     pages: x.pages,
-    author: x.author,
+    author: x.author ?? opts.author,
     coverId,
-    coverV: COVER_V,
+    coverV: quick && kind === 'pdf' ? 1 : COVER_V,
     readMs: 0,
   };
   await saveDoc(meta);
+  if (quick && kind === 'pdf') setTimeout(() => upgradeCovers(), 4000);
   return meta;
 }
 

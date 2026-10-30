@@ -12,13 +12,14 @@ import { About } from './About';
 import { APP_VERSION } from '../lib/config';
 import { fontById } from '../lib/fonts';
 
-export function Settings({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function Settings({ open, onClose, onFrogDemo }: { open: boolean; onClose: () => void; onFrogDemo?: (days: number) => void }) {
   const s = useStore((x) => x.settings);
   const docs = useStore((x) => x.docs);
   const [usage, setUsage] = useState<string>('');
   const [name, setName] = useState(s.name);
   const [fonts, setFonts] = useState(false);
   const [about, setAbout] = useState(false);
+  const [adv, setAdv] = useState(false);
   const [folders, setFolders] = useState<LinkedFolder[]>([]);
   const [scanning, setScanning] = useState(false);
   useEffect(() => {
@@ -64,13 +65,6 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
         </div>
 
         <div className="section-label">reading</div>
-        <div className="row">
-          <div className="grow">
-            <div className="row-label">Daily goal</div>
-            <div className="row-sub">Fills the ring on your library</div>
-          </div>
-        </div>
-        <Ruler value={s.dailyGoal} min={5} max={120} step={5} onChange={(v) => updateSettings({ dailyGoal: v })} format={(v) => `${v}m`} label="Daily goal" />
         <button className="row" style={{ width: '100%', textAlign: 'left' }} onClick={() => setFonts(true)}>
           <Icon name="text" />
           <div className="grow">
@@ -257,6 +251,42 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
           </div>
           <Icon name="right" size={18} />
         </button>
+        <div className="section-label">advanced</div>
+        <button className="row" style={{ width: '100%', textAlign: 'left' }} onClick={() => setAdv((v) => !v)} aria-expanded={adv}>
+          <Icon name="gear" />
+          <div className="grow">
+            <div className="row-label">Daily goal</div>
+            <div className="row-sub">{s.dailyGoal} min a day · changing it re-scales every streak mark</div>
+          </div>
+          <Icon name={adv ? 'up' : 'right'} size={18} />
+        </button>
+        {adv && (
+          <>
+            <p className="muted" style={{ margin: '4px 4px 6px', fontSize: 13 }}>
+              A day counts toward your streak after one minute of reading. The goal fills the ring and decides what each mark in the calendar means.
+            </p>
+            <Ruler value={s.dailyGoal} min={5} max={120} step={5} onChange={(v) => updateSettings({ dailyGoal: v })} format={(v) => `${v}m`} label="Daily goal" />
+          </>
+        )}
+        {onFrogDemo && (
+          <>
+            <div className="section-label">testers · temporary</div>
+            <div className="row">
+              <Icon name="play" />
+              <div className="grow">
+                <div className="row-label">Watch the frog</div>
+                <div className="row-sub">Plays the reward flight as if you had this many lights</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, padding: '2px 4px 8px' }}>
+              {[1, 10, 20, 100].map((n) => (
+                <button key={n} className="pill sm ghost" style={{ flex: 1 }} onClick={() => onFrogDemo(n)}>
+                  {n} {n === 1 ? 'day' : 'days'}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
         <button className="row" style={{ width: '100%', textAlign: 'left' }} onClick={() => setAbout(true)}>
           <Icon name="info" />
           <div className="grow">

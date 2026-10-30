@@ -58,11 +58,82 @@ export function reportScan(id: string, title: string, done: number, total: numbe
 let chain: Promise<void> = Promise.resolve();
 const queued = new Set<string>();
 
-/** Look at a PDF once; if it is a scan, read it. Safe to call again and again. */
+/** Look at a PDF, picture or scan once and read whatever text is in it. Safe to call again and again. */
 export function queueScan(doc: DocMeta) {
-  if (doc.kind !== 'pdf' || queued.has(doc.id)) return;
+  if (!['pdf', 'image', 'scan'].includes(doc.kind) || queued.has(doc.id)) return;
   queued.add(doc.id);
-  chain = chain.then(() => run(doc)).catch((e) => console.warn('scan failed', doc.name, e));
+  const job = doc.kind === 'pdf' ? run : doc.kind === 'image' ? runImage : runScanDoc;
+  chain = chain.then(() => job(doc)).catch((e) => (console.warn('scan failed', doc.name, e), jobs.delete(doc.id), emit()));
+}
+
+const done = (doc: DocMeta, status: 'done' | 'none') => {
+  jobs.set(doc.id, { id: doc.id, title: doc.name, status, progress: 1, done: 1, total: 1, startedAt: Date.now() });
+  emit();
+};
+const finish = (doc: DocMeta) => window.dispatchEvent(new CustomEvent('frogity:scan', { detail: { id: doc.id, title: doc.name } }));
+
+/** Runs `fn` over the items with a few at a time (the OCR pool decides how many really run at once). */
+async function mapLimit<T, R>(items: T[], limit: number, fn: (x: T, i: number) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        out[i] = await fn(items[i], i);
+      }
+    }),
+  );
+  return out;
+}
+
+/** A photo or screenshot: read its text once, keep where every word sits so the reader can select it. */
+async function runImage(doc: DocMeta) {
+  const remembered = await db.get<string>('kv', `scan:${doc.id}`);
+  if (remembered === 'done' || remembered === 'none') return done(doc, remembered);
+  const blob = await getFile(doc.id);
+  if (!blob) return;
+  jobs.set(doc.id, { id: doc.id, title: doc.name, status: 'running', progress: 0.02, done: 0, total: 1, startedAt: Date.now() });
+  emit();
+  const { readImage } = await import('./ocr');
+  const r = await readImage(blob, (p, st) => st.includes('recogni') && set(doc.id, { progress: 0.05 + 0.95 * p }));
+  if (r.text.trim().length < 12) {
+    await db.put('kv', `scan:${doc.id}`, 'none');
+    return done(doc, 'none');
+  }
+  await db.put('cache', `${doc.id}:imgocr`, { words: r.words, w: r.w, h: r.h, text: r.text });
+  await db.put('kv', `scan:${doc.id}`, 'done');
+  done(doc, 'done');
+  finish(doc);
+}
+
+/** Pages from the camera scanner: the pages are saved at once, the text (and the searchable PDF) follow here. */
+async function runScanDoc(doc: DocMeta) {
+  const remembered = await db.get<string>('kv', `scan:${doc.id}`);
+  if (remembered === 'skip' || remembered === 'done' || remembered === 'none' || (await db.get('cache', `${doc.id}:ocr`))) return;
+  const pages = (await Promise.all((doc.scanPages ?? []).map((p) => db.get<Blob>('blobs', p)))).filter(Boolean) as Blob[];
+  if (!pages.length) return;
+  jobs.set(doc.id, { id: doc.id, title: doc.name, status: 'running', progress: 0.02, done: 0, total: pages.length, startedAt: Date.now() });
+  emit();
+  const { readImage, OCR_POOL } = await import('./ocr');
+  let n = 0;
+  const reads = await mapLimit(pages, OCR_POOL, async (b) => {
+    const r = await readImage(b);
+    set(doc.id, { done: ++n, progress: 0.02 + 0.9 * (n / pages.length) });
+    return r;
+  });
+  const html = reads.map((r, i) => `<section data-page="${i + 1}">${pages.length > 1 ? `<h3>Page ${i + 1}</h3>` : ''}${r.html}</section>`).join('');
+  await db.put('cache', `${doc.id}:ocr`, html || '<p>No text recognised.</p>');
+  const { imagesToPdf } = await import('./convert');
+  const pdf = await imagesToPdf(pages, reads.map((r) => r.text)).catch(() => null);
+  if (pdf) {
+    await db.put('files', doc.id, pdf);
+    const { patchDoc } = await import('./store');
+    await patchDoc(doc.id, { size: pdf.size });
+  }
+  await db.put('kv', `scan:${doc.id}`, reads.some((r) => r.text.trim().length > 20) ? 'done' : 'none');
+  done(doc, 'done');
+  finish(doc);
 }
 
 async function run(doc: DocMeta) {
@@ -116,18 +187,24 @@ async function run(doc: DocMeta) {
     // phase 1 (30%): turn every page into a picture block
     blocks = (await pdfToLiquid(buf, (_b, p) => set(doc.id, { progress: 0.02 + 0.28 * (p.page / p.pages), done: 0, total: p.pages }))).blocks;
   }
-  // phase 2 (70%): read each picture
-  const { recognize } = await import('./ocr');
-  const total = blocks.filter((b) => b.t === 'img' && b.kind === 'scan').length;
-  let done = 0;
+  // phase 2 (70%): read each picture (two at a time on phones that can)
+  const { readImage, OCR_POOL } = await import('./ocr');
+  const pics = blocks.filter((b): b is Extract<LBlock, { t: 'img' }> => b.t === 'img' && b.kind === 'scan');
+  const total = pics.length;
+  let doneN = 0;
+  const reads = await mapLimit(pics, OCR_POOL, async (b) => {
+    const r = await readImage(b.blob);
+    doneN++;
+    set(doc.id, { done: doneN, total, progress: 0.3 + 0.7 * (doneN / Math.max(1, total)) });
+    return r;
+  });
   let chars = 0;
   const out: LBlock[] = [];
+  let k = 0;
   for (const b of blocks) {
     if (b.t === 'img' && b.kind === 'scan') {
-      const r = await recognize(b.blob);
-      done++;
+      const r = reads[k++];
       chars += r.text.length;
-      set(doc.id, { done, total, progress: 0.3 + 0.7 * (done / Math.max(1, total)) });
       for (const para of r.text.split(/\n\n+/)) if (para.trim()) out.push({ t: 'p', html: para.replace(/&/g, '&amp;').replace(/</g, '&lt;'), page: b.page });
     } else out.push(b);
   }
