@@ -11,7 +11,8 @@
 //  5. Figures and ruled tables become image blocks; their internal labels are removed from the text flow.
 //  6. Lines are joined into paragraphs (de-hyphenated), with sub/superscripts and italics kept inline.
 
-import { openPdf, renderPage, pdfjs, type PDFDocumentProxy, type PDFPageProxy } from './pdf';
+import { openPdf, openPdfBlob, renderPage, pdfjs, type PDFDocumentProxy, type PDFPageProxy } from './pdf';
+import { slice } from '../ocr';
 import { escapeHtml } from '../sanitize';
 
 export type LBlock =
@@ -64,12 +65,20 @@ export interface LiquidProgress {
   pages: number;
 }
 
+export interface LiquidOpts {
+  /** pages already done in an earlier run (skipped) */
+  have?: Set<number>;
+  /** called with each finished page; when given, pages are not collected in memory (long books) */
+  onPage?: (page: number, blocks: LBlock[], scanned: boolean) => Promise<void> | void;
+}
+
 export async function pdfToLiquid(
-  data: ArrayBuffer,
+  data: ArrayBuffer | Blob,
   onBlocks: (blocks: LBlock[], p: LiquidProgress) => void,
   signal?: AbortSignal,
+  opts: LiquidOpts = {},
 ): Promise<{ blocks: LBlock[]; scannedPages: number[] }> {
-  const pdf = await openPdf(data);
+  const pdf = data instanceof Blob ? await openPdfBlob(data) : await openPdf(data);
   const all: LBlock[] = [];
   const scanned: number[] = [];
   const ctx: DocCtx = { fontHist: new Map(), sizeHist: new Map(), seenMargins: new Map(), bodyFh: 0 };
@@ -78,15 +87,19 @@ export async function pdfToLiquid(
     await primeBodySize(pdf, ctx);
     for (let i = 1; i <= pdf.numPages; i++) {
       if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
+      if (opts.have?.has(i)) {
+        onBlocks([], { page: i, pages: pdf.numPages });
+        continue;
+      }
       const page = await pdf.getPage(i);
       const res = await processPage(page, i, ctx);
       page.cleanup();
       if (res.scanned) scanned.push(i);
-      // Join a paragraph that flows over the page break.
       const blocks: LBlock[] = [{ t: 'page', page: i }, ...res.blocks];
-      all.push(...blocks);
+      if (opts.onPage) await opts.onPage(i, blocks, res.scanned);
+      else all.push(...blocks);
       onBlocks(blocks, { page: i, pages: pdf.numPages });
-      await new Promise((r) => setTimeout(r, 0));
+      await slice(0); // a turn for the screen between pages (without timers: those crawl in the background)
     }
   } finally {
     pdf.loadingTask.destroy();

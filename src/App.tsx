@@ -22,6 +22,7 @@ import { RateSheet } from './screens/RateSheet';
 import { addSamples } from './lib/samples';
 import { Tour } from './screens/Tour';
 import { initWorkNotice } from './lib/workNotice';
+import { ensureNaturalVoice, resumeVoice } from './lib/voices';
 import { Onboarding, type Finish } from './screens/Onboarding';
 import { ConvertSheet } from './screens/Convert';
 import { ScanSheet } from './screens/Scan';
@@ -322,6 +323,13 @@ export default function App() {
     await db.put('kv', 'rate', { at: Date.now(), asks: (seen?.asks ?? 0) + 1, done: sent });
   };
 
+  // a voice download that was interrupted carries on; a downloaded voice is warmed up while the app is quiet
+  useEffect(() => {
+    if (!ready || !onboarded) return;
+    const t = setTimeout(() => void resumeVoice(), 4000);
+    return () => clearTimeout(t);
+  }, [ready, onboarded]);
+
   // anything that was still being read when the app was closed (or the phone locked) carries on where it stopped
   useEffect(() => {
     if (!ready) return;
@@ -335,6 +343,11 @@ export default function App() {
     const t = setTimeout(() => addSamples(Date.now() - 5000), 3000);
     return () => clearTimeout(t);
   }, [ready, onboarded]);
+
+  // the tour belongs to the library: if a book (or anything else) opens over it, it steps aside and comes back later
+  useEffect(() => {
+    if (tour && !idle) setTour(false);
+  }, [tour, idle]);
 
   // the guided tour of the home screen, once, after the introduction
   useEffect(() => {
@@ -357,6 +370,7 @@ export default function App() {
     let guide = docs.find(isGuide);
     if (!guide) guide = await importFile(new Blob([welcome], { type: 'text/markdown' }), 'Welcome to Frogity.md', { title: 'Welcome to Frogity' });
     addSamples(guide.openedAt); // a famous novel and an economics paper, in the background
+    void ensureNaturalVoice(); // the natural voice for the reader's language, downloaded in the background and made the default
     if (f === 'guide') setOpenId(guide.id);
     else if (f === 'add') setAddOpen(true);
   };

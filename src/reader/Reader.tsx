@@ -8,6 +8,7 @@ import { blocksToHtml, pdfToLiquid, type LBlock } from '../lib/formats/liquidPdf
 import { onBack, setStatusBar, shareFile, shareText, tap } from '../lib/native';
 import { ConfirmSheet } from '../ui/Confirm';
 import { ScanBadge } from '../screens/ScanBadge';
+import { LiquidButton } from './LiquidButton';
 import { Icon, TypeGlyph } from '../ui/Icon';
 import { PixelBar, PixelLoader, Segmented, Sheet, toast } from '../ui/kit';
 import { PdfView, type PdfViewHandle } from './PdfView';
@@ -19,7 +20,7 @@ import { anchorFromSelection, applyHighlights, clearMarks, findAll, wordAt, wrap
 import { AskSheet } from './Ask';
 import { FormSheet } from './FormSheet';
 import { detectForm, type FormModel } from '../lib/forms';
-import { LQ_VERSION, enqueue, pageStore, queueFigures, queueScan, reportLiquid, reportScan, scanVerdict, useScan } from '../lib/scan';
+import { LQ_VERSION, pageStore, prepareNow, queueScan, useLiquid } from '../lib/scan';
 import { KIND_LABEL } from '../lib/formats/detect';
 import { fontById } from '../lib/fonts';
 
@@ -60,8 +61,8 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   const [offerGone, setOfferGone] = useState(true);
   // scanned (picture-only) PDFs are read in the background from the moment they are added; until that has worked,
   // liquid and listen aren't offered
-  const scan = useScan(doc.id);
-  const textless = doc.kind === 'pdf' && ((scan?.status === 'running' && !scan.mixed) || scan?.status === 'none');
+  const liq = useLiquid(doc.id);
+  const [liqTip, setLiqTip] = useState(false);
   const [ocrText, setOcrText] = useState<{ text: string; busy: boolean; p: number } | null>(null);
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const flowRef = useRef<HTMLDivElement>(null);
@@ -72,7 +73,8 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   const [flowReady, setFlowReady] = useState(0);
 
   const isPdf = doc.kind === 'pdf';
-  const liquid = !isPdf || (mode === 'liquid' && !textless);
+  // a PDF's Liquid view is prepared in the background from the moment it is added; it can be opened once it is complete
+  const liquid = !isPdf || (mode === 'liquid' && liq.ready);
   const theme = THEMES.find((t) => t.id === settings.readerTheme) ?? THEMES[0];
   const dark = settings.readerTheme === 'dusk' || settings.readerTheme === 'night';
 
@@ -131,91 +133,36 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     }
     if (content.type !== 'pdf') return;
     let alive = true;
-    const ac = new AbortController();
     root.innerHTML = '';
     delete root.dataset.wrapped;
     (async () => {
       const key = `${id}:${LQ_VERSION}`;
       const cached = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', key);
       if (!alive) return;
-      if (cached) {
-        let { blocks: cb, scanned: cs } = cached;
-        if (cs.length) {
-          // pages that were read in the background since this view was made take the place of their pictures
-          const { applyStored } = await import('../lib/ocrpage');
-          const m = await applyStored(cb, pageStore(id));
-          if (m.replaced) {
-            cb = m.blocks;
-            cs = m.left ? cs : [];
-            await db.put('cache', key, { blocks: cb, scanned: cs });
-          }
-        }
-        if (!alive) return;
-        root.innerHTML = blocksToHtml(cb, urls.current);
-        setScanned(cs);
-        afterLiquid(root);
-        if (cs.length) setTimeout(() => void enqueue(() => runOcr(true)), 600);
-        else queueFigures(doc);
+      if (!cached) {
+        // should not happen (the button only opens a finished view): go back to the pages and prepare it again
+        setMode('page');
+        prepareNow(doc);
         return;
       }
-      // a picture-only document is being read page by page: wait for that instead of doing the same work again
-      if ((await scanVerdict(doc)) === 'scanning') return;
+      let { blocks: cb, scanned: cs } = cached;
+      if (cs.length) {
+        // pages that were read in the background since this view was made take the place of their pictures
+        const { applyStored } = await import('../lib/ocrpage');
+        const m = await applyStored(cb, pageStore(id));
+        if (m.replaced) {
+          cb = m.blocks;
+          cs = m.left ? cs : [];
+          await db.put('cache', key, { blocks: cb, scanned: cs });
+        }
+      }
       if (!alive) return;
-      const again = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', key);
-      if (again) {
-        root.innerHTML = blocksToHtml(again.blocks, urls.current);
-        setScanned(again.scanned);
-        afterLiquid(root);
-        return;
-      }
-      const all: LBlock[] = [];
-      setLiquifying({ page: 0, pages: doc.pages ?? 0 });
-      reportLiquid(id, doc.name, 0, doc.pages ?? 0);
-      try {
-        const res = await pdfToLiquid(
-          content.data,
-          (blocks, p) => {
-            if (!alive) return;
-            all.push(...blocks);
-            root.insertAdjacentHTML('beforeend', blocksToHtml(blocks, urls.current));
-            setLiquifying({ page: p.page, pages: p.pages });
-            reportLiquid(id, doc.name, p.page, p.pages);
-            if (p.page === Math.max(1, page)) restoreLiquidPage(root);
-          },
-          ac.signal,
-        );
-        if (!alive) return;
-        // picture-only pages that the background reading has already done are put in place at once
-        let fin = res.blocks;
-        let left = res.scannedPages;
-        if (left.length) {
-          const { applyStored } = await import('../lib/ocrpage');
-          const m = await applyStored(fin, pageStore(id));
-          if (m.replaced) {
-            fin = m.blocks;
-            if (!m.left) left = [];
-            root.innerHTML = blocksToHtml(fin, urls.current);
-            delete root.dataset.wrapped;
-          }
-        }
-        setScanned(left);
-        await db.put('cache', key, { blocks: fin, scanned: left });
-        afterLiquid(root);
-        if (left.length) setTimeout(() => void enqueue(() => runOcr(true)), 600);
-        else queueFigures(doc);
-      } catch (e) {
-        if ((e as Error).name !== 'AbortError') {
-          console.error(e);
-          toast('Liquid mode had trouble with this file');
-        }
-      } finally {
-        reportLiquid(id, doc.name, 1, 1, true);
-        if (alive) setLiquifying(null);
-      }
+      root.innerHTML = blocksToHtml(cb, urls.current);
+      setScanned(cs);
+      afterLiquid(root);
     })();
     return () => {
       alive = false;
-      ac.abort();
     };
   }, [content, liquid]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -631,8 +578,11 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   const toggleListen = (v: 'read' | 'listen') => {
     if (v === 'listen') {
       if (!liquid) {
+        if (!liq.ready) {
+          setLiqTip(true); // Listen reads the Liquid view: it is still being prepared
+          return;
+        }
         switchMode('liquid');
-        toast('Listening uses liquid view');
       }
       setListen(true);
       setChrome(true);
@@ -839,38 +789,9 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
         await db.put('cache', `${id}:imgocr`, { words: r.words, w: r.w, h: r.h, text: r.text });
         setImgLayer({ words: r.words, w: r.w, h: r.h });
         setOcrText({ text: r.text, busy: false, p: 1 });
-      } else if (isPdf && flowRef.current) {
-        const key = `${id}:${LQ_VERSION}`;
-        const cached = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', key);
-        if (!cached) throw new Error('Open liquid view first');
-        const { ocrBlocks } = await import('../lib/ocrpage');
-        const data = await (await getFile(id))?.arrayBuffer();
-        if (!data) throw new Error('The file is not available');
-        const res = await ocrBlocks(
-          data,
-          cached.blocks,
-          (d, total) => {
-            if (silent) reportScan(id, doc.name, d, total);
-            else setOcrText({ text: '', busy: true, p: d / Math.max(1, total) });
-          },
-          pageStore(id),
-        );
-        const out = res.blocks;
-        const text = out.flatMap((b) => (b.t === 'p' || b.t === 'h' ? [b.html.replace(/<[^>]+>/g, '')] : [])).join('\n\n');
-        await db.put('cache', key, { blocks: out, scanned: [] });
-        flowRef.current.innerHTML = blocksToHtml(out, urls.current);
-        delete flowRef.current.dataset.wrapped;
-        setScanned([]);
-        setFlowReady((n) => n + 1);
-        if (!silent) setOcrText({ text, busy: false, p: 1 });
       }
     } catch (e) {
       if (!silent) setOcrText({ text: `OCR failed: ${(e as Error).message}`, busy: false, p: 1 });
-    } finally {
-      if (silent) {
-        reportScan(id, doc.name, 1, 1, true);
-        queueFigures(doc);
-      }
     }
   };
 
@@ -915,9 +836,9 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     { id: 'ask', label: 'Ask this document', icon: 'ask', right: 'free ai' },
     { id: 'find', label: 'Search in document', icon: 'search' },
     { id: 'bookmark', label: hereMark ? 'Remove bookmark here' : 'Bookmark this spot', icon: 'bookmark' },
-    { id: 'mode', label: liquid ? 'Original pages' : 'Liquid view', icon: liquid ? 'page' : 'liquid', hidden: !isPdf || textless },
+    { id: 'mode', label: liquid ? 'Original pages' : 'Liquid view', icon: liquid ? 'page' : 'liquid', hidden: !isPdf || !liq.ready },
     { id: 'thumbs', label: thumbs ? 'Hide page thumbnails' : 'Page thumbnails', icon: 'sidebar', hidden: !isPdf || liquid },
-    { id: 'ocr', label: 'Recognise text (OCR)', pixel: 'scan', hidden: !(content?.type === 'image' || (isPdf && liquid && scanned.length > 0 && !textless)), right: isPdf ? `${scanned.length} scanned` : undefined },
+    { id: 'ocr', label: 'Recognise text (OCR)', pixel: 'scan', hidden: content?.type !== 'image' },
     { id: 'convert', label: 'Convert / export…', pixel: 'convert' },
     { id: 'share', label: 'Share original', icon: 'share' },
     { id: 'card', label: 'Share as a book card', icon: 'share' },
@@ -1053,6 +974,16 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
           >
             <Icon name="ask" />
           </button>
+          {isPdf && liq.known && !liq.none && (
+            <LiquidButton
+              ready={liq.ready}
+              progress={liq.progress}
+              active={liquid}
+              tip={liqTip}
+              onTip={setLiqTip}
+              onClick={() => (liq.ready ? switchMode(liquid ? 'page' : 'liquid') : setLiqTip(true))}
+            />
+          )}
           <button className="r-ibtn" onClick={() => setFind('')} aria-label="Search">
             <Icon name="search" />
           </button>
@@ -1115,7 +1046,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
             <Icon name="clock" size={15} />
             <span>{clockMode === 'time' ? now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : `${minutesLeft}m left`}</span>
           </button>
-          {(liquid || isPdf) && !textless && content?.type !== 'sheet' ? (
+          {(liquid || isPdf) && content?.type !== 'sheet' ? (
             <Segmented
               className="compact"
               value={listen ? 'listen' : 'read'}
@@ -1165,7 +1096,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
       <LookupCard word={lookup} onClose={() => setLookup(null)} />
       <ZoomViewer src={zoom?.src ?? null} mask={zoom?.mask} ratio={zoom?.ratio} onClose={() => setZoom(null)} />
 
-      <TypeSheet open={sheet === 'type'} onClose={() => setSheet(null)} isPdf={isPdf && !textless} mode={mode} onMode={switchMode} />
+      <TypeSheet open={sheet === 'type'} onClose={() => setSheet(null)} isPdf={isPdf} mode={mode} onMode={switchMode} liquidReady={liq.ready} liquidProgress={liq.progress} />
       <ContentsSheet
         open={sheet === 'contents'}
         onClose={() => setSheet(null)}

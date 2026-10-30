@@ -1076,3 +1076,97 @@
     animation-duration: 9s;
   }
 }
+
+/* the Liquid-mode button: a drop that fills up while the view is prepared */
+.liq-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.liqbtn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--r-ink, var(--ink));
+  transition: background 0.3s, transform 0.2s;
+}
+.liqbtn:active {
+  transform: scale(0.92);
+}
+.liqbtn .rim {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linejoin: round;
+  opacity: 0.85;
+}
+.liqbtn .water {
+  transition: transform 1.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.liqbtn .wave {
+  fill: #4a8dff;
+  animation: liq-slosh 2.4s linear infinite;
+}
+.liqbtn .wave.b {
+  fill: #8bb8ff;
+  opacity: 0.7;
+  animation-duration: 3.6s;
+  animation-direction: reverse;
+}
+@keyframes liq-slosh {
+  to {
+    transform: translateX(12px);
+  }
+}
+.liqbtn.ready .rim {
+  stroke: #4a8dff;
+  opacity: 1;
+}
+.liqbtn.ready::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(74, 141, 255, 0.5);
+  animation: liq-pop 2.6s ease-out 1;
+  pointer-events: none;
+}
+@keyframes liq-pop {
+  0% {
+    box-shadow: 0 0 0 0 rgba(74, 141, 255, 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 16px rgba(74, 141, 255, 0);
+  }
+}
+.liqbtn.on {
+  background: color-mix(in srgb, var(--r-ink, var(--ink)) 12%, transparent);
+}
+.liq-tip {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 8px);
+  right: -4px;
+  width: max-content;
+  max-width: 230px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--pill);
+  color: var(--pill-ink);
+  font: 12.5px/1.35 var(--mono);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+  animation: rise 0.3s var(--spring);
+}
+.liq-tip small {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+@media (prefers-reduced-motion: reduce) {
+  .liqbtn .wave,
+  .liqbtn.ready::after {
+    animation: none;
+  }
+}

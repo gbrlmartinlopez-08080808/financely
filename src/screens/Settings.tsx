@@ -11,6 +11,7 @@ import { FontsSheet } from '../reader/sheets';
 import { About } from './About';
 import { APP_VERSION } from '../lib/config';
 import { fontById } from '../lib/fonts';
+import { LANGS, detectLang, ensureNaturalVoice } from '../lib/voices';
 
 export function Settings({ open, onClose }: { open: boolean; onClose: () => void }) {
   const s = useStore((x) => x.settings);
@@ -65,6 +66,28 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
         </div>
 
         <div className="section-label">reading</div>
+        <div className="row">
+          <Icon name="ear" />
+          <div className="grow">
+            <div className="row-label">Reading language</div>
+            <div className="row-sub">Decides your natural reading voice</div>
+          </div>
+          <select
+            className="lang-select"
+            value={s.lang || detectLang()}
+            onChange={(e) => {
+              updateSettings({ lang: e.target.value });
+              void ensureNaturalVoice(e.target.value, { force: true });
+            }}
+            aria-label="Reading language"
+          >
+            {LANGS.map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.label}
+              </option>
+            ))}
+          </select>
+        </div>
         <button className="row" style={{ width: '100%', textAlign: 'left' }} onClick={() => setFonts(true)}>
           <Icon name="text" />
           <div className="grow">

@@ -44,7 +44,12 @@ async function readLeaf(flat: HTMLCanvasElement, l: Leaf, scale: number, soften 
   const r = await recognize(c, undefined, l.lines <= 1 ? 7 : 6);
   const lines = r.lines
     .map((ln) => ({ ...ln, x0: c._ox + ln.x0 / scale, x1: c._ox + ln.x1 / scale, y0: c._oy + ln.y0 / scale, y1: c._oy + ln.y1 / scale, h: (ln.y1 - ln.y0) / scale }))
-    .filter((ln) => ln.text.trim());
+    .filter((ln) => ln.text.trim())
+    // the crop has a margin around the block: a line that belongs to the next block (cut in half at the edge) is not ours, or its words would appear twice
+    .filter((ln) => {
+      const cy = (ln.y0 + ln.y1) / 2;
+      return cy >= l.y0 - l.lh * 0.35 && cy <= l.y1 + l.lh * 0.35;
+    });
   const chars = lines.reduce((a, ln) => a + ln.text.length, 0);
   const conf = chars ? lines.reduce((a, ln) => a + ln.conf * ln.text.length, 0) / chars : 0;
   return { lines, conf, chars };
@@ -185,7 +190,7 @@ export async function ocrPage(page: HTMLCanvasElement, pageNo: number): Promise<
     let prev: (typeof good)[number] | null = null;
     for (const ln of good) {
       const t = tidy(ln.text);
-      if (!t) continue;
+      if (!t || (prev && tidy(prev.text).toLowerCase() === t.toLowerCase())) continue; // the same line twice in a row is a misread, not the text
       const gap = prev ? ln.y0 - prev.y1 : 0;
       const indent = ln.x0 - left > mh * 0.9;
       const prevShort = prev ? prev.x1 < left + (right - left) * 0.72 && /[.!?:”"’)]$/.test(prev.text.trim()) : false;

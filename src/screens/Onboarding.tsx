@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore, updateSettings } from '../lib/store';
+import { LANGS, detectLang } from '../lib/voices';
 import { displayName } from '../lib/cheer';
 import { lightsFor, renderGlobe } from '../lib/globe';
 import { plantStage } from '../lib/ascii';
@@ -302,6 +303,11 @@ const GLOW: [string, string][] = [['#1b3cff', '#e8cf9a'], ['#e8cf9a', '#ff9bb0']
 
 export function Onboarding({ onDone }: { onDone: (f: Finish) => void }) {
   const settings = useStore((s) => s.settings);
+  // the reading language starts as the phone's own (so there is no extra question); it can be changed on the name step
+  const [lang, setLang] = useState(settings.lang || detectLang());
+  useEffect(() => {
+    if (!settings.lang) updateSettings({ lang });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [i, setI] = useState(0);
   const [dir, setDir] = useState(1);
   const [draft, setDraft] = useState(displayName(settings.name));
@@ -379,6 +385,26 @@ export function Onboarding({ onDone }: { onDone: (f: Finish) => void }) {
             >
               <input autoFocus value={draft} onChange={(e) => setDraft(e.target.value.slice(0, 24))} placeholder="your first name" maxLength={24} aria-label="Your name" enterKeyHint="next" />
             </form>
+          )}
+          {step.id === 'name' && (
+            <label className="ob-lang">
+              <span className="mono">reading language</span>
+              <select
+                value={lang}
+                onChange={(e) => {
+                  setLang(e.target.value);
+                  updateSettings({ lang: e.target.value });
+                }}
+                aria-label="Reading language"
+              >
+                {LANGS.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+              <small className="mono">picked from your phone · your natural reading voice downloads in this language</small>
+            </label>
           )}
           {step.id === 'goal' && (
             <div className="ob-ruler">

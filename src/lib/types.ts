@@ -69,6 +69,8 @@ export type ReaderFont = string;
 
 export interface Settings {
   name: string;
+  /** the reading language (en, es, fr, de, it, pt, other): chosen from the phone's, changeable in Settings */
+  lang: string;
   appTheme: 'light' | 'system' | 'dark';
   readerTheme: ReaderTheme;
   font: ReaderFont;
@@ -96,6 +98,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   name: 'reader',
+  lang: '',
   appTheme: 'system',
   readerTheme: 'paper',
   font: 'garamond',

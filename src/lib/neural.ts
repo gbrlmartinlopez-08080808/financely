@@ -169,6 +169,9 @@ export class NeuralEngine {
   }
 }
 
+/** One engine for the whole app: the voice stays loaded (and warm) between books, so Listen starts at once. */
+export const sharedEngine = new NeuralEngine();
+
 // ------------------------------------------------------------------ gapless playback
 interface Slot {
   i: number; // sentence index

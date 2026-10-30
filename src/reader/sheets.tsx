@@ -13,7 +13,7 @@ export const THEMES: { id: ReaderTheme; bg: string; ink: string; name: string }[
   { id: 'night', bg: '#000000', ink: '#bdbbb5', name: 'night' },
 ];
 
-export function TypeSheet({ open, onClose, isPdf, mode, onMode }: { open: boolean; onClose: () => void; isPdf: boolean; mode: 'page' | 'liquid'; onMode: (m: 'page' | 'liquid') => void }) {
+export function TypeSheet({ open, onClose, isPdf, mode, onMode, liquidReady = true, liquidProgress = 1 }: { open: boolean; onClose: () => void; isPdf: boolean; mode: 'page' | 'liquid'; onMode: (m: 'page' | 'liquid') => void; liquidReady?: boolean; liquidProgress?: number }) {
   const s = useStore((x) => x.settings);
   const [fonts, setFonts] = useState(false);
   return (
@@ -27,13 +27,14 @@ export function TypeSheet({ open, onClose, isPdf, mode, onMode }: { open: boolea
               light
               className="w100"
               value={mode}
-              onChange={onMode}
+              onChange={(v) => (v === 'liquid' && !liquidReady ? undefined : onMode(v))}
               options={[
                 { value: 'page', label: <><Icon name="page" size={16} /> Page</> },
-                { value: 'liquid', label: <><Icon name="liquid" size={16} /> Liquid</> },
+                { value: 'liquid', label: <><Icon name="liquid" size={16} /> {liquidReady ? 'Liquid' : `Liquid ${Math.round(liquidProgress * 100)}%`}</> },
               ]}
             />
-            {mode === 'page' && <p className="muted" style={{ fontSize: 12.5, margin: '10px 4px 0' }}>Liquid reflows the PDF to fit your screen — equations and figures are kept intact.</p>}
+            {!liquidReady && <p className="muted" style={{ fontSize: 12.5, margin: '10px 4px 0' }}>Liquid mode is being prepared in the background. Keep reading the pages: it opens as soon as it is complete.</p>}
+            {liquidReady && mode === 'page' && <p className="muted" style={{ fontSize: 12.5, margin: '10px 4px 0' }}>Liquid reflows the PDF to fit your screen — equations and figures are kept intact.</p>}
           </>
         )}
         {(!isPdf || mode === 'liquid') && (

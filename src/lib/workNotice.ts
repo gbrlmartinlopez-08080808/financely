@@ -12,7 +12,7 @@ interface WorkPlugin {
 }
 const Work = registerPlugin<WorkPlugin>('Work');
 
-export const kindLabel = (k: ScanJob['kind']) => (k === 'scan' ? 'Reading the scan' : k === 'liquid' ? 'Preparing Liquid mode' : 'Reading the pictures');
+export const kindLabel = (k: ScanJob['kind']) => (k === 'scan' ? 'Reading the scan' : k === 'liquid' ? 'Preparing Liquid mode' : k === 'voice' ? 'Downloading your voice' : 'Reading the pictures');
 export const left = (j: ScanJob) => (j.total ? `${Math.max(0, j.total - j.done)} left` : '…');
 
 let started = false;

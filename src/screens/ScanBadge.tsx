@@ -13,20 +13,15 @@ export function JobsHost() {
   const all = useRunningJobs();
   const [list, setList] = useState(false);
   useEffect(() => {
-    const done = (e: Event) => {
-      const d = (e as CustomEvent<{ title: string }>).detail;
-      toast(`“${short(d.title, 28)}” is readable now — Liquid mode and Listen are ready`);
-    };
     const began = (e: Event) => {
       const d = (e as CustomEvent<{ title: string; pages: number }>).detail;
+      if (d.pages <= 0) return; // a book of ordinary text is just prepared quietly: the Liquid button fills up by itself
       toast(`Reading ${d.pages > 1 ? d.pages + ' pages of ' : ''}“${short(d.title, 24)}” in the background — tap to follow`, undefined, () => setList(true));
     };
     const open = () => setList(true);
-    window.addEventListener('frogity:scan', done);
     window.addEventListener('frogity:started', began);
     window.addEventListener('frogity:jobs', open);
     return () => {
-      window.removeEventListener('frogity:scan', done);
       window.removeEventListener('frogity:started', began);
       window.removeEventListener('frogity:jobs', open);
     };

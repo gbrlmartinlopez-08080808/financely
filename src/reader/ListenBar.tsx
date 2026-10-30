@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { bestVoice, listVoices, openVoiceInstall, speak, speechText, stopSpeaking, ttsAvailable, guessLang, type Voice } from '../lib/tts';
-import { NEURAL_PREFIX, NEURAL_VOICES, NeuralEngine, NeuralPlayer, isNeural, neuralDownload, neuralId, neuralRemove, neuralStored, neuralSupported } from '../lib/neural';
+import { NEURAL_PREFIX, NEURAL_VOICES, NeuralPlayer, sharedEngine, isNeural, neuralDownload, neuralId, neuralRemove, neuralStored, neuralSupported } from '../lib/neural';
 import { firstVisibleSentence, markSaying, sentenceAtPoint, sentenceRaw, sentenceText, wrapSentences } from './dom';
 import { updateSettings, useStore } from '../lib/store';
 import { isNative, mediaStart, mediaStop, mediaUpdate, onMediaAction, tap } from '../lib/native';
@@ -33,7 +33,6 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
   const [busy, setBusy] = useState(false);
   const [stored, setStored] = useState<string[]>([]);
   const [dl, setDl] = useState<{ id: string; p: number } | null>(null);
-  const engine = useRef<NeuralEngine | null>(null);
   const player = useRef<NeuralPlayer | null>(null);
   const neuralBroken = useRef(false);
   const bestRef = useRef<string | undefined>(undefined);
@@ -103,7 +102,7 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
   useEffect(() => {
     const v = settings.ttsVoice;
     if (!isNeural(v) || !neuralSupported() || neuralBroken.current) return;
-    (engine.current ??= new NeuralEngine()).init(neuralId(v)).catch(() => {});
+    sharedEngine.init(neuralId(v)).catch(() => {});
   }, [settings.ttsVoice]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -154,7 +153,7 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
    */
   const runNeural = async (from: number, my: number, sel: string, n: number, offset: number) => {
     if (!root) return;
-    const eng = (engine.current ??= new NeuralEngine());
+    const eng = sharedEngine;
     setBusy(true);
     try {
       await eng.init(neuralId(sel));
@@ -336,9 +335,7 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
 
   useEffect(
     () => () => {
-      pause();
-      engine.current?.dispose(); // frees the voice's memory
-      engine.current = null;
+      pause(); // the voice itself stays loaded in the app, ready for the next book
     },
     [], // eslint-disable-line react-hooks/exhaustive-deps
   );
@@ -474,7 +471,7 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
           {neuralSupported() && (
             <>
               <div className="voice-h">
-                <b>Studio voices</b>
+                <b>Natural voices</b>
                 <span>{stored.length ? 'the most natural · free · works offline' : 'the most natural · free · the first one also installs a ~30 MB speech engine'}</span>
               </div>
               <div className="actions">
@@ -542,8 +539,8 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
             </>
           )}
           <div className="voice-h" style={{ marginTop: 18 }}>
-            <b>This phone’s voices</b>
-            <span>{sortedVoices.some((v) => v.natural) ? 'natural ones first' : 'tip: install a high-quality voice for a more natural sound'}</span>
+            <b>Fast voices</b>
+            <span>this phone’s own voices, in many accents · start instantly</span>
           </div>
           {isNative && (
             <button className="pill ghost sm" style={{ margin: '0 0 10px' }} onClick={() => openVoiceInstall()}>
