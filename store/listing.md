@@ -13,7 +13,7 @@ Frogity is a quiet reader for the files you already have: PDFs, EPUB books, Word
 STREAKS THAT FORGIVE
 Set a daily goal in minutes. Every mark in the streak calendar (: + * % @) is scaled to YOUR goal. One freeze day a week quietly saves your streak when life gets in the way, and you can earn more.
 A jetpack frog flies across your map each morning, trailing an @ for every light you've earned.
-A home-screen widget shows your streak, the last seven days and today's progress.
+Home-screen widgets in several sizes show your streak, the week or five weeks, and a button to carry on with your book; tap them to jump straight in.
 
 LIQUID MODE FOR PDFS
 Fixed pages reflow into one column that fits your phone — no pinching, no side-scrolling. Equations, tables and figures stay intact.

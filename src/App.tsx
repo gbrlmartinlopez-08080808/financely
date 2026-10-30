@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { init, useStore, updateSettings, getState, dayKey, applyFreeze, streakInfo } from './lib/store';
 import * as db from './lib/db';
 import { importFile, importText, upgradeCovers } from './lib/library';
-import { initBackButton, isNative, listenIncoming, manageSelectionMenu, readIncoming, setStatusBar, tap, widgetUpdate } from './lib/native';
+import { initBackButton, isNative, listenIncoming, manageSelectionMenu, readIncoming, setStatusBar, tap, widgetUpdate, onWidgetAction } from './lib/native';
 import { glyphFor } from './lib/glyphs';
 import { linkFolder, linkPickedFiles, rescanAll } from './lib/linked';
 import type { DocMeta } from './lib/types';
@@ -19,11 +19,28 @@ import { importUrl, looksLikeUrl } from './lib/links';
 import { Settings } from './screens/Settings';
 import { RateSheet } from './screens/RateSheet';
 import { addSamples } from './lib/samples';
+import { Tour } from './screens/Tour';
 import { Onboarding, type Finish } from './screens/Onboarding';
 import { ConvertSheet } from './screens/Convert';
 import { ScanSheet } from './screens/Scan';
 import { PixelLoader, Toasts, toast } from './ui/kit';
 import welcome from './samples/welcome.md?raw';
+
+/** A small JPEG of a picture, as base64 (for the widgets). */
+async function thumbB64(b: Blob, side: number): Promise<string | undefined> {
+  try {
+    const bmp = await createImageBitmap(b);
+    const k = side / Math.max(bmp.width, bmp.height);
+    const c = document.createElement('canvas');
+    c.width = Math.round(bmp.width * k);
+    c.height = Math.round(bmp.height * k);
+    c.getContext('2d')!.drawImage(bmp, 0, 0, c.width, c.height);
+    bmp.close();
+    return c.toDataURL('image/jpeg', 0.8).split(',')[1];
+  } catch {
+    return undefined;
+  }
+}
 
 export default function App() {
   const ready = useStore((s) => s.ready);
@@ -34,7 +51,7 @@ export default function App() {
   const [stats, setStats] = useState(false);
   const [reward, setReward] = useState<string | null>(null);
   const [rate, setRate] = useState(false);
-  const [demo, setDemo] = useState<number | null>(null); // testers: play the frog flight for N days
+  const [tour, setTour] = useState(false);
   const [settings, setSettings] = useState(false);
   const [convert, setConvert] = useState<{ doc: DocMeta; root?: HTMLElement | null } | null>(null);
   const [scanFiles, setScanFiles] = useState<File[] | null>(null);
@@ -219,31 +236,71 @@ export default function App() {
     };
   }, [ready]);
 
-  // keep the home-screen widget's numbers fresh
+  // keep the home-screen widgets' numbers fresh (streak, the week, a five-week map, and the book you're on)
   const days = useStore((st) => st.days);
   const dailyGoal = useStore((st) => st.settings.dailyGoal);
+  const lastDoc = docs.find((d) => !d.finished && d.progress < 0.995);
+  const lastKey = lastDoc ? `${lastDoc.id}:${Math.round(lastDoc.progress * 100)}:${lastDoc.name}` : '';
+  const coverSent = useRef('');
   useEffect(() => {
     if (!ready || !isNative) return;
-    const t = setTimeout(() => {
+    const t = setTimeout(async () => {
       const st = getState();
       const goalMs = dailyGoal * 60_000;
-      let week = '';
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const k = dayKey(d);
-        const ms = st.days[k] ?? 0;
-        week += ms < 60_000 && st.freeze.used.includes(k) ? '~' : glyphFor(ms, goalMs).ch;
+      const glyphs = (n: number) => {
+        let out = '';
+        for (let i = n - 1; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const k = dayKey(d);
+          const ms = st.days[k] ?? 0;
+          out += ms < 60_000 && st.freeze.used.includes(k) ? '~' : glyphFor(ms, goalMs).ch;
+        }
+        return out;
+      };
+      let cover: string | undefined;
+      if (lastDoc?.coverId && coverSent.current !== lastDoc.coverId) {
+        const b = await db.get<Blob>('blobs', lastDoc.coverId);
+        if (b) cover = await thumbB64(b, 150);
+        coverSent.current = lastDoc.coverId;
       }
-      widgetUpdate({ day: dayKey(), streak: streakInfo(st.days).current, today: Math.floor((st.days[dayKey()] ?? 0) / 60_000), goal: dailyGoal, week });
+      widgetUpdate({
+        day: dayKey(),
+        streak: streakInfo(st.days).current,
+        today: Math.floor((st.days[dayKey()] ?? 0) / 60_000),
+        goal: dailyGoal,
+        week: glyphs(7),
+        heat: glyphs(35),
+        docId: lastDoc?.id ?? '',
+        bookTitle: lastDoc?.name ?? '',
+        bookPct: Math.round((lastDoc?.progress ?? 0) * 100),
+        cover,
+      });
     }, 1200);
     return () => clearTimeout(t);
-  }, [ready, days, dailyGoal]);
+  }, [ready, days, dailyGoal, lastKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // a tap on a home-screen widget: open the streak, add, scan, or carry on with the book
+  useEffect(() => {
+    if (!ready || !onboarded) return;
+    let off = () => {};
+    onWidgetAction((a, doc) => {
+      if (a === 'stats') setStats(true);
+      else if (a === 'add') setAddOpen(true);
+      else if (a === 'scan') setAddOpen(true); // the camera needs a tap inside the app (Android won't open it on its own)
+      else if (a === 'continue') {
+        const d = getState().docs.find((x) => x.id === doc);
+        if (d) setOpenId(d.id);
+        else setStats(false);
+      }
+    }).then((f) => (off = f));
+    return () => off();
+  }, [ready, onboarded]);
 
   // after the first streak milestone (3 days) ask, once, how it's going — and offer a freeze day for feedback
   const idle = !openId && !stats && !settings && !addOpen && !discover && !convert && !scanFiles;
   useEffect(() => {
-    if (!ready || !onboarded || !idle || rate) return;
+    if (!ready || !onboarded || !idle || rate || tour) return;
     let alive = true;
     const t = setTimeout(async () => {
       const seen = await db.get<{ at: number; asks: number; done?: boolean }>('kv', 'rate');
@@ -255,16 +312,31 @@ export default function App() {
       alive = false;
       clearTimeout(t);
     };
-  }, [ready, onboarded, idle, rate]);
+  }, [ready, onboarded, idle, rate, tour]);
   const closeRate = async (sent: boolean) => {
     setRate(false);
     const seen = await db.get<{ at: number; asks: number }>('kv', 'rate');
     await db.put('kv', 'rate', { at: Date.now(), asks: (seen?.asks ?? 0) + 1, done: sent });
   };
 
+  // the guided tour of the home screen, once, after the introduction
+  useEffect(() => {
+    if (!ready || !onboarded || !idle || tour || rate) return;
+    let alive = true;
+    const t = setTimeout(async () => {
+      if ((await db.get<string>('kv', 'tour')) !== 'pending' || !alive) return;
+      if (document.querySelector('.carousel, .empty')) setTour(true);
+    }, 1400);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [ready, onboarded, idle, tour, rate]);
+
   // end of the introduction: the welcome guide goes on the shelf (once), then whatever they chose
   const finishIntro = async (f: Finish) => {
     updateSettings({ onboarded: true });
+    db.put('kv', 'tour', 'pending'); // the home-screen tour runs once the library is on screen
     let guide = docs.find(isGuide);
     if (!guide) guide = await importFile(new Blob([welcome], { type: 'text/markdown' }), 'Welcome to Frogity.md', { title: 'Welcome to Frogity' });
     addSamples(guide.openedAt); // a famous novel and an economics paper, in the background
@@ -311,17 +383,10 @@ export default function App() {
         onDiscover={() => setDiscover(true)}
         onSample={() => importFile(new Blob([welcome], { type: 'text/markdown' }), 'Welcome to Frogity.md', { title: 'Welcome to Frogity' }).then((m) => setOpenId(m.id))}
       />
-      <StatsBubble open={stats} onClose={() => (setStats(false), setReward(null), setDemo(null))} reward={reward} demo={demo} onRewardDone={() => setDemo(null)} />
+      <StatsBubble open={stats} onClose={() => (setStats(false), setReward(null))} reward={reward} onRewardDone={() => {}} />
       {openDoc && <Reader key={openDoc.id} doc={openDoc} onClose={() => setOpenId(null)} onConvert={(doc, root) => setConvert({ doc, root })} />}
-      <Settings
-        open={settings}
-        onClose={() => setSettings(false)}
-        onFrogDemo={(n) => {
-          setSettings(false);
-          setDemo(null);
-          setTimeout(() => (setDemo(n), setStats(true)), 320);
-        }}
-      />
+      <Settings open={settings} onClose={() => setSettings(false)} />
+      {tour && <Tour onDone={() => (setTour(false), db.put('kv', 'tour', 'done'))} />}
       <RateSheet open={rate} onClose={closeRate} streak={streakInfo(getState().days).current} />
       <ConvertSheet doc={convert?.doc ?? null} root={convert?.root} onClose={() => setConvert(null)} onOpenDoc={setOpenId} />
       <ScanSheet

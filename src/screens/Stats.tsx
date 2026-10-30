@@ -115,7 +115,7 @@ function DayChart({ date, ms, hours, ice }: { date: Date; ms: number; hours?: nu
   );
 }
 
-export function StatsBubble({ open, onClose, reward, onRewardDone, demo }: { open: boolean; onClose: () => void; reward?: string | null; onRewardDone?: () => void; demo?: number | null }) {
+export function StatsBubble({ open, onClose, reward, onRewardDone }: { open: boolean; onClose: () => void; reward?: string | null; onRewardDone?: () => void }) {
   const days = useStore((s) => s.days);
   const hours = useStore((s) => s.hours);
   const frozen = useStore((s) => s.freeze);
@@ -123,8 +123,8 @@ export function StatsBubble({ open, onClose, reward, onRewardDone, demo }: { ope
   const [pick, setPick] = useState<string | null>(null);
   const [scene, setScene] = useState(false);
   useEffect(() => {
-    setScene(!!(open && (reward || demo)));
-  }, [open, reward, demo]);
+    setScene(!!(open && reward));
+  }, [open, reward]);
   const docs = useStore((s) => s.docs);
   const settings = useStore((s) => s.settings);
   const [full, setFull] = useState(false);
@@ -273,11 +273,11 @@ export function StatsBubble({ open, onClose, reward, onRewardDone, demo }: { ope
               </form>
             )}
           </div>
-          {scene && (reward || demo) ? (
+          {scene && reward ? (
             <FrogScene
-              key={demo ?? reward}
-              count={demo ?? lights.length}
-              minutes={reward ? Math.round((days[reward] ?? 0) / 60000) : settings.dailyGoal}
+              key={reward}
+              count={lights.length}
+              minutes={Math.round((days[reward] ?? 0) / 60000)}
               goal={settings.dailyGoal}
               name={settings.name}
               onEnd={() => {
@@ -287,13 +287,13 @@ export function StatsBubble({ open, onClose, reward, onRewardDone, demo }: { ope
               }}
             />
           ) : (
-            <Globe enter={!!(reward || demo)} lights={lights} view={reward || demo ? 'globe' : view} onToggle={() => setView((v) => (v === 'globe' ? 'plant' : 'globe'))} />
+            <Globe enter={!!reward} lights={lights} view={reward ? 'globe' : view} onToggle={() => setView((v) => (v === 'globe' ? 'plant' : 'globe'))} />
           )}
           <div className="bubble-cap">
             <b className="mono">
-              {demo ?? lights.length} light{(demo ?? lights.length) === 1 ? '' : 's'} on your map
+              {lights.length} light{lights.length === 1 ? '' : 's'} on your map
             </b>
-            <span>{demo ?? lights.length ? 'One for every day you reached your goal.' : 'Reach your daily goal to light the first place.'}</span>
+            <span>{lights.length ? 'One for every day you reached your goal.' : 'Reach your daily goal to light the first place.'}</span>
             <span className="muted">{info.today >= goal ? 'Today’s light is blinking — it joins the map at midnight.' : `${Math.max(1, Math.ceil((goal - info.today) / 60000))} min to today’s light.`}</span>
           </div>
           <div className="bubble-line mono">

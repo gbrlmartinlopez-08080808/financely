@@ -82,7 +82,8 @@ async function say(text: string, rate: number): Promise<{ samples: Float32Array;
     input: new ort.Tensor('int64', BigInt64Array.from(ids.map((n) => BigInt(n))), [1, ids.length]),
     input_lengths: new ort.Tensor('int64', BigInt64Array.from([BigInt(ids.length)]), [1]),
     // length_scale is the voice's own speed control: a faster voice keeps its natural pitch
-    scales: new ort.Tensor('float32', Float32Array.from([cfg.inference.noise_scale, cfg.inference.length_scale / rate, cfg.inference.noise_w]), [3]),
+    // a touch more variation than the voice's defaults: livelier, less monotone reading
+    scales: new ort.Tensor('float32', Float32Array.from([Math.min(0.9, cfg.inference.noise_scale * 1.15), cfg.inference.length_scale / rate, Math.min(1.1, cfg.inference.noise_w * 1.12)]), [3]),
   };
   if (Object.keys(cfg.speaker_id_map ?? {}).length) feeds.sid = new ort.Tensor('int64', BigInt64Array.from([0n]), [1]);
   const out = await session.run(feeds);

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { bestVoice, listVoices, openVoiceInstall, speak, speechText, stopSpeaking, ttsAvailable, guessLang, type Voice } from '../lib/tts';
 import { NEURAL_PREFIX, NEURAL_VOICES, NeuralEngine, NeuralPlayer, isNeural, neuralDownload, neuralId, neuralRemove, neuralStored, neuralSupported } from '../lib/neural';
-import { firstVisibleSentence, markSaying, sentenceText, wrapSentences } from './dom';
+import { firstVisibleSentence, markSaying, sentenceAtPoint, sentenceRaw, sentenceText, wrapSentences } from './dom';
 import { updateSettings, useStore } from '../lib/store';
 import { isNative, mediaStart, mediaStop, mediaUpdate, onMediaAction, tap } from '../lib/native';
 import { notifyPermission } from '../lib/reminders';
@@ -99,6 +99,13 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
     } else if (media.current) mediaUpdate({ title, subtitle, playing });
   }, [playing, Math.floor(idx / 8)]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // load the studio voice as soon as listening opens, so pressing play starts at once
+  useEffect(() => {
+    const v = settings.ttsVoice;
+    if (!isNeural(v) || !neuralSupported() || neuralBroken.current) return;
+    (engine.current ??= new NeuralEngine()).init(neuralId(v)).catch(() => {});
+  }, [settings.ttsVoice]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     listVoices().then(setVoices);
     neuralStored().then(setStored);
@@ -117,10 +124,35 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
   };
 
   /**
-   * Studio voice. A worker keeps the voice loaded and voices sentence after sentence; every sentence is placed on
-   * one audio clock right behind the previous one, so phrases flow without gaps. The highlight follows that clock.
+   * What to say next: a few whole sentences together, so the voice carries its intonation from one to the next
+   * instead of finishing every sentence as if it were the end. `offset` starts the first sentence mid-way (a tapped word).
    */
-  const runNeural = async (from: number, my: number, sel: string, n: number) => {
+  const buildChunk = (from: number, n: number, offset: number, target: number) => {
+    if (!root) return null;
+    const parts: { i: number; at: number; w: number }[] = [];
+    let text = '';
+    let i = from;
+    for (; i < n; i++) {
+      const raw = i === from && offset > 0 ? sentenceRaw(root, i).slice(offset) : sentenceText(root, i);
+      let t = speechText(raw);
+      if (!t || !/[\p{L}\p{N}]/u.test(t)) continue;
+      if (!/[.!?…:;,"”’)\]]$/.test(t)) t += '.'; // a heading or list line: a breath before the next one
+      if (text && text.length + t.length > target * 1.35) break;
+      parts.push({ i, at: text ? text.length + 1 : 0, w: t.length });
+      text += (text ? ' ' : '') + t;
+      if (text.length >= target) {
+        i++;
+        break;
+      }
+    }
+    return text ? { text, parts, next: i } : null;
+  };
+
+  /**
+   * Studio voice. A worker keeps the voice loaded and voices chunk after chunk; every chunk is placed on one audio
+   * clock right behind the previous one, so speech flows without gaps. The highlight follows that clock.
+   */
+  const runNeural = async (from: number, my: number, sel: string, n: number, offset: number) => {
     if (!root) return;
     const eng = (engine.current ??= new NeuralEngine());
     setBusy(true);
@@ -131,7 +163,7 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
       setBusy(false);
       neuralBroken.current = true;
       toast('The studio voice couldn’t start — using the phone’s voice');
-      if (my === token.current) run(from);
+      if (my === token.current) run(from, offset);
       return;
     }
     if (my !== token.current) return;
@@ -164,27 +196,37 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
       requestAnimationFrame(watch);
     };
     requestAnimationFrame(watch);
-    for (let i = from; i < n; i++) {
+    let at = from;
+    let off = offset;
+    let first = true;
+    let rtf = 0.45; // how long the voice takes per second of speech (measured as we go)
+    while (at < n) {
       if (my !== token.current) return;
-      const text = speechText(sentenceText(root, i));
-      if (!text || !/[\p{L}\p{N}]/u.test(text)) continue;
+      // a short first chunk so the voice starts quickly, longer ones after that for a smoother flow
+      // each chunk is sized so it is ready before the audio already in hand runs out: short at the start, longer as the buffer grows
+      const room = Math.round((pl.buffered() * 0.75 * 14 * Math.min(rate, 2)) / rtf);
+      const ch = buildChunk(at, n, off, first ? 60 : Math.max(60, Math.min(260, room)));
+      off = 0;
+      if (!ch) break;
+      at = ch.next;
       // keep about half a minute of speech ready, no more
       while (pl.ahead() > 30 && my === token.current) await new Promise((r) => setTimeout(r, 250));
       if (my !== token.current) return;
       try {
         const t0 = performance.now();
-        const r = await eng.say(text, Math.min(rate, 2));
+        const r = await eng.say(ch.text, Math.min(rate, 2));
         if (my !== token.current) return;
-        console.debug(`[studio] sentence ${i}: ${Math.round(performance.now() - t0)} ms for ${(r.samples.length / r.rate).toFixed(1)} s of speech, ${pl.ahead().toFixed(1)} s ready ahead`);
-        const end = text.slice(-1);
-        pl.enqueue(i, r.samples, r.rate, /[.!?…]/.test(end) ? 0.34 : /[,;:]/.test(end) ? 0.18 : 0.26);
+        rtf = Math.max(0.15, (performance.now() - t0) / 1000 / Math.max(0.5, (r.samples.length / r.rate) / Math.min(rate, 2)));
+        console.debug(`[studio] ${ch.parts.length} sentence(s): ${Math.round(performance.now() - t0)} ms for ${(r.samples.length / r.rate).toFixed(1)} s of speech, ${pl.ahead().toFixed(1)} s ready ahead`);
+        pl.enqueue(ch.parts.map((p) => ({ i: p.i, w: p.w })), r.samples, r.rate, /[.!?…]["”’)\]]*$/.test(ch.text) ? 0.16 : 0.1);
+        first = false;
       } catch (e) {
         if (my !== token.current) return;
         console.warn('studio voice failed', e);
         neuralBroken.current = true;
         pl.stop();
         toast('The studio voice stopped — using the phone’s voice');
-        run(i);
+        run(ch.parts[0].i);
         return;
       }
     }
@@ -193,24 +235,51 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
   };
 
   const run = useCallback(
-    async (from: number) => {
+    async (from: number, offset = 0) => {
       if (!root) return;
       const my = ++token.current;
       setPlaying(true);
       onPlaying(true);
       const n = Number(root.dataset.wrapped ?? 0);
       const chosen = opts.current.ttsVoice;
-      if (isNeural(chosen) && !neuralBroken.current) return runNeural(from, my, chosen, n);
-      for (let i = from; i < n; i++) {
+      if (isNeural(chosen) && !neuralBroken.current) return runNeural(from, my, chosen, n, offset);
+      // The phone's own voice: several sentences per request (so it doesn't end every sentence on a falling note), and the
+      // engine's word positions move the highlight. Engines that don't report positions get an estimate from the clock.
+      let at = from;
+      let off = offset;
+      let first = true;
+      while (at < n) {
         if (my !== token.current) return;
-        setIdx(i);
-        localStorage.setItem('listen:' + docId, String(i));
-        const el = markSaying(root, i);
-        follow(el);
-        const text = speechText(sentenceText(root, i));
-        if (!text || !/[\p{L}\p{N}]/u.test(text)) continue;
+        const ch = buildChunk(at, n, off, first ? 120 : 300);
+        off = 0;
+        first = false;
+        if (!ch) break;
+        at = ch.next;
+        const show = (k: number) => {
+          const i = ch.parts[k].i;
+          setIdx(i);
+          localStorage.setItem('listen:' + docId, String(i));
+          follow(markSaying(root, i));
+        };
+        let cur = 0;
+        let heard = false;
+        const t0 = Date.now();
+        show(0);
+        const move = (pos: number) => {
+          let k = cur;
+          while (k + 1 < ch.parts.length && ch.parts[k + 1].at <= pos) k++;
+          if (k !== cur) {
+            cur = k;
+            show(k);
+          }
+        };
         const s = opts.current;
-        const r = await speak(text, { rate: s.ttsRate, pitch: s.ttsPitch, voice: chosen ?? bestRef.current, lang: lang.current });
+        const timer = setInterval(() => !heard && move(((Date.now() - t0) / 1000) * 14 * s.ttsRate), 250);
+        const r = await speak(ch.text, { rate: s.ttsRate, pitch: s.ttsPitch, voice: chosen ?? bestRef.current, lang: lang.current }, (ci) => {
+          heard = true;
+          move(ci);
+        });
+        clearInterval(timer);
         if (my !== token.current || r === 'stopped') return;
         if (sleepAt.current && Date.now() > sleepAt.current) {
           sleepAt.current = 0;
@@ -245,20 +314,25 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
     }
   }, [startAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // tap a sentence while listening → jump there
+  // tap any word (playing or paused) → carry on reading from that word
   useEffect(() => {
     if (!root) return;
     const on = (e: MouseEvent) => {
       if (window.getSelection()?.toString()) return;
-      const s = (e.target as HTMLElement).closest<HTMLElement>('.s');
-      if (!s || !playing) return;
+      if ((e.target as HTMLElement).closest('a, button, input, textarea')) return;
+      const hit = sentenceAtPoint(root, e.clientX, e.clientY);
+      if (!hit) return;
       e.stopPropagation();
+      e.preventDefault();
+      tap('select');
       pause();
-      setTimeout(() => run(Number(s.dataset.i)), 60);
+      setIdx(hit.i);
+      follow(markSaying(root, hit.i));
+      setTimeout(() => run(hit.i, hit.offset), 60);
     };
     root.addEventListener('click', on, true);
     return () => root.removeEventListener('click', on, true);
-  }, [root, playing, run, pause]);
+  }, [root, run, pause]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(
     () => () => {

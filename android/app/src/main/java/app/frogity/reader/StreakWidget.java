@@ -1,100 +1,93 @@
 package app.frogity.reader;
 
-import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
 import android.content.ComponentName;
 import android.content.Context;
-import android.content.Intent;
-import android.content.SharedPreferences;
-import android.graphics.Color;
-import android.text.SpannableString;
-import android.text.Spanned;
-import android.text.style.ForegroundColorSpan;
+import android.os.Build;
+import android.os.Bundle;
+import android.util.SizeF;
 import android.widget.RemoteViews;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
+import java.util.HashMap;
+import java.util.Map;
 
-/** Home-screen widget: the streak, the last seven days as ASCII glyphs, and today's progress. */
+/**
+ * Home-screen streak widget in three sizes that follow the size you drag it to: a small counter, a wide one with the
+ * week and today's bar, and a tall one with a five-week map, the book you're on and quick buttons.
+ * Every part is tappable: the streak opens the stats, ▶ continues the book, + adds, ▣ scans.
+ */
 public class StreakWidget extends AppWidgetProvider {
-    static final String PREFS = "frogity_widget";
-    private static final int YELLOW = Color.rgb(0xF2, 0xC9, 0x4C);
-    private static final int ICE = Color.rgb(0x5B, 0x8D, 0xFF);
-
     @Override
     public void onUpdate(Context ctx, AppWidgetManager mgr, int[] ids) {
-        for (int id : ids) mgr.updateAppWidget(id, build(ctx));
+        for (int id : ids) mgr.updateAppWidget(id, build(ctx, mgr, id));
+    }
+
+    @Override
+    public void onAppWidgetOptionsChanged(Context ctx, AppWidgetManager mgr, int id, Bundle options) {
+        mgr.updateAppWidget(id, build(ctx, mgr, id));
     }
 
     /** Called by {@link WidgetPlugin} whenever the page has new numbers. */
     static void refresh(Context ctx) {
         AppWidgetManager mgr = AppWidgetManager.getInstance(ctx);
-        int[] ids = mgr.getAppWidgetIds(new ComponentName(ctx, StreakWidget.class));
-        for (int id : ids) mgr.updateAppWidget(id, build(ctx));
+        for (int id : mgr.getAppWidgetIds(new ComponentName(ctx, StreakWidget.class))) mgr.updateAppWidget(id, build(ctx, mgr, id));
+        for (int id : mgr.getAppWidgetIds(new ComponentName(ctx, BookWidget.class))) mgr.updateAppWidget(id, BookWidget.build(ctx));
     }
 
-    private static int dayDiff(String from, String to) {
-        try {
-            SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
-            return (int) Math.round((f.parse(to).getTime() - f.parse(from).getTime()) / 86400000.0);
-        } catch (Exception e) {
-            return 0;
+    static RemoteViews build(Context ctx, AppWidgetManager mgr, int id) {
+        WidgetData d = WidgetData.load(ctx);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Android 12+: hand over all three and the launcher picks the one that fits the current size
+            Map<SizeF, RemoteViews> m = new HashMap<>();
+            m.put(new SizeF(110f, 110f), small(ctx, d));
+            m.put(new SizeF(230f, 110f), wide(ctx, d));
+            m.put(new SizeF(230f, 250f), large(ctx, d));
+            return new RemoteViews(m);
         }
+        Bundle o = mgr.getAppWidgetOptions(id);
+        int w = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250);
+        int h = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 110);
+        if (w < 200) return small(ctx, d);
+        if (h >= 220) return large(ctx, d);
+        return wide(ctx, d);
     }
 
-    private static SpannableString colour(String s) {
-        SpannableString sp = new SpannableString(s);
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (c == '@') sp.setSpan(new ForegroundColorSpan(YELLOW), i, i + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            else if (c == '~') sp.setSpan(new ForegroundColorSpan(ICE), i, i + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            else if (c == '%' || c == '*') sp.setSpan(new ForegroundColorSpan(Color.rgb(0xD6, 0xD5, 0xD0)), i, i + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        }
-        return sp;
+    private static RemoteViews small(Context ctx, WidgetData d) {
+        RemoteViews v = new RemoteViews(ctx.getPackageName(), R.layout.widget_small);
+        v.setTextViewText(R.id.w_num, String.valueOf(d.streak));
+        v.setTextViewText(R.id.w_label, d.streak == 1 ? "day streak" : "day streak");
+        v.setTextViewText(R.id.w_bar, WidgetData.colour(d.bar(8, false)));
+        v.setOnClickPendingIntent(R.id.widget_root, WidgetData.tap(ctx, "stats", ""));
+        return v;
     }
 
-    static RemoteViews build(Context ctx) {
-        SharedPreferences p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
-        String saved = p.getString("day", today);
-        int streak = p.getInt("streak", 0);
-        int goal = Math.max(1, p.getInt("goal", 15));
-        int mins = p.getInt("today", 0);
-        String week = p.getString("week", "·······");
-        int gap = Math.max(0, dayDiff(saved, today));
-        if (gap > 0) {
-            // the page hasn't run since midnight: today is a fresh day, and the week slides along
-            mins = 0;
-            if (gap > 1) streak = 0; // a whole day went by unread (a freeze would have been applied by the app)
-            StringBuilder w = new StringBuilder(week);
-            for (int i = 0; i < Math.min(gap, 7); i++) {
-                w.deleteCharAt(0);
-                w.append('·');
-            }
-            week = w.toString();
-        }
-        if (week.length() > 7) week = week.substring(week.length() - 7);
-
-        int slots = 10;
-        int filled = Math.min(slots, (int) Math.round(slots * Math.min(1.0, mins / (double) goal)));
-        StringBuilder bar = new StringBuilder("[");
-        for (int i = 0; i < slots; i++) bar.append(i < filled ? '@' : '·');
-        bar.append("] ").append(mins).append('/').append(goal).append(" min");
-
-        StringBuilder spaced = new StringBuilder();
-        for (int i = 0; i < week.length(); i++) {
-            if (i > 0) spaced.append(' ');
-            spaced.append(week.charAt(i));
-        }
-
+    private static RemoteViews wide(Context ctx, WidgetData d) {
         RemoteViews v = new RemoteViews(ctx.getPackageName(), R.layout.widget_streak);
-        v.setTextViewText(R.id.widget_title, colour("@ " + streak + (streak == 1 ? " day streak" : " day streak")));
-        v.setTextViewText(R.id.widget_week, colour(spaced.toString()));
-        v.setTextViewText(R.id.widget_bar, colour(bar.toString()));
-        Intent open = new Intent(ctx, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        v.setOnClickPendingIntent(R.id.widget_root, PendingIntent.getActivity(ctx, 0, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
+        v.setTextViewText(R.id.widget_title, WidgetData.colour("@ " + d.streak + " day streak"));
+        v.setTextViewText(R.id.widget_week, WidgetData.colour(d.spacedWeek()));
+        v.setTextViewText(R.id.widget_bar, WidgetData.colour(d.bar(10, true)));
+        v.setOnClickPendingIntent(R.id.widget_root, WidgetData.tap(ctx, "stats", ""));
+        v.setOnClickPendingIntent(R.id.btn_continue, WidgetData.tap(ctx, d.docId.isEmpty() ? "add" : "continue", d.docId));
+        v.setOnClickPendingIntent(R.id.btn_add, WidgetData.tap(ctx, "add", ""));
+        v.setOnClickPendingIntent(R.id.btn_scan, WidgetData.tap(ctx, "scan", ""));
+        return v;
+    }
+
+    private static RemoteViews large(Context ctx, WidgetData d) {
+        RemoteViews v = new RemoteViews(ctx.getPackageName(), R.layout.widget_large);
+        v.setTextViewText(R.id.widget_title, WidgetData.colour("@ " + d.streak + " day streak"));
+        v.setTextViewText(R.id.w_goal, d.today + "/" + d.goal + " min");
+        v.setTextViewText(R.id.w_heat, WidgetData.colour(d.heatRows()));
+        v.setTextViewText(R.id.widget_bar, WidgetData.colour(d.bar(16, false)));
+        d.bindBook(ctx, v, R.id.w_cover, R.id.w_book_title, R.id.w_book_sub);
+        v.setOnClickPendingIntent(R.id.w_main, WidgetData.tap(ctx, "stats", ""));
+        v.setOnClickPendingIntent(R.id.w_heat, WidgetData.tap(ctx, "stats", ""));
+        v.setOnClickPendingIntent(R.id.w_book, WidgetData.tap(ctx, d.docId.isEmpty() ? "add" : "continue", d.docId));
+        v.setOnClickPendingIntent(R.id.btn_continue, WidgetData.tap(ctx, d.docId.isEmpty() ? "add" : "continue", d.docId));
+        v.setOnClickPendingIntent(R.id.btn_add, WidgetData.tap(ctx, "add", ""));
+        v.setOnClickPendingIntent(R.id.btn_scan, WidgetData.tap(ctx, "scan", ""));
+        v.setOnClickPendingIntent(R.id.btn_stats, WidgetData.tap(ctx, "stats", ""));
         return v;
     }
 }

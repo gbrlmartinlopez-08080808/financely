@@ -73,11 +73,17 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
-        <receiver android:name=".StreakWidget" android:exported="false" android:label="@string/app_name">
+        <receiver android:name=".StreakWidget" android:exported="false" android:label="Frogity · streak">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/streak_widget_info" />
+        </receiver>
+        <receiver android:name=".BookWidget" android:exported="false" android:label="Frogity · continue">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/book_widget_info" />
         </receiver>
         <service android:name=".ListenService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
     </application>

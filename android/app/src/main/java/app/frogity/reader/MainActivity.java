@@ -13,6 +13,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(ListenPlugin.class);
         registerPlugin(WidgetPlugin.class);
         super.onCreate(savedInstanceState);
+        WidgetPlugin.handle(getIntent());
         // Let the page choose its own layout width (the app scales its interface to fit).
         WebSettings s = getBridge().getWebView().getSettings();
         s.setUseWideViewPort(true);
@@ -20,5 +21,12 @@ public class MainActivity extends BridgeActivity {
         s.setSupportZoom(false);
         s.setBuiltInZoomControls(false);
         s.setMediaPlaybackRequiresUserGesture(false);
+    }
+
+    @Override
+    protected void onNewIntent(android.content.Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        WidgetPlugin.handle(intent);
     }
 }

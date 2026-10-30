@@ -5,4 +5,5 @@
     <string name="package_name">app.frogity.reader</string>
     <string name="custom_url_scheme">app.frogity.reader</string>
     <string name="widget_description">Your streak and today’s progress, in ASCII.</string>
+    <string name="widget_book_description">Continue reading with one tap.</string>
 </resources>

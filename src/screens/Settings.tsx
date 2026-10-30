@@ -12,7 +12,7 @@ import { About } from './About';
 import { APP_VERSION } from '../lib/config';
 import { fontById } from '../lib/fonts';
 
-export function Settings({ open, onClose, onFrogDemo }: { open: boolean; onClose: () => void; onFrogDemo?: (days: number) => void }) {
+export function Settings({ open, onClose }: { open: boolean; onClose: () => void }) {
   const s = useStore((x) => x.settings);
   const docs = useStore((x) => x.docs);
   const [usage, setUsage] = useState<string>('');
@@ -266,25 +266,6 @@ export function Settings({ open, onClose, onFrogDemo }: { open: boolean; onClose
               A day counts toward your streak after one minute of reading. The goal fills the ring and decides what each mark in the calendar means.
             </p>
             <Ruler value={s.dailyGoal} min={5} max={120} step={5} onChange={(v) => updateSettings({ dailyGoal: v })} format={(v) => `${v}m`} label="Daily goal" />
-          </>
-        )}
-        {onFrogDemo && (
-          <>
-            <div className="section-label">testers · temporary</div>
-            <div className="row">
-              <Icon name="play" />
-              <div className="grow">
-                <div className="row-label">Watch the frog</div>
-                <div className="row-sub">Plays the reward flight as if you had this many lights</div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 8, padding: '2px 4px 8px' }}>
-              {[1, 10, 20, 100].map((n) => (
-                <button key={n} className="pill sm ghost" style={{ flex: 1 }} onClick={() => onFrogDemo(n)}>
-                  {n} {n === 1 ? 'day' : 'days'}
-                </button>
-              ))}
-            </div>
           </>
         )}
         <button className="row" style={{ width: '100%', textAlign: 'left' }} onClick={() => setAbout(true)}>

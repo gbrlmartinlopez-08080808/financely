@@ -75,6 +75,51 @@ export function sentenceText(root: HTMLElement, i: number): string {
     .trim();
 }
 
+/** The sentence's text exactly as it is in the page (whitespace not collapsed), so offsets into it match what was tapped. */
+export function sentenceRaw(root: HTMLElement, i: number): string {
+  return Array.from(root.querySelectorAll<HTMLElement>(`.s[data-i="${i}"]`))
+    .map((s) => s.textContent ?? '')
+    .join('');
+}
+
+/** Which sentence, and which character inside it, a screen point lands on (the start of the tapped word). */
+export function sentenceAtPoint(root: HTMLElement, x: number, y: number): { i: number; offset: number } | null {
+  const doc = document as Document & { caretRangeFromPoint?: (x: number, y: number) => Range | null; caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null };
+  let node: Node | null = null;
+  let off = 0;
+  if (doc.caretRangeFromPoint) {
+    const r = doc.caretRangeFromPoint(x, y);
+    node = r?.startContainer ?? null;
+    off = r?.startOffset ?? 0;
+  } else if (doc.caretPositionFromPoint) {
+    const p = doc.caretPositionFromPoint(x, y);
+    node = p?.offsetNode ?? null;
+    off = p?.offset ?? 0;
+  }
+  const el = (node?.nodeType === 3 ? node.parentElement : (node as HTMLElement | null))?.closest<HTMLElement>('.s');
+  if (!el || !node || !root.contains(el)) return null;
+  const i = Number(el.dataset.i);
+  let before = 0;
+  for (const s of Array.from(root.querySelectorAll<HTMLElement>(`.s[data-i="${i}"]`))) {
+    if (s === el) break;
+    before += (s.textContent ?? '').length;
+  }
+  // position inside this span's text
+  let inside = 0;
+  const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  for (let t = w.nextNode(); t; t = w.nextNode()) {
+    if (t === node) {
+      inside += off;
+      break;
+    }
+    inside += (t as Text).data.length;
+  }
+  let offset = before + inside;
+  const raw = sentenceRaw(root, i);
+  while (offset > 0 && /\S/.test(raw[offset - 1] ?? ' ')) offset--; // back to the start of the word
+  return { i, offset };
+}
+
 export function markSaying(root: HTMLElement, i: number | null) {
   root.querySelectorAll('.s.say').forEach((s) => s.classList.remove('say'));
   if (i === null) return null;

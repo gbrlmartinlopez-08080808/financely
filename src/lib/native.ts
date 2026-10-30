@@ -207,9 +207,24 @@ export async function onMediaAction(cb: (action: string) => void) {
   }
 }
 
-// ------------------------------------------------------------------ home-screen widget
+// ------------------------------------------------------------------ home-screen widgets
+export type WidgetAction = 'stats' | 'add' | 'scan' | 'continue';
 interface WidgetPlugin {
-  update(o: { day: string; streak: number; today: number; goal: number; week: string }): Promise<void>;
+  update(o: { day: string; streak: number; today: number; goal: number; week: string; heat: string; docId: string; bookTitle: string; bookPct: number; cover?: string }): Promise<void>;
+  getAction(): Promise<{ action: string; doc: string }>;
+  addListener(event: 'action', cb: (e: { action: string; doc: string }) => void): Promise<PluginListenerHandle>;
 }
 const Widget = registerPlugin<WidgetPlugin>('Widget');
 export const widgetUpdate = (o: Parameters<WidgetPlugin['update']>[0]) => (isNative ? Widget.update(o).catch(() => {}) : Promise.resolve());
+/** A tap on a home-screen widget (the streak, ▶ continue, + add, ▣ scan) arrives here, also if it started the app. */
+export async function onWidgetAction(cb: (action: WidgetAction, doc: string) => void) {
+  if (!isNative) return () => {};
+  try {
+    const p = await Widget.getAction();
+    if (p.action) cb(p.action as WidgetAction, p.doc);
+    const h = await Widget.addListener('action', (e) => e.action && cb(e.action as WidgetAction, e.doc));
+    return () => h.remove();
+  } catch {
+    return () => {};
+  }
+}

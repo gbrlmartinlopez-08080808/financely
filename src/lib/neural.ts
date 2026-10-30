@@ -175,19 +175,24 @@ interface Slot {
   start: number; // seconds on the audio clock
   end: number;
 }
+/** One stretch of speech that covers several sentences; `w` is each sentence's share of the text, used to time the highlight. */
+export interface Part {
+  i: number;
+  w: number;
+}
 
-/** Plays sentence after sentence on one audio clock: each starts the instant the last one ends. */
+/** Plays chunk after chunk on one audio clock: each starts the instant the last one ends. */
 export class NeuralPlayer {
   private ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
   private nextAt = 0;
   private slots: Slot[] = [];
   private srcs: AudioBufferSourceNode[] = [];
-  private held: { i: number; buf: AudioBuffer; gap: number }[] = [];
+  private held: { parts: Part[]; buf: AudioBuffer; gap: number }[] = [];
   private heldSecs = 0;
   private released = false;
   constructor(
     private tempo = 1,
-    private prebuffer = 3, // seconds of speech to have in hand before starting, so the first sentences never run dry
+    private prebuffer = 1.4, // seconds of speech to have in hand before starting, so the first words never run dry
   ) {
     this.ctx.resume().catch(() => {});
   }
@@ -195,26 +200,37 @@ export class NeuralPlayer {
   ahead() {
     return Math.max(0, this.nextAt - this.ctx.currentTime);
   }
-  /** Quiet trimmed from both ends, then a pause that fits the punctuation. */
-  enqueue(i: number, samples: Float32Array, rate: number, gapAfter: number) {
+  /** seconds of speech in hand that have not been heard yet, counting what is held back before the start */
+  buffered() {
+    return this.released ? this.ahead() : this.heldSecs;
+  }
+  /** Quiet trimmed from both ends (just enough so chunks join without a click), then a short, natural pause. */
+  enqueue(parts: Part[], samples: Float32Array, rate: number, gapAfter: number) {
     let a = 0;
     let b = samples.length;
     const quiet = 0.006;
     while (a < b - 1 && Math.abs(samples[a]) < quiet) a++;
     while (b > a + 1 && Math.abs(samples[b - 1]) < quiet) b--;
-    a = Math.max(0, a - Math.round(rate * 0.03));
-    b = Math.min(samples.length, b + Math.round(rate * 0.05));
+    a = Math.max(0, a - Math.round(rate * 0.02));
+    b = Math.min(samples.length, b + Math.round(rate * 0.03));
     const buf = this.ctx.createBuffer(1, b - a, rate);
-    buf.copyToChannel(samples.subarray(a, b) as Float32Array<ArrayBuffer>, 0);
+    const data = samples.slice(a, b);
+    // a very short fade on both ends: no clicks where one chunk meets the next
+    const f = Math.min(data.length >> 1, Math.round(rate * 0.012));
+    for (let k = 0; k < f; k++) {
+      data[k] *= k / f;
+      data[data.length - 1 - k] *= k / f;
+    }
+    buf.copyToChannel(data as Float32Array<ArrayBuffer>, 0);
     if (!this.released) {
-      this.held.push({ i, buf, gap: gapAfter });
+      this.held.push({ parts, buf, gap: gapAfter });
       this.heldSecs += buf.duration / this.tempo;
       if (this.heldSecs >= this.prebuffer) this.release();
       return;
     }
-    this.place(i, buf, gapAfter);
+    this.place(parts, buf, gapAfter);
   }
-  private place(i: number, buf: AudioBuffer, gapAfter: number) {
+  private place(parts: Part[], buf: AudioBuffer, gapAfter: number) {
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
     src.playbackRate.value = this.tempo;
@@ -222,7 +238,13 @@ export class NeuralPlayer {
     const at = Math.max(this.nextAt, this.ctx.currentTime + 0.05);
     const dur = buf.duration / this.tempo;
     src.start(at);
-    this.slots.push({ i, start: at, end: at + dur });
+    // the highlight moves through the chunk's sentences in proportion to how much text each holds
+    const sum = parts.reduce((x, p) => x + p.w, 0) || 1;
+    let acc = 0;
+    for (const p of parts) {
+      this.slots.push({ i: p.i, start: at + (dur * acc) / sum, end: at + (dur * (acc + p.w)) / sum });
+      acc += p.w;
+    }
     this.nextAt = at + dur + gapAfter;
     this.srcs.push(src);
     src.onended = () => {
@@ -234,7 +256,7 @@ export class NeuralPlayer {
   release() {
     if (this.released) return;
     this.released = true;
-    for (const h of this.held) this.place(h.i, h.buf, h.gap);
+    for (const h of this.held) this.place(h.parts, h.buf, h.gap);
     this.held = [];
   }
   /** nothing at all was voiced */
