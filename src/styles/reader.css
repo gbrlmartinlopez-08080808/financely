@@ -1019,3 +1019,48 @@
   font-size: 10.5px;
   color: var(--muted);
 }
+
+/* the form offer closes by itself: a ring around the cross runs down */
+.form-offer .offer-x {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.offer-ring {
+  position: absolute;
+  inset: -1px;
+  width: calc(100% + 2px);
+  height: calc(100% + 2px);
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+.offer-ring circle {
+  fill: none;
+  stroke-width: 2.5;
+}
+.offer-ring .track {
+  stroke: color-mix(in srgb, var(--r-ink, var(--ink)) 14%, transparent);
+}
+.offer-ring .run {
+  stroke: var(--r-ink, var(--ink));
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+  animation: offer-count 9s linear forwards;
+}
+.form-offer:active .offer-ring .run {
+  animation-play-state: paused; /* holding your finger on it pauses the countdown */
+}
+@keyframes offer-count {
+  to {
+    stroke-dashoffset: 100;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .offer-ring .run {
+    animation-duration: 9s;
+  }
+}

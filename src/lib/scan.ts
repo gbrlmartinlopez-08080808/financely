@@ -1,19 +1,25 @@
-// Scanned (picture-only) PDFs: found and read automatically, in the background, from the moment they are added.
-// The result (readable text, paragraphs and page numbers) is saved, so Liquid mode, Listen, Search and Ask just work.
+// Background reading of files: scanned (picture-only) PDFs, photos, camera scans — and the same kind of care for the
+// pictures inside ordinary documents. The result (readable text, paragraphs and page numbers) is saved, so Liquid
+// mode, Listen, Search and Ask just work. Everything heavy goes through one queue, so reading a scan, preparing the
+// Liquid view and looking at pictures never fight each other (they used to, and the results collided).
 import { useSyncExternalStore } from 'react';
 import * as db from './db';
 import { getFile } from './library';
 import { openPdf } from './formats/pdf';
-import { pdfToLiquid, type LBlock } from './formats/liquidPdf';
+import type { LBlock } from './formats/liquidPdf';
 import { mapLimit } from './ocrpage';
 import type { DocMeta } from './types';
 
 export const LQ_VERSION = 'lq9';
 
+export type JobKind = 'scan' | 'liquid' | 'images';
+
 export interface ScanJob {
   id: string;
   title: string;
-  /** checking = looking for a text layer · running = reading the pages · done = text ready · none = nothing readable · text = ordinary PDF */
+  /** what the work is: reading a scan, preparing Liquid mode, or looking at the pictures in a document */
+  kind: JobKind;
+  /** checking = looking for a text layer · running = at work · done = finished · none = nothing readable · text = ordinary PDF */
   status: 'checking' | 'running' | 'done' | 'none' | 'text';
   /** 0‥1 */
   progress: number;
@@ -28,12 +34,21 @@ const emit = () => {
   jobs = new Map(jobs);
   subs.forEach((s) => s());
 };
-const set = (id: string, patch: Partial<ScanJob>) => {
-  const j = jobs.get(id);
+const key = (kind: JobKind, id: string) => (kind === 'scan' ? id : `${kind}:${id}`);
+const set = (id: string, patch: Partial<ScanJob>, kind: JobKind = 'scan') => {
+  const j = jobs.get(key(kind, id));
   if (j) {
-    jobs.set(id, { ...j, ...patch });
+    jobs.set(key(kind, id), { ...j, ...patch });
     emit();
   }
+};
+const start = (id: string, title: string, kind: JobKind, status: ScanJob['status'], total = 0) => {
+  jobs.set(key(kind, id), { id, title, kind, status, progress: status === 'running' ? 0.02 : 0, done: 0, total, startedAt: Date.now() });
+  emit();
+};
+const end = (id: string, kind: JobKind = 'scan') => {
+  jobs.delete(key(kind, id));
+  emit();
 };
 
 export const scanState = (id: string) => jobs.get(id);
@@ -43,32 +58,83 @@ export function useScan(id?: string): ScanJob | undefined {
     () => (id ? jobs.get(id) : undefined),
   );
 }
-/** the job that is reading pages right now (for the little progress badge) */
+/** the job that is at work right now (for the little progress badge) */
 export function useActiveScan(): ScanJob | undefined {
   return useSyncExternalStore(
     (l) => (subs.add(l), () => subs.delete(l)),
     () => [...jobs.values()].find((j) => j.status === 'running'),
   );
 }
+/** every job that is at work (for the list behind the badge) */
+export function useRunningJobs(): ScanJob[] {
+  const all = useSyncExternalStore(
+    (l) => (subs.add(l), () => subs.delete(l)),
+    () => jobs,
+  );
+  return [...all.values()].filter((j) => j.status === 'running');
+}
+export const runningJobs = () => [...jobs.values()].filter((j) => j.status === 'running');
+export const subscribeJobs = (f: () => void) => (subs.add(f), () => subs.delete(f));
+
 /** Reports progress of reading some scanned pages of a mixed document (used by the reader). */
 export function reportScan(id: string, title: string, done: number, total: number, finished = false) {
-  if (!jobs.has(id)) jobs.set(id, { id, title, status: 'running', progress: 0, done: 0, total, startedAt: Date.now() });
+  if (!jobs.has(id)) start(id, title, 'scan', 'running', total);
   set(id, { status: finished ? 'done' : 'running', done, total, progress: total ? done / total : 0 });
 }
+/** Progress of preparing Liquid mode (the reader reports it here instead of drawing its own bar). */
+export function reportLiquid(id: string, title: string, done: number, total: number, finished = false) {
+  if (finished) return end(id, 'liquid');
+  if (!jobs.has(key('liquid', id))) start(id, title, 'liquid', 'running', total);
+  set(id, { status: 'running', done, total, progress: total ? Math.min(1, done / total) : 0.05 }, 'liquid');
+}
 
+// ---------------------------------------------------------------- one queue for the heavy work
 let chain: Promise<void> = Promise.resolve();
 const queued = new Set<string>();
+/** Runs `fn` after everything queued before it. */
+export function enqueue<T>(fn: () => Promise<T>): Promise<T> {
+  const r = chain.then(fn, fn);
+  chain = r.then(
+    () => {},
+    () => {},
+  );
+  return r;
+}
+
+/** How a document turned out to be, once it has been looked at (so Liquid mode knows whether to wait for the reading). */
+export type Verdict = 'text' | 'scanning' | 'done' | 'none' | 'other';
+const verdicts = new Map<string, { p: Promise<Verdict>; ok: (v: Verdict) => void }>();
+const verdictOf = (id: string) => {
+  let v = verdicts.get(id);
+  if (!v) {
+    let ok!: (x: Verdict) => void;
+    const p = new Promise<Verdict>((r) => (ok = r));
+    v = { p, ok };
+    verdicts.set(id, v);
+  }
+  return v;
+};
+/** Resolves as soon as the document has been looked at: a normal PDF, a scan being read, or already read. */
+export function scanVerdict(doc: DocMeta): Promise<Verdict> {
+  if (doc.kind !== 'pdf') return Promise.resolve('other');
+  queueScan(doc);
+  return verdictOf(doc.id).p;
+}
 
 /** Look at a PDF, picture or scan once and read whatever text is in it. Safe to call again and again. */
 export function queueScan(doc: DocMeta) {
   if (!['pdf', 'image', 'scan'].includes(doc.kind) || queued.has(doc.id)) return;
   queued.add(doc.id);
   const job = doc.kind === 'pdf' ? run : doc.kind === 'image' ? runImage : runScanDoc;
-  chain = chain.then(() => job(doc)).catch((e) => (console.warn('scan failed', doc.name, e), jobs.delete(doc.id), emit()));
+  void enqueue(() => job(doc)).catch((e) => {
+    console.warn('scan failed', doc.name, e);
+    end(doc.id);
+    verdictOf(doc.id).ok('other');
+  });
 }
 
-const done = (doc: DocMeta, status: 'done' | 'none') => {
-  jobs.set(doc.id, { id: doc.id, title: doc.name, status, progress: 1, done: 1, total: 1, startedAt: Date.now() });
+const settle = (doc: DocMeta, status: 'done' | 'none') => {
+  jobs.set(doc.id, { id: doc.id, title: doc.name, kind: 'scan', status, progress: 1, done: 1, total: 1, startedAt: Date.now() });
   emit();
 };
 const finish = (doc: DocMeta) => window.dispatchEvent(new CustomEvent('frogity:scan', { detail: { id: doc.id, title: doc.name } }));
@@ -76,20 +142,19 @@ const finish = (doc: DocMeta) => window.dispatchEvent(new CustomEvent('frogity:s
 /** A photo or screenshot: read its text once, keep where every word sits so the reader can select it. */
 async function runImage(doc: DocMeta) {
   const remembered = await db.get<string>('kv', `scan:${doc.id}`);
-  if (remembered === 'done' || remembered === 'none') return done(doc, remembered);
+  if (remembered === 'done' || remembered === 'none') return settle(doc, remembered);
   const blob = await getFile(doc.id);
   if (!blob) return;
-  jobs.set(doc.id, { id: doc.id, title: doc.name, status: 'running', progress: 0.02, done: 0, total: 1, startedAt: Date.now() });
-  emit();
+  start(doc.id, doc.name, 'scan', 'running', 1);
   const { readImage } = await import('./ocr');
   const r = await readImage(blob, (p, st) => st.includes('recogni') && set(doc.id, { progress: 0.05 + 0.95 * p }));
   if (r.text.trim().length < 12) {
     await db.put('kv', `scan:${doc.id}`, 'none');
-    return done(doc, 'none');
+    return settle(doc, 'none');
   }
   await db.put('cache', `${doc.id}:imgocr`, { words: r.words, w: r.w, h: r.h, text: r.text });
   await db.put('kv', `scan:${doc.id}`, 'done');
-  done(doc, 'done');
+  settle(doc, 'done');
   finish(doc);
 }
 
@@ -99,8 +164,7 @@ async function runScanDoc(doc: DocMeta) {
   if (remembered === 'skip' || remembered === 'done' || remembered === 'none' || (await db.get('cache', `${doc.id}:ocr`))) return;
   const pages = (await Promise.all((doc.scanPages ?? []).map((p) => db.get<Blob>('blobs', p)))).filter(Boolean) as Blob[];
   if (!pages.length) return;
-  jobs.set(doc.id, { id: doc.id, title: doc.name, status: 'running', progress: 0.02, done: 0, total: pages.length, startedAt: Date.now() });
-  emit();
+  start(doc.id, doc.name, 'scan', 'running', pages.length);
   const { readImage, OCR_POOL } = await import('./ocr');
   let n = 0;
   const reads = await mapLimit(pages, OCR_POOL, async (b) => {
@@ -118,36 +182,37 @@ async function runScanDoc(doc: DocMeta) {
     await patchDoc(doc.id, { size: pdf.size });
   }
   await db.put('kv', `scan:${doc.id}`, reads.some((r) => r.text.trim().length > 20) ? 'done' : 'none');
-  done(doc, 'done');
+  settle(doc, 'done');
   finish(doc);
 }
 
 async function run(doc: DocMeta) {
+  const v = verdictOf(doc.id);
   const remembered = await db.get<string>('kv', `scan:${doc.id}`);
-  const key = `${doc.id}:${LQ_VERSION}`;
-  const cached = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', key);
-  if (remembered === 'text') return;
+  const ckey = `${doc.id}:${LQ_VERSION}`;
+  const cached = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', ckey);
+  if (remembered === 'text') return v.ok('text');
   if (remembered === 'done2') {
-    jobs.set(doc.id, { id: doc.id, title: doc.name, status: 'done', progress: 1, done: 1, total: 1, startedAt: Date.now() });
-    return emit();
+    settle(doc, 'done');
+    return v.ok('done');
   }
   if (remembered === 'none') {
-    jobs.set(doc.id, { id: doc.id, title: doc.name, status: 'none', progress: 1, done: 1, total: 1, startedAt: Date.now() });
-    return emit();
+    settle(doc, 'none');
+    return v.ok('none');
   }
-  jobs.set(doc.id, { id: doc.id, title: doc.name, status: 'checking', progress: 0, done: 0, total: 0, startedAt: Date.now() });
-  emit();
+  start(doc.id, doc.name, 'scan', 'checking');
   const blob = await getFile(doc.id);
-  if (!blob) return void (jobs.delete(doc.id), emit());
+  if (!blob) return void (end(doc.id), v.ok('other'));
   const buf = await blob.arrayBuffer();
 
   // does it have a text layer? look at a handful of pages
   const pdf = await openPdf(buf.slice(0));
   let withText = 0;
   let sample = 0;
+  let numPages = 0;
   try {
-    const n = pdf.numPages;
-    const pick = [1, 2, 3, Math.ceil(n / 2), n].filter((v, i, a) => v >= 1 && v <= n && a.indexOf(v) === i);
+    const n = (numPages = pdf.numPages);
+    const pick = [1, 2, 3, Math.ceil(n / 2), n].filter((x, i, a) => x >= 1 && x <= n && a.indexOf(x) === i);
     sample = pick.length;
     for (const pn of pick) {
       const tc = await (await pdf.getPage(pn)).getTextContent();
@@ -158,32 +223,61 @@ async function run(doc: DocMeta) {
   }
   if (withText / Math.max(1, sample) > 0.4) {
     await db.put('kv', `scan:${doc.id}`, 'text');
-    jobs.delete(doc.id);
-    return emit();
+    end(doc.id);
+    return v.ok('text');
   }
 
   if (cached && cached.scanned.length === 0 && !cached.blocks.some((b) => b.t === 'img' && b.kind === 'scan')) {
     // recognised before this version existed
-    await db.put('kv', `scan:${doc.id}`, cached.blocks.some((b) => b.t === 'p') ? 'done2' : 'none');
-    return set(doc.id, { status: cached.blocks.some((b) => b.t === 'p') ? 'done' : 'none', progress: 1 });
+    const has = cached.blocks.some((b) => b.t === 'p');
+    await db.put('kv', `scan:${doc.id}`, has ? 'done2' : 'none');
+    set(doc.id, { status: has ? 'done' : 'none', progress: 1 });
+    return v.ok(has ? 'done' : 'none');
   }
-  set(doc.id, { status: 'running', progress: 0.02 });
-  let blocks = cached?.blocks;
-  if (!blocks) {
-    // phase 1 (30%): turn every page into a picture block
-    blocks = (await pdfToLiquid(buf, (_b, p) => set(doc.id, { progress: 0.02 + 0.28 * (p.page / p.pages), done: 0, total: p.pages }))).blocks;
-  }
-  // phase 2 (70%): find the columns and pictures on each page, read the text blocks, keep diagrams as pictures
-  const { ocrBlocks } = await import('./ocrpage');
-  const res = await ocrBlocks(buf, blocks, (d, total) => set(doc.id, { done: d, total, progress: 0.3 + 0.7 * (d / Math.max(1, total)) }));
-  const out = res.blocks;
-  const chars = res.chars;
-  if (chars < 60) {
+  // a picture-only document: from here on Liquid mode waits for this reading instead of doing the same work again
+  set(doc.id, { status: 'running', progress: 0.02, total: numPages });
+  v.ok('scanning');
+  window.dispatchEvent(new CustomEvent('frogity:started', { detail: { title: doc.name, pages: numPages } }));
+  const { ocrBlocks, ocrPages } = await import('./ocrpage');
+  const progress = (d: number, total: number) => set(doc.id, { done: d, total, progress: 0.02 + 0.98 * (d / Math.max(1, total)) });
+  // if Liquid mode already made the page pictures, read those places; otherwise go straight to the pages
+  const res = cached?.blocks ? await ocrBlocks(buf, cached.blocks, progress) : await ocrPages(buf, progress);
+  if (res.chars < 60) {
     await db.put('kv', `scan:${doc.id}`, 'none');
     return set(doc.id, { status: 'none', progress: 1 });
   }
-  await db.put('cache', key, { blocks: out, scanned: [] });
+  await db.put('cache', ckey, { blocks: res.blocks, scanned: [] });
   await db.put('kv', `scan:${doc.id}`, 'done2');
   set(doc.id, { status: 'done', progress: 1 });
-  window.dispatchEvent(new CustomEvent('frogity:scan', { detail: { id: doc.id, title: doc.name } }));
+  finish(doc);
+}
+
+/**
+ * Pictures inside an ordinary document: after Liquid mode has been made, look at each one; writing that sits in a
+ * picture becomes text and diagrams stay as they are. Runs once per document and version.
+ */
+export function queueFigures(doc: DocMeta) {
+  const k = `figs:${doc.id}`;
+  if (queued.has(k)) return;
+  queued.add(k);
+  void enqueue(async () => {
+    if ((await db.get<string>('kv', k)) === LQ_VERSION) return;
+    const ckey = `${doc.id}:${LQ_VERSION}`;
+    const cached = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', ckey);
+    if (!cached) return;
+    const cands = cached.blocks.filter((b) => b.t === 'img' && b.kind === 'figure' && !b.mask).length;
+    if (!cands) return void (await db.put('kv', k, LQ_VERSION));
+    start(doc.id, doc.name, 'images', 'running', cands);
+    try {
+      const { triageFigures } = await import('./ocrpage');
+      const r = await triageFigures(cached.blocks, (d, total) => set(doc.id, { done: d, total, progress: d / Math.max(1, total) }, 'images'));
+      if (r.changed) {
+        await db.put('cache', ckey, { blocks: r.blocks, scanned: cached.scanned });
+        window.dispatchEvent(new CustomEvent('frogity:figures', { detail: { id: doc.id, changed: r.changed } }));
+      }
+      await db.put('kv', k, LQ_VERSION);
+    } finally {
+      end(doc.id, 'images');
+    }
+  }).catch((e) => console.warn('pictures not looked at', e));
 }

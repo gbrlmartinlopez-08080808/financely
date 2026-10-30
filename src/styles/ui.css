@@ -2225,3 +2225,26 @@
     animation: none;
   }
 }
+
+/* background work list */
+.job-row {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 6px;
+}
+.job-row:last-of-type {
+  border-bottom: 0;
+}
+.job-kind {
+  font-size: 11px;
+  color: var(--muted);
+}
+.job-name {
+  font-weight: 650;
+  font-size: 15px;
+}
+.job-sub {
+  font-size: 11.5px;
+  color: var(--muted);
+}

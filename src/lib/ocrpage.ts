@@ -235,8 +235,66 @@ export async function mapLimit<T, R>(items: T[], limit: number, fn: (x: T, i: nu
   return out;
 }
 
+/** Renders one PDF page for reading and runs the page reader on it. A page with nothing readable comes back as its picture. */
+async function readPdfPage(pdf: import('./formats/pdf').PDFDocumentProxy, pageNo: number, renderPage: typeof import('./formats/pdf').renderPage): Promise<LBlock[]> {
+  const page = await pdf.getPage(pageNo);
+  const vp = page.getViewport({ scale: 1 });
+  const S = Math.max(1.2, Math.min(4, 2400 / vp.width));
+  const { canvas } = await renderPage(page, S);
+  page.cleanup();
+  let out: PageOut = { blocks: [], readable: 0 };
+  try {
+    out = await ocrPage(canvas, pageNo);
+  } catch (e) {
+    console.warn('page not read', pageNo, e);
+  }
+  if (out.blocks.length) {
+    canvas.width = canvas.height = 0;
+    return out.blocks;
+  }
+  // nothing readable (a blank sheet, a photo page): keep the page as a picture
+  const k = Math.min(1, 1400 / canvas.width);
+  const c = document.createElement('canvas');
+  c.width = Math.round(canvas.width * k);
+  c.height = Math.round(canvas.height * k);
+  c.getContext('2d')!.drawImage(canvas, 0, 0, c.width, c.height);
+  canvas.width = canvas.height = 0;
+  const blob = await new Promise<Blob>((res) => c.toBlob((b) => res(b!), 'image/jpeg', 0.82));
+  return [{ t: 'img', blob, w: c.width, h: c.height, em: 0, mask: false, kind: 'scan', page: pageNo, alt: `Scanned page ${pageNo}` }];
+}
+
 /**
- * Reads every scanned page of a PDF (the picture-only pages found by Liquid mode) and puts the result in their
+ * Reads a whole picture-only PDF page by page, without first building the Liquid view of it (that was slow for big
+ * books and did the same work twice). Returns the document's blocks, page markers included.
+ */
+export async function ocrPages(data: ArrayBuffer, onProgress?: (done: number, total: number) => void): Promise<{ blocks: LBlock[]; chars: number }> {
+  const { openPdf, renderPage } = await import('./formats/pdf');
+  const { OCR_POOL } = await import('./ocr');
+  const pdf = await openPdf(data.slice(0));
+  const total = pdf.numPages;
+  let n = 0;
+  let per: LBlock[][] = [];
+  try {
+    per = await mapLimit(Array.from({ length: total }, (_, i) => i + 1), OCR_POOL, async (pn) => {
+      const r = await readPdfPage(pdf, pn, renderPage);
+      onProgress?.(++n, total);
+      await new Promise((res) => setTimeout(res, 0));
+      return r;
+    });
+  } finally {
+    pdf.loadingTask.destroy();
+  }
+  const blocks: LBlock[] = [];
+  let chars = 0;
+  per.forEach((bs, i) => {
+    blocks.push({ t: 'page', page: i + 1 }, ...bs);
+    for (const x of bs) if (x.t === 'p' || x.t === 'h') chars += x.html.length;
+  });
+  return { blocks, chars };
+}
+
+/**
+ * Reads the scanned pages of a mixed PDF (the picture-only pages found by Liquid mode) and puts the result in their
  * place: text and headings where there is writing, pictures where there are diagrams. A page that has nothing
  * readable keeps its picture. Pages are drawn again from the PDF at a size made for reading, not the preview size.
  */
@@ -246,23 +304,12 @@ export async function ocrBlocks(data: ArrayBuffer, blocks: LBlock[], onProgress?
   const pics = blocks.filter((b): b is Extract<LBlock, { t: 'img' }> => b.t === 'img' && b.kind === 'scan');
   const pdf = await openPdf(data.slice(0));
   let n = 0;
-  let results: PageOut[] = [];
+  let results: LBlock[][] = [];
   try {
     results = await mapLimit(pics, OCR_POOL, async (b) => {
-      let out: PageOut = { blocks: [], readable: 0 };
-      try {
-        const page = await pdf.getPage(b.page);
-        const vp = page.getViewport({ scale: 1 });
-        const S = Math.max(1.2, Math.min(4, 2400 / vp.width));
-        const { canvas } = await renderPage(page, S);
-        page.cleanup();
-        out = await ocrPage(canvas, b.page);
-        canvas.width = canvas.height = 0;
-      } catch (e) {
-        console.warn('page not read', b.page, e);
-      }
+      const r = await readPdfPage(pdf, b.page, renderPage);
       onProgress?.(++n, pics.length);
-      return out;
+      return r;
     });
   } finally {
     pdf.loadingTask.destroy();
@@ -273,11 +320,71 @@ export async function ocrBlocks(data: ArrayBuffer, blocks: LBlock[], onProgress?
   for (const b of blocks) {
     if (b.t === 'img' && b.kind === 'scan') {
       const r = results[k++];
-      if (r.blocks.length) {
-        out.push(...r.blocks);
-        for (const x of r.blocks) if (x.t === 'p' || x.t === 'h') chars += x.html.length;
-      } else out.push(b);
+      out.push(...r);
+      for (const x of r) if (x.t === 'p' || x.t === 'h') chars += x.html.length;
     } else out.push(b);
   }
   return { blocks: out, chars };
+}
+
+/**
+ * Pictures inside an ordinary document: some are really pages of writing (a screenshot, a pasted scan), others are
+ * diagrams or photos. Look at each one with the same layout step; writing becomes text, anything else stays a picture.
+ */
+export async function triageFigures(blocks: LBlock[], onProgress?: (done: number, total: number) => void): Promise<{ blocks: LBlock[]; changed: number }> {
+  type Img = Extract<LBlock, { t: 'img' }>;
+  const isPic = (b: LBlock): b is Img => b.t === 'img' && b.kind === 'figure' && !b.mask;
+  // a picture of writing is often cut into several strips when the page is made reflowable: look at neighbours together
+  const groups: Img[][] = [];
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
+    if (!isPic(b)) continue;
+    const g = [b];
+    while (i + 1 < blocks.length && isPic(blocks[i + 1]) && (blocks[i + 1] as Img).page === b.page) g.push(blocks[++i] as Img);
+    if (g.reduce((a, x) => a + x.h, 0) >= 60 && Math.max(...g.map((x) => x.w)) >= 300) groups.push(g);
+  }
+  let n = 0;
+  let changed = 0;
+  const replace = new Map<Img, LBlock[] | null>(); // first picture of a group → what replaces the group
+  const drop = new Set<Img>();
+  for (const g of groups) {
+    onProgress?.(++n, groups.length);
+    try {
+      const W = Math.max(...g.map((x) => x.w));
+      const bmps = await Promise.all(g.map((x) => createImageBitmap(x.blob)));
+      const gap = 14;
+      const c = document.createElement('canvas');
+      c.width = W;
+      c.height = bmps.reduce((a, m) => a + m.height + gap, 0);
+      const cx = c.getContext('2d')!;
+      cx.fillStyle = '#fff';
+      cx.fillRect(0, 0, c.width, c.height);
+      let y = 0;
+      for (const m of bmps) {
+        cx.drawImage(m, 0, y);
+        y += m.height + gap;
+        m.close();
+      }
+      const flat = flattenSource(c, 2000);
+      const leaves = segmentPage(flat);
+      const area = (l: Leaf) => (l.x1 - l.x0) * (l.y1 - l.y0);
+      const total = leaves.reduce((a, l) => a + area(l), 0) || 1;
+      const textArea = leaves.filter((l) => l.kind === 'text').reduce((a, l) => a + area(l), 0);
+      const pics = leaves.filter((l) => l.kind !== 'text').reduce((a, l) => a + area(l), 0);
+      // mostly lines of writing and hardly any drawing: worth reading
+      if (textArea / total < 0.6 || pics / total > 0.3) continue;
+      const out = await ocrPage(c, g[0].page);
+      const chars = out.blocks.reduce((a, x) => a + (x.t === 'p' || x.t === 'h' ? x.html.length : 0), 0);
+      if (chars >= 60 && out.blocks.some((x) => x.t === 'p')) {
+        replace.set(g[0], out.blocks);
+        g.slice(1).forEach((x) => drop.add(x));
+        changed++;
+      }
+    } catch (e) {
+      console.warn('picture not read', e);
+    }
+    await new Promise((r) => setTimeout(r, 0));
+  }
+  if (!changed) return { blocks, changed: 0 };
+  return { blocks: blocks.flatMap((b) => (b.t === 'img' && drop.has(b) ? [] : b.t === 'img' && replace.get(b) ? replace.get(b)! : [b])), changed };
 }

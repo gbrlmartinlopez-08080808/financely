@@ -18,7 +18,7 @@ import { anchorFromSelection, applyHighlights, clearMarks, findAll, wordAt, wrap
 import { AskSheet } from './Ask';
 import { FormSheet } from './FormSheet';
 import { detectForm, type FormModel } from '../lib/forms';
-import { LQ_VERSION, queueScan, reportScan, useScan } from '../lib/scan';
+import { LQ_VERSION, enqueue, queueFigures, queueScan, reportLiquid, reportScan, scanVerdict, useScan } from '../lib/scan';
 import { KIND_LABEL } from '../lib/formats/detect';
 import { fontById } from '../lib/fonts';
 
@@ -141,10 +141,22 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
         root.innerHTML = blocksToHtml(cached.blocks, urls.current);
         setScanned(cached.scanned);
         afterLiquid(root);
+        queueFigures(doc);
+        return;
+      }
+      // a picture-only document is being read page by page: wait for that instead of doing the same work again
+      if ((await scanVerdict(doc)) === 'scanning') return;
+      if (!alive) return;
+      const again = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', key);
+      if (again) {
+        root.innerHTML = blocksToHtml(again.blocks, urls.current);
+        setScanned(again.scanned);
+        afterLiquid(root);
         return;
       }
       const all: LBlock[] = [];
       setLiquifying({ page: 0, pages: doc.pages ?? 0 });
+      reportLiquid(id, doc.name, 0, doc.pages ?? 0);
       try {
         const res = await pdfToLiquid(
           content.data,
@@ -153,6 +165,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
             all.push(...blocks);
             root.insertAdjacentHTML('beforeend', blocksToHtml(blocks, urls.current));
             setLiquifying({ page: p.page, pages: p.pages });
+            reportLiquid(id, doc.name, p.page, p.pages);
             if (p.page === Math.max(1, page)) restoreLiquidPage(root);
           },
           ac.signal,
@@ -161,13 +174,15 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
         setScanned(res.scannedPages);
         await db.put('cache', key, { blocks: res.blocks, scanned: res.scannedPages });
         afterLiquid(root);
-        if (res.scannedPages.length) setTimeout(() => runOcr(true), 600);
+        if (res.scannedPages.length) setTimeout(() => void enqueue(() => runOcr(true)), 600);
+        else queueFigures(doc);
       } catch (e) {
         if ((e as Error).name !== 'AbortError') {
           console.error(e);
           toast('Liquid mode had trouble with this file');
         }
       } finally {
+        reportLiquid(id, doc.name, 1, 1, true);
         if (alive) setLiquifying(null);
       }
     })();
@@ -176,6 +191,24 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
       ac.abort();
     };
   }, [content, liquid]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // pictures that turned out to be writing were turned into text in the background: show the better version (not mid-listen)
+  useEffect(() => {
+    const on = async (e: Event) => {
+      if ((e as CustomEvent<{ id: string }>).detail.id !== id || !liquid || listen) return;
+      const root = flowRef.current;
+      const cached = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', `${id}:${LQ_VERSION}`);
+      if (!root || !cached) return;
+      const top = scroller?.scrollTop ?? 0;
+      root.innerHTML = blocksToHtml(cached.blocks, urls.current);
+      delete root.dataset.wrapped;
+      afterLiquid(root);
+      if (scroller) scroller.scrollTop = top;
+      toast('Pictures with writing were turned into text');
+    };
+    window.addEventListener('frogity:figures', on);
+    return () => window.removeEventListener('frogity:figures', on);
+  }, [id, liquid, listen, scroller]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // does this PDF look like a form? If so, offer to fill it in
   useEffect(() => {
@@ -799,7 +832,10 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     } catch (e) {
       if (!silent) setOcrText({ text: `OCR failed: ${(e as Error).message}`, busy: false, p: 1 });
     } finally {
-      if (silent) reportScan(id, doc.name, 1, 1, true);
+      if (silent) {
+        reportScan(id, doc.name, 1, 1, true);
+        queueFigures(doc);
+      }
     }
   };
 
@@ -934,13 +970,6 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
         )}
       </div>
 
-      {liquifying && (
-        <div className="liquify" role="status">
-          <PixelLoader size={4} gap={2} />
-          liquifying {liquifying.page}/{liquifying.pages || '…'}
-          <PixelBar value={liquifying.pages ? liquifying.page / liquifying.pages : 0} cells={10} />
-        </div>
-      )}
 
       {find !== null ? (
         <div className="findbar">
@@ -1011,13 +1040,28 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
             Fill it in
           </button>
           <button
-            className="pill sm round ghost"
-            aria-label="Not now"
+            className="pill sm round ghost offer-x"
+            aria-label="Not now (this also closes by itself)"
             onClick={() => {
               setOfferGone(true);
               db.put('kv', `formoffer:${id}`, true);
             }}
           >
+            {/* the ring runs down while the offer waits; it closes by itself when the ring is empty */}
+            <svg className="offer-ring" viewBox="0 0 40 40" aria-hidden>
+              <circle className="track" cx="20" cy="20" r="18" />
+              <circle
+                className="run"
+                cx="20"
+                cy="20"
+                r="18"
+                pathLength={100}
+                onAnimationEnd={() => {
+                  setOfferGone(true);
+                  db.put('kv', `formoffer:${id}`, true);
+                }}
+              />
+            </svg>
             <Icon name="close" size={16} />
           </button>
         </div>

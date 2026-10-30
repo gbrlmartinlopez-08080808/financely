@@ -20,6 +20,7 @@ import { Settings } from './screens/Settings';
 import { RateSheet } from './screens/RateSheet';
 import { addSamples } from './lib/samples';
 import { Tour } from './screens/Tour';
+import { initWorkNotice } from './lib/workNotice';
 import { Onboarding, type Finish } from './screens/Onboarding';
 import { ConvertSheet } from './screens/Convert';
 import { ScanSheet } from './screens/Scan';
@@ -65,6 +66,7 @@ export default function App() {
 
   useEffect(() => {
     init();
+    initWorkNotice();
     initBackButton();
     manageSelectionMenu();
   }, []);
