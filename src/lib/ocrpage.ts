@@ -2,12 +2,12 @@
 // recogniser likes best, rebuild paragraphs and headings from where the lines sit, and keep every picture (diagram,
 // photo, table) as a picture instead of letting the OCR scribble over it.
 import type { LBlock } from './formats/liquidPdf';
-import { flattenSource, recognize, type OcrLine } from './ocr';
+import { breathe, flattenSource, recognize, slice, type OcrLine } from './ocr';
 import { estimateSkew, rotateCanvas, segmentPage, type Leaf } from './layout';
 import { escapeHtml } from './sanitize';
 
 /** Height (px) the recogniser sees for one line of ink: big enough to be exact, small enough to be quick. */
-const TARGET_LINE = 30;
+const TARGET_LINE = 27;
 
 const median = (a: number[]) => {
   if (!a.length) return 0;
@@ -90,18 +90,22 @@ export interface PageOut {
  * order: headings, paragraphs and pictures. If nothing on it reads as text, `blocks` is empty and the caller keeps the page.
  */
 export async function ocrPage(page: HTMLCanvasElement, pageNo: number): Promise<PageOut> {
-  const tick = () => new Promise((r) => setTimeout(r, 0)); // let the screen breathe between the heavy steps
-  let flat = flattenSource(page, 2600);
+  const t0 = performance.now();
+  const tick = () => slice(0); // let the screen breathe between the heavy steps
+  let flat = await flattenSource(page, 2400);
   await tick();
   // a crooked scan or photo: straighten it first (lines of text must run level for everything that follows)
-  const tilt = estimateSkew(flat);
+  const t1 = performance.now();
+  const tilt = await estimateSkew(flat);
+  const t2 = performance.now();
   let color = page; // pictures are cut from the original, in colour
   if (Math.abs(tilt) >= 0.3) {
     flat = rotateCanvas(flat, tilt);
     color = rotateCanvas(page, tilt);
   }
   await tick();
-  const leaves = segmentPage(flat);
+  const leaves = await segmentPage(flat);
+  const t3 = performance.now();
   await tick();
   const soften = leaves.noise > 0.45 ? 1.1 : leaves.noise > 0.25 ? 0.7 : 0;
   console.debug(`[ocr] page ${pageNo}: ${page.width}×${page.height}, tilt ${tilt.toFixed(1)}°, noise ${leaves.noise.toFixed(2)}, blocks: ${leaves.map((l) => `${l.kind[0]}${l.lines}`).join(' ')}`);
@@ -123,6 +127,8 @@ export async function ocrPage(page: HTMLCanvasElement, pageNo: number): Promise<
     }),
   );
 
+  const t4 = performance.now();
+  console.debug(`[ocr] timing page ${pageNo}: flatten ${(t1 - t0).toFixed(0)} skew ${(t2 - t1).toFixed(0)} layout ${(t3 - t2).toFixed(0)} read ${(t4 - t3).toFixed(0)} ms`);
   // line height of the body text on this page → what counts as a heading
   const allH: number[] = [];
   reads.forEach((r) => r && r.conf >= 55 && r.lines.forEach((ln) => allH.push(ln.h)));
@@ -235,62 +241,105 @@ export async function mapLimit<T, R>(items: T[], limit: number, fn: (x: T, i: nu
   return out;
 }
 
+/** What a page read came to. `failed` means something went wrong (a crashed worker, an out-of-memory render): try again later. */
+interface PageRead {
+  blocks: LBlock[];
+  failed: boolean;
+}
+
 /** Renders one PDF page for reading and runs the page reader on it. A page with nothing readable comes back as its picture. */
-async function readPdfPage(pdf: import('./formats/pdf').PDFDocumentProxy, pageNo: number, renderPage: typeof import('./formats/pdf').renderPage): Promise<LBlock[]> {
-  const page = await pdf.getPage(pageNo);
-  const vp = page.getViewport({ scale: 1 });
-  const S = Math.max(1.2, Math.min(4, 2400 / vp.width));
-  const { canvas } = await renderPage(page, S);
-  page.cleanup();
-  let out: PageOut = { blocks: [], readable: 0 };
+async function readPdfPage(pdf: import('./formats/pdf').PDFDocumentProxy, pageNo: number, renderPage: typeof import('./formats/pdf').renderPage): Promise<PageRead> {
+  let canvas: HTMLCanvasElement | null = null;
   try {
-    out = await ocrPage(canvas, pageNo);
+    const page = await pdf.getPage(pageNo);
+    const vp = page.getViewport({ scale: 1 });
+    // about 220 dpi on a normal page: plenty to read, and half the pixels of the bigger render this used to make
+    const S = Math.max(1.2, Math.min(3.2, 1800 / vp.width));
+    ({ canvas } = await renderPage(page, S));
+    page.cleanup();
+    const out = await ocrPage(canvas, pageNo);
+    if (out.blocks.length) return { blocks: out.blocks, failed: false };
+    // nothing readable (a blank sheet, a photo page): keep the page as a picture
+    const k = Math.min(1, 1400 / canvas.width);
+    const c = document.createElement('canvas');
+    c.width = Math.round(canvas.width * k);
+    c.height = Math.round(canvas.height * k);
+    c.getContext('2d')!.drawImage(canvas, 0, 0, c.width, c.height);
+    const blob = await new Promise<Blob>((res) => c.toBlob((b) => res(b!), 'image/jpeg', 0.82));
+    return { blocks: [{ t: 'img', blob, w: c.width, h: c.height, em: 0, mask: false, kind: 'scan', page: pageNo, alt: `Scanned page ${pageNo}` }], failed: false };
   } catch (e) {
     console.warn('page not read', pageNo, e);
+    return { blocks: [], failed: true };
+  } finally {
+    if (canvas) canvas.width = canvas.height = 0;
   }
-  if (out.blocks.length) {
-    canvas.width = canvas.height = 0;
-    return out.blocks;
-  }
-  // nothing readable (a blank sheet, a photo page): keep the page as a picture
-  const k = Math.min(1, 1400 / canvas.width);
-  const c = document.createElement('canvas');
-  c.width = Math.round(canvas.width * k);
-  c.height = Math.round(canvas.height * k);
-  c.getContext('2d')!.drawImage(canvas, 0, 0, c.width, c.height);
-  canvas.width = canvas.height = 0;
-  const blob = await new Promise<Blob>((res) => c.toBlob((b) => res(b!), 'image/jpeg', 0.82));
-  return [{ t: 'img', blob, w: c.width, h: c.height, em: 0, mask: false, kind: 'scan', page: pageNo, alt: `Scanned page ${pageNo}` }];
+}
+
+/** Where finished pages are kept as they are read, so that nothing is lost when the app is closed or the phone locks. */
+export interface PageStore {
+  load(page: number): Promise<LBlock[] | undefined>;
+  save(page: number, blocks: LBlock[]): Promise<void>;
 }
 
 /**
- * Reads a whole picture-only PDF page by page, without first building the Liquid view of it (that was slow for big
- * books and did the same work twice). Returns the document's blocks, page markers included.
+ * Reads a whole picture-only PDF page by page, without first building the Liquid view of it. Every finished page is
+ * saved straight away, so a restart carries on from where it stopped. A page that fails is tried again before it is
+ * given up on. Returns the document's blocks, page markers included.
  */
-export async function ocrPages(data: ArrayBuffer, onProgress?: (done: number, total: number) => void): Promise<{ blocks: LBlock[]; chars: number }> {
-  const { openPdf, renderPage } = await import('./formats/pdf');
+export async function ocrPages(
+  data: ArrayBuffer | Blob,
+  onProgress?: (done: number, total: number) => void,
+  store?: PageStore,
+): Promise<{ blocks: LBlock[]; chars: number; failedPages: number[] }> {
+  const { openPdf, openPdfBlob, renderPage } = await import('./formats/pdf');
   const { OCR_POOL } = await import('./ocr');
-  const pdf = await openPdf(data.slice(0));
+  const pdf = data instanceof Blob ? await openPdfBlob(data) : await openPdf(data);
   const total = pdf.numPages;
+  const per: LBlock[][] = new Array(total);
+  const failed: number[] = [];
   let n = 0;
-  let per: LBlock[][] = [];
   try {
-    per = await mapLimit(Array.from({ length: total }, (_, i) => i + 1), OCR_POOL, async (pn) => {
-      const r = await readPdfPage(pdf, pn, renderPage);
-      onProgress?.(++n, total);
-      await new Promise((res) => setTimeout(res, 0));
-      return r;
-    });
+    const todo: number[] = [];
+    for (let pn = 1; pn <= total; pn++) {
+      const have = await store?.load(pn);
+      if (have) {
+        per[pn - 1] = have;
+        n++;
+      } else todo.push(pn);
+    }
+    onProgress?.(n, total);
+    const pass = async (pages: number[], isRetry: boolean) => {
+      await mapLimit(pages, OCR_POOL, async (pn) => {
+        const r = await readPdfPage(pdf, pn, renderPage);
+        if (r.failed) {
+          if (!isRetry) failed.push(pn);
+          else per[pn - 1] = []; // gave up: the page stays empty and is reported
+          return;
+        }
+        per[pn - 1] = r.blocks;
+        await store?.save(pn, r.blocks);
+        onProgress?.(++n, total);
+        await breathe(40); // a breath, so the rest of the app stays quick
+      });
+    };
+    await pass(todo, false);
+    if (failed.length) {
+      const again = failed.splice(0);
+      await pass(again, true);
+    }
   } finally {
     pdf.loadingTask.destroy();
   }
   const blocks: LBlock[] = [];
+  const lost: number[] = [];
   let chars = 0;
-  per.forEach((bs, i) => {
+  for (let i = 0; i < total; i++) {
+    const bs = per[i] ?? [];
+    if (!bs.length) lost.push(i + 1);
     blocks.push({ t: 'page', page: i + 1 }, ...bs);
     for (const x of bs) if (x.t === 'p' || x.t === 'h') chars += x.html.length;
-  });
-  return { blocks, chars };
+  }
+  return { blocks, chars, failedPages: lost };
 }
 
 /**
@@ -309,7 +358,7 @@ export async function ocrBlocks(data: ArrayBuffer, blocks: LBlock[], onProgress?
     results = await mapLimit(pics, OCR_POOL, async (b) => {
       const r = await readPdfPage(pdf, b.page, renderPage);
       onProgress?.(++n, pics.length);
-      return r;
+      return r.failed ? [b] : r.blocks; // a page that could not be read keeps its picture
     });
   } finally {
     pdf.loadingTask.destroy();
@@ -365,8 +414,8 @@ export async function triageFigures(blocks: LBlock[], onProgress?: (done: number
         y += m.height + gap;
         m.close();
       }
-      const flat = flattenSource(c, 2000);
-      const leaves = segmentPage(flat);
+      const flat = await flattenSource(c, 2000);
+      const leaves = await segmentPage(flat);
       const area = (l: Leaf) => (l.x1 - l.x0) * (l.y1 - l.y0);
       const total = leaves.reduce((a, l) => a + area(l), 0) || 1;
       const textArea = leaves.filter((l) => l.kind === 'text').reduce((a, l) => a + area(l), 0);
@@ -383,7 +432,7 @@ export async function triageFigures(blocks: LBlock[], onProgress?: (done: number
     } catch (e) {
       console.warn('picture not read', e);
     }
-    await new Promise((r) => setTimeout(r, 0));
+    await slice(0);
   }
   if (!changed) return { blocks, changed: 0 };
   return { blocks: blocks.flatMap((b) => (b.t === 'img' && drop.has(b) ? [] : b.t === 'img' && replace.get(b) ? replace.get(b)! : [b])), changed };

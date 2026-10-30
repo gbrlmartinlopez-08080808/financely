@@ -4,6 +4,7 @@ import { coverUrl, coverInfo, ago, formatSize, getFile, refreshCover } from '../
 import { KIND_LABEL } from '../lib/formats/detect';
 import type { DocMeta } from '../lib/types';
 import { ConfirmSheet, Tick } from '../ui/Confirm';
+import { JobMark } from './ScanBadge';
 import { Icon } from '../ui/Icon';
 import { Pixel, Screws, Sheet, toast } from '../ui/kit';
 import { ASCII } from '../lib/ascii';
@@ -54,6 +55,7 @@ function Pocket({ doc, near, onClick, onMenu }: { doc: DocMeta; near: boolean; o
       data-near={near ? '1' : undefined}
     >
       <div className="cover">{info && <img src={info.url} alt="" draggable={false} style={{ objectFit: Math.abs(info.ar - ar) < 0.02 ? 'cover' : 'contain' }} />}</div>
+      <JobMark id={doc.id} className="on-pocket" />
       <div className="pocket">
         <Screws />
         {doc.progress > 0.005 && (
@@ -454,6 +456,7 @@ function ShelfRow({ doc, onOpen, onMenu, picked }: { doc: DocMeta; onOpen: () =>
       <Cover doc={doc} className="thumb" />
       <div className="info">
         <div className="name">{doc.name}</div>
+        <JobMark id={doc.id} className="on-row" />
         <div className="sub">
           {KIND_LABEL[doc.kind]}
           {doc.finished ? ' · finished' : doc.progress > 0.01 ? ` · ${Math.round(doc.progress * 100)}%` : ''} · {ago(doc.openedAt)}

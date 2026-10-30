@@ -7,6 +7,7 @@ import { openPdf, pdfOutline, type PDFDocumentProxy } from '../lib/formats/pdf';
 import { blocksToHtml, pdfToLiquid, type LBlock } from '../lib/formats/liquidPdf';
 import { onBack, setStatusBar, shareFile, shareText, tap } from '../lib/native';
 import { ConfirmSheet } from '../ui/Confirm';
+import { ScanBadge } from '../screens/ScanBadge';
 import { Icon, TypeGlyph } from '../ui/Icon';
 import { PixelBar, PixelLoader, Segmented, Sheet, toast } from '../ui/kit';
 import { PdfView, type PdfViewHandle } from './PdfView';
@@ -214,7 +215,10 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   useEffect(() => {
     if (!pdf) return;
     let alive = true;
+    // not while the page is still drawing or while the phone is busy: wait for a quiet moment, and never block reading
     const t = setTimeout(async () => {
+      await new Promise<void>((r) => ((window as unknown as { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => void }).requestIdleCallback ? (window as unknown as { requestIdleCallback: (f: () => void, o: { timeout: number }) => void }).requestIdleCallback(() => r(), { timeout: 4000 }) : setTimeout(r, 300)));
+      if (!alive) return;
       const m = await detectForm(pdf);
       if (!alive || !m) return;
       setForm(m);
@@ -970,6 +974,8 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
         )}
       </div>
 
+
+      <ScanBadge docId={id} />
 
       {find !== null ? (
         <div className="findbar">

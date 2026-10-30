@@ -43,7 +43,11 @@
   --r-page-bg: #d9d7d0;
 }
 .reader[data-dark='1'] .pdf-page canvas {
-  filter: invert(0.88) hue-rotate(180deg) contrast(0.95);
+  filter: invert(0.9) hue-rotate(180deg) contrast(1.05);
+}
+.reader[data-dark='1'] .lq-scan img {
+  /* a whole scanned page shown as a picture: turn the white paper dark like the other pages, keep the ink readable */
+  filter: invert(0.9) hue-rotate(180deg) contrast(0.95);
 }
 .reader[data-dark='1'] .lq-figure img,
 .reader[data-dark='1'] .flow img {
@@ -998,12 +1002,20 @@
   gap: 10px;
   padding: 10px 10px 10px 16px;
   border-radius: 20px;
-  color: var(--r-ink, var(--ink));
-  background: color-mix(in srgb, var(--surface) 64%, transparent);
-  -webkit-backdrop-filter: blur(20px) saturate(1.5);
-  backdrop-filter: blur(20px) saturate(1.5);
-  box-shadow: inset 0 0 0 1px var(--glass-edge), 0 10px 30px rgba(0, 0, 0, 0.18);
+  /* always the app's solid "inverse" capsule, whatever the page colour or reader theme is behind it */
+  color: var(--pill-ink);
+  background: var(--pill);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
   animation: rise 0.4s var(--spring);
+}
+.form-offer .pill.sm:not(.ghost) {
+  background: var(--pill-ink);
+  color: var(--pill);
+}
+.form-offer .pill.ghost {
+  background: color-mix(in srgb, var(--pill-ink) 14%, transparent);
+  color: var(--pill-ink);
+  box-shadow: none;
 }
 .form-offer .t {
   flex: 1;
@@ -1017,7 +1029,7 @@
 .form-offer small {
   font-family: var(--mono);
   font-size: 10.5px;
-  color: var(--muted);
+  color: color-mix(in srgb, var(--pill-ink) 68%, transparent);
 }
 
 /* the form offer closes by itself: a ring around the cross runs down */
@@ -1042,10 +1054,10 @@
   stroke-width: 2.5;
 }
 .offer-ring .track {
-  stroke: color-mix(in srgb, var(--r-ink, var(--ink)) 14%, transparent);
+  stroke: color-mix(in srgb, var(--pill-ink) 22%, transparent);
 }
 .offer-ring .run {
-  stroke: var(--r-ink, var(--ink));
+  stroke: var(--pill-ink);
   stroke-linecap: round;
   stroke-dasharray: 100;
   stroke-dashoffset: 0;

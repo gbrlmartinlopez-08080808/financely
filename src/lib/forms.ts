@@ -88,7 +88,7 @@ function nearbyLabel(items: TItem[], r: [number, number, number, number]): strin
 async function acroFields(pdf: PDFDocumentProxy): Promise<FormField[]> {
   const out: FormField[] = [];
   const radios = new Map<string, FormField>();
-  const n = Math.min(pdf.numPages, 60);
+  const n = Math.min(pdf.numPages, 24);
   for (let p = 1; p <= n; p++) {
     const page = await pdf.getPage(p);
     const anns = (await page.getAnnotations()) as {
@@ -154,8 +154,8 @@ async function flatFields(pdf: PDFDocumentProxy): Promise<{ fields: FormField[];
     // group the words into lines
     const lines: TItem[][] = [];
     for (const it of [...items].sort((a, b) => b.y - a.y || a.x - b.x)) {
-      const ln = lines.find((l) => Math.abs(l[0].y - it.y) < 3);
-      if (ln) ln.push(it);
+      const ln = lines[lines.length - 1]; // sorted top to bottom, so a line is always the last one started
+      if (ln && Math.abs(ln[0].y - it.y) < 3) ln.push(it);
       else lines.push([it]);
     }
     lines.forEach((ln) => ln.sort((a, b) => a.x - b.x));
@@ -213,18 +213,35 @@ const order = (f: FormField[]) => [...f].sort((a, b) => a.page - b.page || (Math
 /** Does this PDF look like a form? If so, its fields in reading order. */
 export async function detectForm(pdf: PDFDocumentProxy): Promise<FormModel | null> {
   try {
-    const acro = await acroFields(pdf);
-    if (acro.length) {
-      // a printed "Signature: ____" line next to real fields still deserves a signature box
-      if (!acro.some((f) => f.kind === 'sign')) {
-        const { fields } = await flatFields(pdf);
-        const extra = fields.filter((f) => f.kind === 'sign').slice(0, 2);
-        if (extra.length) return { kind: 'acro', fields: order([...acro, ...extra]) };
-      }
-      return { kind: 'acro', fields: acro };
+    // forms are short: never spend time on a long book or a stack of notes
+    if (pdf.numPages > 40) return null;
+    let hasAcro = false;
+    try {
+      const fo = await pdf.getFieldObjects(); // instant: null when the file has no form fields at all
+      hasAcro = !!fo && Object.keys(fo).length > 0;
+    } catch {
+      hasAcro = false;
     }
-    const { fields, wordy } = await flatFields(pdf);
-    if (fields.length >= 4 || (fields.length >= 2 && wordy)) return { kind: 'flat', fields };
+    if (hasAcro) {
+      const acro = await acroFields(pdf);
+      if (acro.length) {
+        // a printed "Signature: ____" line next to real fields still deserves a signature box
+        if (!acro.some((f) => f.kind === 'sign')) {
+          const { fields } = await flatFields(pdf);
+          const extra = fields.filter((f) => f.kind === 'sign').slice(0, 2);
+          if (extra.length) return { kind: 'acro', fields: order([...acro, ...extra]) };
+        }
+        return { kind: 'acro', fields: acro };
+      }
+    }
+    // a printed form: look at the first page's words before doing any real work
+    const first = await pageItems(pdf, 1);
+    const text = first.items.map((i) => i.str).join(' ');
+    const blanks = (text.match(/_{4,}|\.{6,}|\[\s\]|\(\s\)|[☐□❑◻⬜]/g) ?? []).length;
+    const wordy = /\b(form|application|registration|declaration|consent|enrol?ment|questionnaire|claim|request|agreement)\b/i.test(text.slice(0, 600));
+    if (blanks < 3 && !(wordy && blanks >= 1)) return null;
+    const { fields, wordy: w2 } = await flatFields(pdf);
+    if (fields.length >= 4 || (fields.length >= 2 && w2)) return { kind: 'flat', fields };
   } catch (e) {
     console.warn('form detection failed', e);
   }

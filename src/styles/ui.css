@@ -2248,3 +2248,29 @@
   font-size: 11.5px;
   color: var(--muted);
 }
+
+/* a book in the library that is being read right now */
+.jobmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink);
+  font-size: 10.5px;
+}
+.jobmark b {
+  font-weight: 600;
+}
+.jobmark.on-row {
+  margin: 2px 0 1px;
+}
+.jobmark.on-pocket {
+  position: absolute;
+  z-index: 3;
+  top: 8px;
+  right: 14%;
+  padding: 4px 8px 4px 5px;
+  border-radius: 999px;
+  background: var(--pill);
+  color: var(--pill-ink);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}

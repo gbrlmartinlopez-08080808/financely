@@ -1,3 +1,5 @@
+import { slice } from './ocr';
+
 // Page layout for scans: where the columns are, which blocks are text and which are pictures. It works on a small
 // black-and-white copy of the page (fast), cutting the page along its white gutters again and again (an "XY cut"),
 // then judging each piece by how line-like its ink is. Text pieces are read by the OCR; pictures are kept as pictures.
@@ -23,7 +25,7 @@ interface Bin {
   s: number; // working scale (working px per source px)
 }
 
-function binarize(src: HTMLCanvasElement): Bin {
+async function binarize(src: HTMLCanvasElement): Promise<Bin> {
   const s = Math.min(1, 1000 / src.width); // a modest working size: it averages away grain and speckle
   const w = Math.max(8, Math.round(src.width * s));
   const h = Math.max(8, Math.round(src.height * s));
@@ -42,6 +44,7 @@ function binarize(src: HTMLCanvasElement): Bin {
     gray[j] = g;
     hist[g]++;
   }
+  await slice();
   // Otsu, kept in a sensible range (the page was flattened first, so paper is near white)
   let sum = 0;
   for (let i = 0; i < 256; i++) sum += i * hist[i];
@@ -291,12 +294,13 @@ function judge(b: Bin, r: R): Omit<Leaf, 'x0' | 'y0' | 'x1' | 'y1'> {
  * small). Each such shape (with everything inside it, labels and axes included) is filled in solid so the cutting step
  * treats it as one block that cannot be sliced into "lines".
  */
-function markFigures(b: Bin): void {
+async function markFigures(b: Bin): Promise<void> {
   const { w, h, ink } = b;
   const label = new Int32Array(w * h).fill(-1);
   const comps: { x0: number; y0: number; x1: number; y1: number; n: number }[] = [];
   const stack = new Int32Array(w * h);
   for (let i = 0; i < w * h; i++) {
+    if ((i & 0x3fff) === 0) await slice();
     if (!ink[i] || label[i] >= 0) continue;
     const id = comps.length;
     const c = { x0: w, y0: h, x1: 0, y1: 0, n: 0 };
@@ -358,9 +362,9 @@ function markFigures(b: Bin): void {
 }
 
 /** Finds the text blocks and pictures of a (flattened) page, in reading order. */
-export function segmentPage(flat: HTMLCanvasElement): Leaf[] & { noise: number } {
-  const b = binarize(flat);
-  markFigures(b);
+export async function segmentPage(flat: HTMLCanvasElement): Promise<Leaf[] & { noise: number }> {
+  const b = await binarize(flat);
+  await markFigures(b);
   const boxes: R[] = [];
   cut(b, { x0: 0, y0: 0, x1: b.w, y1: b.h }, boxes, 0);
   const pageArea = b.w * b.h;
@@ -399,8 +403,8 @@ export function segmentPage(flat: HTMLCanvasElement): Leaf[] & { noise: number }
  * How much a page is tilted, in degrees (positive = clockwise to put right). Lines of text give the sharpest row
  * profile when the page is straight, so try a few angles and keep the one with the most "peaky" profile.
  */
-export function estimateSkew(flat: HTMLCanvasElement): number {
-  const b = binarize(flat);
+export async function estimateSkew(flat: HTMLCanvasElement): Promise<number> {
+  const b = await binarize(flat);
   const xs: number[] = [];
   const ys: number[] = [];
   for (let y = 0; y < b.h; y++) for (let x = (y & 1); x < b.w; x += 2) if (b.ink[y * b.w + x]) (xs.push(x), ys.push(y));

@@ -5,7 +5,10 @@ type Worker = import('tesseract.js').Worker;
 
 // A small pool: phones with enough cores and memory read two pages at once, the rest read one. Workers run off the
 // main thread, so reading never freezes the screen.
-const POOL = (navigator.hardwareConcurrency ?? 4) >= 6 && ((navigator as unknown as { deviceMemory?: number }).deviceMemory ?? 4) >= 3 ? 2 : 1;
+const cores = navigator.hardwareConcurrency ?? 4;
+const mem = (navigator as unknown as { deviceMemory?: number }).deviceMemory ?? 4;
+// how many pages are read at once: more on phones with the cores and memory for it (each reader takes about 150 MB)
+const POOL = cores >= 8 && mem >= 6 ? 3 : cores >= 4 && mem >= 3 ? 2 : 1;
 export const OCR_POOL = POOL;
 interface Slot {
   p: Promise<Worker>;
@@ -164,13 +167,37 @@ export async function recognize(img: Blob | HTMLCanvasElement, onProgress?: (p: 
  */
 export async function prepareCanvas(blob: Blob, maxSide = 2400): Promise<HTMLCanvasElement> {
   const bmp = await createImageBitmap(blob);
-  const out = flattenSource(bmp, maxSide);
+  const out = await flattenSource(bmp, maxSide);
   bmp.close();
   return out;
 }
 
 /** The same preparation for anything already drawn (a rendered PDF page, a canvas). */
-export function flattenSource(bmp: { width: number; height: number } & CanvasImageSource, maxSide = 2400): HTMLCanvasElement {
+let sliceAt = 0;
+const chan = typeof MessageChannel !== 'undefined' ? new MessageChannel() : null;
+const turns: (() => void)[] = [];
+if (chan) chan.port1.onmessage = () => turns.shift()?.();
+/** A turn for the screen without a timer (timers are slowed to a crawl when the app is in the background; messages are not). */
+const turn = () =>
+  new Promise<void>((resolve) => {
+    if (!chan) return void setTimeout(resolve, 0);
+    turns.push(resolve); // several pages can be waiting at once: each message frees the oldest one
+    chan.port2.postMessage(0);
+  });
+/** Gives the screen a turn if the current stretch of work has been running a while (keeps the app smooth while it reads). */
+export async function slice(ms = 9) {
+  if (document.hidden) return; // nobody is looking: just get on with it
+  const now = performance.now();
+  if (!sliceAt) sliceAt = now;
+  if (now - sliceAt > ms) {
+    await turn();
+    sliceAt = performance.now();
+  }
+}
+/** A short pause between pages while the app is on screen (none when it is in the background). */
+export const breathe = (ms = 40) => (document.hidden ? Promise.resolve() : new Promise<void>((r) => setTimeout(r, ms)));
+
+export async function flattenSource(bmp: { width: number; height: number } & CanvasImageSource, maxSide = 2400): Promise<HTMLCanvasElement> {
   const longest = Math.max(bmp.width, bmp.height);
   const scale = longest > maxSide ? maxSide / longest : longest < 1400 ? Math.min(1.6, 1800 / longest) : 1;
   const w = Math.round(bmp.width * scale);
@@ -186,10 +213,14 @@ export function flattenSource(bmp: { width: number; height: number } & CanvasIma
   const n = w * h;
   const gray = new Uint8ClampedArray(n);
   let sum = 0;
-  for (let i = 0, j = 0; j < n; i += 4, j++) {
-    const l = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) | 0;
-    gray[j] = l;
-    sum += l;
+  for (let y0 = 0; y0 < h; y0 += 96) {
+    const y1 = Math.min(h, y0 + 96);
+    for (let j = y0 * w, i = j * 4; j < y1 * w; i += 4, j++) {
+      const l = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) | 0;
+      gray[j] = l;
+      sum += l;
+    }
+    await slice();
   }
   // a dark page with light letters: flip it
   if (sum / n < 105) for (let j = 0; j < n; j++) gray[j] = 255 - gray[j];
@@ -202,7 +233,11 @@ export function flattenSource(bmp: { width: number; height: number } & CanvasIma
   g.height = h;
   const gctx = g.getContext('2d')!;
   const gid = gctx.createImageData(w, h);
-  for (let i = 0, j = 0; j < n; i += 4, j++) gid.data[i] = gid.data[i + 1] = gid.data[i + 2] = gray[j], (gid.data[i + 3] = 255);
+  for (let y0 = 0; y0 < h; y0 += 128) {
+    const y1 = Math.min(h, y0 + 128);
+    for (let j = y0 * w, i = j * 4; j < y1 * w; i += 4, j++) gid.data[i] = gid.data[i + 1] = gid.data[i + 2] = gray[j], (gid.data[i + 3] = 255);
+    await slice();
+  }
   gctx.putImageData(gid, 0, 0);
   const small = document.createElement('canvas');
   small.width = bw;
@@ -242,6 +277,7 @@ export function flattenSource(bmp: { width: number; height: number } & CanvasIma
       out[y * w + x] = v;
       hist[v | 0]++;
     }
+    if ((y & 63) === 63) await slice();
   }
   // finish with a gentle stretch so the ink is properly dark
   let lo = 0;
@@ -254,9 +290,13 @@ export function flattenSource(bmp: { width: number; height: number } & CanvasIma
     }
   }
   const span = Math.max(40, 245 - lo);
-  for (let i = 0, j = 0; j < n; i += 4, j++) {
-    const v = Math.max(0, Math.min(255, ((out[j] - lo) / span) * 255));
-    d[i] = d[i + 1] = d[i + 2] = v;
+  for (let y0 = 0; y0 < h; y0 += 128) {
+    const y1 = Math.min(h, y0 + 128);
+    for (let j = y0 * w, i = j * 4; j < y1 * w; i += 4, j++) {
+      const v = Math.max(0, Math.min(255, ((out[j] - lo) / span) * 255));
+      d[i] = d[i + 1] = d[i + 2] = v;
+    }
+    await slice();
   }
   ctx.putImageData(id, 0, 0);
   return c;

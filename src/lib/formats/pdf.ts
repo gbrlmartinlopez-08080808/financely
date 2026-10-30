@@ -24,6 +24,30 @@ export async function openPdf(data: ArrayBuffer | Uint8Array): Promise<PDFDocume
   return task.promise;
 }
 
+/**
+ * Opens a stored file without copying all of it into memory: pdf.js reads it from the blob as it needs it.
+ * (Big books were being read into memory twice just to be looked at.)
+ */
+export async function openPdfBlob(blob: Blob): Promise<PDFDocumentProxy> {
+  const url = URL.createObjectURL(blob);
+  const task = pdfjs.getDocument({
+    url,
+    cMapUrl: base + 'cmaps/',
+    cMapPacked: true,
+    standardFontDataUrl: base + 'standard_fonts/',
+    wasmUrl: base + 'wasm/',
+    enableXfa: false,
+    fontExtraProperties: true,
+  });
+  const doc = await task.promise;
+  const destroy = task.destroy.bind(task);
+  task.destroy = async () => {
+    URL.revokeObjectURL(url);
+    return destroy();
+  };
+  return doc;
+}
+
 /** Render a page into a fresh canvas at the given CSS-pixel scale (already multiplied by DPR if wanted). */
 export async function renderPage(page: PDFPageProxy, scale: number, canvas?: HTMLCanvasElement) {
   const viewport = page.getViewport({ scale });

@@ -11,7 +11,8 @@ import { Reader } from './reader/Reader';
 import { StatsBubble } from './screens/Stats';
 import { AddSheet } from './screens/AddSheet';
 import { Discover } from './screens/Discover';
-import { ScanBadge } from './screens/ScanBadge';
+import { JobsHost } from './screens/ScanBadge';
+import { resumeScans } from './lib/scan';
 import { prefetch as prefetchCatalog } from './lib/catalog';
 import { isGuide } from './lib/harvest';
 import { refreshReminder } from './lib/reminders';
@@ -321,6 +322,13 @@ export default function App() {
     await db.put('kv', 'rate', { at: Date.now(), asks: (seen?.asks ?? 0) + 1, done: sent });
   };
 
+  // anything that was still being read when the app was closed (or the phone locked) carries on where it stopped
+  useEffect(() => {
+    if (!ready) return;
+    const t = setTimeout(() => resumeScans(getState().docs), 2500);
+    return () => clearTimeout(t);
+  }, [ready]);
+
   // people who already finished the introduction get the current set of samples once, too
   useEffect(() => {
     if (!ready || !onboarded) return;
@@ -429,7 +437,7 @@ export default function App() {
         error={linkErr}
       />
       {discover && <Discover onClose={() => setDiscover(false)} onOpen={setOpenId} />}
-      <ScanBadge />
+      <JobsHost />
       <Toasts />
       <input
         ref={fileIn}

@@ -2,7 +2,7 @@
 
 A calm, ad-free, paywall-free reader for Android (and the web) that opens almost anything: PDF, EPUB, DOCX, ODT, RTF, Markdown, HTML, TXT, PPTX, XLSX/CSV, images, audio, video and source code.
 
-**Install:** download [`releases/Frogity-3.2.apk`](releases/Frogity-3.2.apk) on your phone and open it. Allow “Install unknown apps” for your browser or file manager when asked (on Xiaomi/HyperOS you may also have to confirm a security prompt).
+**Install:** download [`releases/Frogity-3.3.apk`](releases/Frogity-3.3.apk) on your phone and open it. Allow “Install unknown apps” for your browser or file manager when asked (on Xiaomi/HyperOS you may also have to confirm a security prompt).
 
 ## What it does
 
