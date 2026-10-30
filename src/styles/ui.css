@@ -1986,3 +1986,20 @@
 .sheet.over {
   z-index: 61;
 }
+
+/* the frog's flight ends by fading into the globe, which fades up in its place */
+.ascii-card.frog {
+  transition: opacity 0.7s ease;
+}
+.ascii-card.frog.out {
+  opacity: 0;
+}
+.ascii-card.globe.enter {
+  animation: globein 0.9s ease both;
+}
+@keyframes globein {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}

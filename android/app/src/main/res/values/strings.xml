@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">Frogity</string>
     <string name="title_activity_main">Frogity</string>
-    <string name="package_name">app.quire.reader</string>
-    <string name="custom_url_scheme">app.quire.reader</string>
+    <string name="package_name">app.frogity.reader</string>
+    <string name="custom_url_scheme">app.frogity.reader</string>
     <string name="widget_description">Your streak and today’s progress, in ASCII.</string>
 </resources>

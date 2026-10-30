@@ -5,14 +5,14 @@ def keystoreProps = new Properties()
 if (keystorePropsFile.exists()) keystoreProps.load(new FileInputStream(keystorePropsFile))
 
 android {
-    namespace = "app.quire.reader"
+    namespace = "app.frogity.reader"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "app.quire.reader"
+        applicationId "app.frogity.reader"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 18
-        versionName "2.6"
+        versionCode 19
+        versionName "2.7"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

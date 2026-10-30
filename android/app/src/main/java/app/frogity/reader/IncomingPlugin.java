@@ -1,4 +1,4 @@
-package app.quire.reader;
+package app.frogity.reader;
 
 import android.app.Activity;
 import android.content.ContentResolver;
@@ -28,7 +28,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
 /**
- * Receives files opened with Quire ("Open with…") or shared to it, copies them into the app cache
+ * Receives files opened with Frogity ("Open with…") or shared to it, copies them into the app cache
  * and hands their paths to the web layer through the "file" event.
  */
 @CapacitorPlugin(name = "Incoming")
@@ -255,7 +255,7 @@ public class IncomingPlugin extends Plugin {
     public void setNativeSelectionMenu(final PluginCall call) {
         final boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
         getActivity().runOnUiThread(() -> {
-            if (getBridge().getWebView() instanceof QuireWebView) ((QuireWebView) getBridge().getWebView()).setSuppressSelectionMenu(!enabled);
+            if (getBridge().getWebView() instanceof FrogityWebView) ((FrogityWebView) getBridge().getWebView()).setSuppressSelectionMenu(!enabled);
             call.resolve();
         });
     }

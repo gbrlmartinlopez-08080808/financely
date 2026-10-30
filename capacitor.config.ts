@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.quire.reader',
+  appId: 'app.frogity.reader',
   appName: 'Frogity',
   webDir: 'dist',
   android: { backgroundColor: '#EFEEEC' },

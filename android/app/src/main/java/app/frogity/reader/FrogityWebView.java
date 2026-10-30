@@ -1,4 +1,4 @@
-package app.quire.reader;
+package app.frogity.reader;
 
 import android.content.Context;
 import android.util.AttributeSet;
@@ -12,12 +12,12 @@ import com.getcapacitor.CapacitorWebView;
 
 /**
  * Capacitor's WebView, with one extra: the system "Copy / Select all / Google" popup can be switched off
- * while reading so it never covers (or competes with) Quire's own word menu. Selection handles still work.
+ * while reading so it never covers (or competes with) Frogity’s own word menu. Selection handles still work.
  */
-public class QuireWebView extends CapacitorWebView {
+public class FrogityWebView extends CapacitorWebView {
     private volatile boolean suppressSelectionMenu = true;
 
-    public QuireWebView(Context context, AttributeSet attrs) {
+    public FrogityWebView(Context context, AttributeSet attrs) {
         super(context, attrs);
     }
 
@@ -28,7 +28,7 @@ public class QuireWebView extends CapacitorWebView {
     /**
      * Returning null from startActionMode() makes Chromium throw the selection away, so the word would
      * flash and vanish. Instead the system bar is started but with an empty menu: the selection and its
-     * handles stay, and nothing competes with Quire's own menu.
+     * handles stay, and nothing competes with Frogity’s own menu.
      */
     private ActionMode.Callback quiet(final ActionMode.Callback cb) {
         if (!suppressSelectionMenu || cb == null) return cb;

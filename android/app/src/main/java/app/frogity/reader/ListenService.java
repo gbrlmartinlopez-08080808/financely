@@ -1,4 +1,4 @@
-package app.quire.reader;
+package app.frogity.reader;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -33,11 +33,11 @@ public class ListenService extends Service {
 
     public static final String CHANNEL = "frogity_listen";
     public static final int NOTIF_ID = 4711;
-    public static final String A_UPDATE = "app.quire.reader.listen.UPDATE";
-    public static final String A_STOP = "app.quire.reader.listen.STOP";
-    public static final String A_TOGGLE = "app.quire.reader.listen.TOGGLE";
-    public static final String A_NEXT = "app.quire.reader.listen.NEXT";
-    public static final String A_PREV = "app.quire.reader.listen.PREV";
+    public static final String A_UPDATE = "app.frogity.reader.listen.UPDATE";
+    public static final String A_STOP = "app.frogity.reader.listen.STOP";
+    public static final String A_TOGGLE = "app.frogity.reader.listen.TOGGLE";
+    public static final String A_NEXT = "app.frogity.reader.listen.NEXT";
+    public static final String A_PREV = "app.frogity.reader.listen.PREV";
 
     static Listener listener;
     static volatile String title = "Frogity";

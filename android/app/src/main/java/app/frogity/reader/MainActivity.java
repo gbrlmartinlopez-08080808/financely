@@ -1,4 +1,4 @@
-package app.quire.reader;
+package app.frogity.reader;
 
 import android.os.Bundle;
 import android.webkit.WebSettings;

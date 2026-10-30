@@ -7,7 +7,7 @@ This is the checklist, in the order you should do it. Items marked **BLOCKER** w
 ## 0. Decide these first (they are hard to change later)
 
 1. **BLOCKER – the name.** The app's old working name, "Quire", is the name of a well-known project-management product (quire.io); "Frogity" and probably registered as a trademark in software classes. Google can remove an app after a trademark complaint. Check that "Frogity" is unique, then search: Google Play, USPTO TESS, EUIPO eSearch, WIPO Global Brand Database, plus the web. Do not put another company's brand (Adobe, Google, "PDF") in the name.
-2. **BLOCKER – the application ID.** Currently `app.quire.reader` (in `android/app/build.gradle` → `applicationId`, `namespace`, `capacitor.config.ts` → `appId`, `AndroidManifest`, Java package folders). **It can never change after the first upload.** Use a domain you control or a unique string, e.g. `com.yourname.pages`.
+2. **BLOCKER – the application ID.** Now `app.frogity.reader` (renamed from `app.quire.reader` before the first upload — do not change it again once you publish) (in `android/app/build.gradle` → `applicationId`, `namespace`, `capacitor.config.ts` → `appId`, `AndroidManifest`, Java package folders). **It can never change after the first upload.** Use a domain you control or a unique string, e.g. `com.yourname.pages`.
    Changing it also means the phone currently running the test build treats the new app as a different app (uninstall the old one).
 3. **Contact details.** A support email and a public privacy-policy URL. Put them in `src/lib/config.ts` (`SUPPORT_EMAIL`, `PRIVACY_URL`) – the app links to them from *Settings → About* and from the "Report this answer" button.
 
@@ -110,12 +110,12 @@ Do not claim things the app doesn't do, don't mention other apps/brands in the d
 - Data safety form: no data collected or shared by notifications.
 
 ## The name
-- The app is called **Frogity**. The Android package id is still `app.quire.reader` (it cannot change after publishing, and changing it now would stop updates installing over the existing app). If you want a matching id, change `appId` in `capacitor.config.ts`, the `namespace`/`applicationId` in `android/app/build.gradle` and the Java package before the first publish. Check that the name is free as a trademark and on Google Play first.
+- The app is called **Frogity**. The Android package id is `app.frogity.reader` (it can never change after the first Play upload). It was renamed from `app.quire.reader` in 2.7, so 2.7 installs as a separate app next to older test builds; uninstall those. Check that the name is free as a trademark and on Google Play first.
 
 ## Play Console declarations for 2.2 (copy these answers)
 
 ### Foreground service declaration (Policy → App content → Foreground service permissions)
-- **Type:** Media playback (`FOREGROUND_SERVICE_MEDIA_PLAYBACK`). Service: `app.quire.reader.ListenService`.
+- **Type:** Media playback (`FOREGROUND_SERVICE_MEDIA_PLAYBACK`). Service: `app.frogity.reader.ListenService`.
 - **What it does:** keeps the "read aloud" feature playing when the screen turns off or the app is in the background, with a media notification (title, cover, play/pause, skip) and lock-screen controls through a `MediaSession`. It starts only when the user taps play and stops when they pause, finish, or dismiss it.
 - **User impact if it didn't run:** audio would stop the moment the screen locks, which defeats listening to a book while walking or commuting.
 - **Video:** Play asks for a short screen recording: open a document → tap Listen → press the power button → show the notification and lock-screen controls → pause from the notification.

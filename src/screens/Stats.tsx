@@ -26,7 +26,7 @@ const MESSAGES: [number, string][] = [
 ];
 
 /** The reading globe: spins slowly; one light per day you've read, today’s light blinks. */
-function Globe({ lights, view, onToggle }: { lights: ReturnType<typeof lightsFor>; view: 'globe' | 'plant'; onToggle: () => void }) {
+function Globe({ lights, view, onToggle, enter }: { lights: ReturnType<typeof lightsFor>; view: 'globe' | 'plant'; onToggle: () => void; enter?: boolean }) {
   const pre = useRef<HTMLPreElement>(null);
   const rot = useRef(-20);
   const drag = useRef<{ x: number; rot: number; moved: boolean } | null>(null);
@@ -49,7 +49,7 @@ function Globe({ lights, view, onToggle }: { lights: ReturnType<typeof lightsFor
   }, [lights, view]);
   return (
     <div
-      className="ascii-card globe"
+      className={`ascii-card globe${enter ? " enter" : ""}`}
       onPointerDown={(e) => {
         drag.current = { x: e.clientX, rot: rot.current, moved: false };
         (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
@@ -287,7 +287,7 @@ export function StatsBubble({ open, onClose, reward, onRewardDone, demo }: { ope
               }}
             />
           ) : (
-            <Globe lights={lights} view={reward ? 'globe' : view} onToggle={() => setView((v) => (v === 'globe' ? 'plant' : 'globe'))} />
+            <Globe enter={!!(reward || demo)} lights={lights} view={reward || demo ? 'globe' : view} onToggle={() => setView((v) => (v === 'globe' ? 'plant' : 'globe'))} />
           )}
           <div className="bubble-cap">
             <b className="mono">

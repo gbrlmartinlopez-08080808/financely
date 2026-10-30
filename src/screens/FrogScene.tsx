@@ -43,25 +43,46 @@ function render(t: number, trailCount: number, shown: number): string {
   put(padX, GROUND + 1, '(______)');
   put(0, GROUND + 2, '~-'.repeat(W / 2));
 
-  // frog path: sit → crouch → jump → fly
+  // How far it carries the lights depends on how many there are: a single light is a short hop, a hundred a long haul.
+  const f = Math.min(1, Math.log(1 + trailCount) / Math.log(1 + 60));
+  const endX = 5 + Math.round(6 + 20 * f);
+  // frog path: sit → crouch → jump → cruise → glide down → land
   let x = 5;
   let y = GROUND - 3;
   let sprite = SIT;
+  let jet = false;
+  const LAND0 = 5.4; // the glide down starts
+  const LAND1 = 7.3; // paws on the pad
   if (t >= 0.45 && t < 0.8) sprite = CROUCH;
   if (t >= 0.8) {
     const u = ease(Math.min(1, (t - 0.8) / 1.5));
-    x = 5 + u * (trailCount > 20 ? 25 : trailCount > 6 ? 19 : 14); // the more lights, the further it carries them across the sky
+    x = 5 + u * (endX - 5);
     const arc = Math.sin(Math.PI * Math.min(1, (t - 0.8) / 0.9)) * 3;
     const climb = u * 6;
-    y = GROUND - 3 - climb - arc + (t > 2.3 ? Math.sin(t * 2.4) * 0.9 : 0);
+    const cruise = t > 2.3 && t < LAND0 ? Math.sin(t * 2.4) * 0.9 : 0;
+    y = GROUND - 3 - climb - arc + cruise;
     sprite = t >= 1.1 ? FLY : SIT;
+    jet = t >= 1.1;
   }
-  // trail of @ (one per light), a gentle wave behind the frog. A long streak is drawn tighter, and in two lines.
+  let landed = false;
+  if (t >= LAND0) {
+    const v = ease(Math.min(1, (t - LAND0) / (LAND1 - LAND0)));
+    const top = GROUND - 9 + Math.sin(LAND0 * 2.4) * 0.9;
+    y = top + (GROUND - 3 - top) * v;
+    x = endX + Math.sin(v * Math.PI) * 1.5; // a little sway on the way down
+    jet = v < 0.82; // the flames sputter out just before touchdown
+    sprite = v < 0.82 ? FLY : v < 1 ? CROUCH : SIT;
+    landed = v >= 1;
+  }
+  // the pad it lands on appears under it
+  if (t >= LAND0 - 0.4) put(endX - 1, GROUND + 1, '(______)');
+  // trail of @ (one per light), a gentle wave behind the frog. A long streak is drawn tighter, and in more lines.
   const total = Math.min(trailCount, 120);
   if (t >= 1.3) {
-    const rows = total > 40 ? 2 : 1;
+    const avail = Math.max(4, endX - 6); // columns the trail can span
+    const rows = Math.max(1, Math.min(4, Math.ceil(total / avail)));
     const perRow = Math.ceil(total / rows);
-    const spacing = perRow <= 6 ? 3 : perRow <= 12 ? 2 : 1;
+    const spacing = Math.max(1, Math.min(3, Math.floor(avail / perRow)));
     const stagger = Math.min(0.16, 2.6 / Math.max(1, total));
     for (let i = 0; i < total; i++) {
       const born = 1.5 + i * stagger;
@@ -69,21 +90,29 @@ function render(t: number, trailCount: number, shown: number): string {
       const row = i % rows;
       const k = Math.floor(i / rows);
       const tx = x - 2 - (k + 1) * spacing + 1;
-      const ty = y + 1.4 + row * 2.2 + Math.sin(t * 4 - k * 0.7) * (spacing === 1 ? 0.9 : 1.3);
+      const ty = y + 1.4 + row * 1.7 + Math.sin(t * 4 - k * 0.7) * (spacing === 1 ? 0.8 : 1.3);
+      // after touchdown the lights drift up and settle into the sky, the oldest first, ready to be lit on the globe
+      const settle = t - (LAND1 - 0.2) - k * 0.05;
+      if (i !== 0 && settle > 0) {
+        if (settle > 0.9) continue;
+        put(tx, ty - settle * 6, settle < 0.3 ? '@' : settle < 0.6 ? '*' : '.', settle < 0.3 ? undefined : 's');
+        continue;
+      }
       const fresh = i === 0; // the newest light is the one just earned: yellow
       put(tx, ty, '@', fresh ? 'y' : undefined);
     }
   }
   // sprite and jet flames
   sprite.forEach((row, i) => put(x, y + i, row, undefined));
-  if (t >= 1.1) {
-    const f = FLAMES[Math.floor(t * 14) % FLAMES.length];
-    put(x + 1, y + 4, f[0], 'f');
-    put(x + 1, y + 5, f[1], 'f');
+  if (jet) {
+    const fl = FLAMES[Math.floor(t * 14) % FLAMES.length];
+    put(x + 1, y + 4, fl[0], 'f');
+    put(x + 1, y + 5, fl[1], 'f');
     put(x + 8, y + 4, 'v', 'f');
   }
+  if (landed && t < LAND1 + 0.5) put(x + 3, GROUND, '. *  * .', 's'); // a puff of dust
   // sparkle when the newest light joins at the end
-  if (t > 6.2 && Math.floor(t * 8) % 2 === 0) put(x - 6, y - 1, '+', 'y');
+  if (landed && Math.floor(t * 8) % 2 === 0) put(x - 1, y - 1, '+', 'y');
   void shown;
   return g
     .map((row) =>
@@ -120,15 +149,15 @@ export function FrogScene({ count, minutes, goal, name, onEnd }: { count: number
   };
   useEffect(() => {
     if (t > 0.8 && t < 0.85) tap('medium');
-    if (t >= 9.2) finish();
+    if (t >= 9.4) finish();
   }, [t]); // eslint-disable-line react-hooks/exhaustive-deps
   const who = displayName(name);
   const extra = minutes - goal;
   const line = extra >= goal ? `${minutes} minutes — double your goal.` : extra > 0 ? `${minutes} minutes — ${extra} over your goal.` : `${minutes} minutes — right on your goal.`;
   return (
-    <div className="ascii-card frog" onClick={finish} role="img" aria-label="A frog with a jetpack flies across the sky, towing one @ for every day you reached your goal">
+    <div className={`ascii-card frog${t >= 8.7 ? ' out' : ''}`} onClick={finish} role="img" aria-label="A frog with a jetpack flies across the sky, towing one @ for every day you reached your goal">
       <pre dangerouslySetInnerHTML={{ __html: render(t, count, count) }} />
-      <p className={`frog-msg mono${t > 5.6 ? ' in' : ''}`}>
+      <p className={`frog-msg mono${t > 6.6 ? ' in' : ''}`}>
         <b>
           yesterday’s light · {count} on your map
         </b>

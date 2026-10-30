@@ -23,7 +23,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- "Open with Quire" for documents, books, sheets, images, media… -->
+            <!-- "Open with Frogity" for documents, books, sheets, images, media… -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -50,7 +50,7 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
 
-            <!-- Share to Quire -->
+            <!-- Share to Frogity -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
