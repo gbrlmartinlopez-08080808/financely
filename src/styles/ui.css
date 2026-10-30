@@ -1897,3 +1897,13 @@
   max-width: 86vw;
   text-align: center;
 }
+
+.ascii-card.frog pre i.f {
+  font-style: normal;
+  color: #ff9a3c;
+  text-shadow: 0 0 8px rgba(255, 150, 40, 0.9);
+}
+.ascii-card.frog pre u.s {
+  text-decoration: none;
+  color: #7f8a9a;
+}

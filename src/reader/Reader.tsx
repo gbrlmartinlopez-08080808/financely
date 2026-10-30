@@ -15,6 +15,8 @@ import { ContentsSheet, MoreSheet, THEMES, TypeSheet, type MoreAction } from './
 import { BinaryView, CodeView, ImageView, MediaView, SheetView } from './OtherViews';
 import { anchorFromSelection, applyHighlights, clearMarks, findAll, wordAt, wrapSentences } from './dom';
 import { AskSheet } from './Ask';
+import { FormSheet } from './FormSheet';
+import { detectForm, type FormModel } from '../lib/forms';
 import { LQ_VERSION, queueScan, reportScan, useScan } from '../lib/scan';
 import { KIND_LABEL } from '../lib/formats/detect';
 import { fontById } from '../lib/fonts';
@@ -51,6 +53,9 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [thumbs, setThumbs] = useState(false);
   const [scanned, setScanned] = useState<number[]>([]);
+  const [form, setForm] = useState<FormModel | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [offerGone, setOfferGone] = useState(true);
   // scanned (picture-only) PDFs are read in the background from the moment they are added; until that has worked,
   // liquid and listen aren't offered
   const scan = useScan(doc.id);
@@ -170,6 +175,23 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
       ac.abort();
     };
   }, [content, liquid]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // does this PDF look like a form? If so, offer to fill it in
+  useEffect(() => {
+    if (!pdf) return;
+    let alive = true;
+    const t = setTimeout(async () => {
+      const m = await detectForm(pdf);
+      if (!alive || !m) return;
+      setForm(m);
+      const dismissed = await db.get<boolean>('kv', `formoffer:${id}`);
+      if (alive && !dismissed) setOfferGone(false);
+    }, 1200);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [pdf]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     queueScan(doc); // no-op if it was already looked at when it was added
@@ -797,6 +819,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
 
   const moreActions: MoreAction[] = [
     { id: 'contents', label: 'Contents & bookmarks', icon: 'list' },
+    { id: 'form', label: 'Fill this form', icon: 'edit', right: form ? `${form.fields.length} fields` : undefined, hidden: !form },
     { id: 'ask', label: 'Ask this document', icon: 'ask', right: 'free ai' },
     { id: 'find', label: 'Search in document', icon: 'search' },
     { id: 'bookmark', label: hereMark ? 'Remove bookmark here' : 'Bookmark this spot', icon: 'bookmark' },
@@ -955,10 +978,32 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
 
       {liquid && <div className="r-fade" style={{ opacity: chrome || listen ? 1 : 0.55 }} />}
 
+      {form && !offerGone && !formOpen && (
+        <div className="form-offer" role="status">
+          <div className="t">
+            <b>This looks like a form</b>
+            <small>{form.fields.length} fields found · fill, sign and export</small>
+          </div>
+          <button className="pill sm" onClick={() => (setFormOpen(true), setOfferGone(true))}>
+            Fill it in
+          </button>
+          <button
+            className="pill sm round ghost"
+            aria-label="Not now"
+            onClick={() => {
+              setOfferGone(true);
+              db.put('kv', `formoffer:${id}`, true);
+            }}
+          >
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+      )}
+
       <div className={`r-dock${chrome || listen ? '' : ' hide'}`}>
         {listen && (
           <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
-            <ListenBar root={flowRef.current} scroller={scroller} startAt={listenFrom} onPlaying={setListening} docId={id} key={flowReady} />
+            <ListenBar root={flowRef.current} scroller={scroller} startAt={listenFrom} onPlaying={setListening} docId={id} title={doc.name} coverId={doc.coverId} key={flowReady} />
           </div>
         )}
         <div className="r-dock-row compact">
@@ -1050,6 +1095,18 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
           setHighlights((l) => l.filter((x) => x.id !== h.id));
         }}
       />
+      {form && formOpen && (
+        <FormSheet
+          open
+          onClose={() => setFormOpen(false)}
+          model={form}
+          docName={doc.name}
+          getData={async () => (await (await getFile(id))!.arrayBuffer()) as ArrayBuffer}
+          onAddToLibrary={async (blob, name) => {
+            await importFile(blob, name, { title: name.replace(/\.pdf$/i, '') });
+          }}
+        />
+      )}
       <MoreSheet open={sheet === 'more'} onClose={() => setSheet(null)} actions={moreActions} onAction={onMore} title={doc.name} />
       <Sheet open={sheet === 'remove'} onClose={() => setSheet(null)} title={doc.uri ? 'Remove from shelf?' : 'Delete this file?'}>
         <div className="sheet-body">

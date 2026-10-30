@@ -777,3 +777,245 @@
 .reader-scroll {
   touch-action: pan-x pan-y; /* two-finger zoom is handled by the app, never by the browser */
 }
+
+/* ------------------------------------------------------------ fill a form */
+.formfill {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--safe-t);
+  animation: fade 0.25s;
+  color: var(--ink);
+}
+.ff-top {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 10px 4px;
+}
+.ff-top h2 {
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  margin: 0 0 0 4px;
+}
+.ff-top .mono {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.ff-bar {
+  height: 4px;
+  margin: 4px 18px 0;
+  border-radius: 2px;
+  background: var(--line-2);
+  overflow: hidden;
+}
+.ff-bar i {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+  transition: width 0.3s var(--ease);
+}
+.ff-actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px 18px 4px;
+  flex-wrap: wrap;
+}
+.ff-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 14px calc(30px + var(--safe-b));
+  overscroll-behavior: contain;
+}
+.ff-list h3 {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 18px 6px 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.ff-card {
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 14px 16px 14px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.2s;
+}
+.ff-card.done {
+  box-shadow: inset 3px 0 0 var(--ink), var(--shadow);
+}
+.ff-label {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 6px;
+  line-height: 1.3;
+}
+.ff-card input:not([type='checkbox']),
+.ff-card textarea,
+.ff-card select {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: var(--surface-2);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 16px;
+  color: var(--ink);
+  font-family: var(--sans);
+  resize: none;
+}
+.ff-card input:focus,
+.ff-card textarea:focus,
+.ff-card select:focus {
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+.ff-date {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ff-check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 2px 0;
+}
+.ff-choices {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ff-choices button {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 15px;
+}
+.ff-choices button.on {
+  background: var(--ink);
+  color: var(--bg);
+}
+.ff-sign {
+  width: 100%;
+  height: 74px;
+  border-radius: 14px;
+  border: 1.5px dashed var(--line-2);
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 12px;
+  background: repeating-linear-gradient(0deg, transparent 0 21px, var(--line) 21px 22px);
+}
+.ff-sign.has {
+  border-style: solid;
+}
+.ff-sign img {
+  max-height: 62px;
+  max-width: 90%;
+  object-fit: contain;
+}
+.sigpad {
+  position: relative;
+  animation: sig-open 0.35s var(--spring);
+}
+@keyframes sig-open {
+  from {
+    opacity: 0;
+    transform: scaleY(0.6);
+    transform-origin: top;
+  }
+}
+.sigpad canvas {
+  width: 100%;
+  height: 210px;
+  display: block;
+  border-radius: 16px;
+  background: var(--surface-2) repeating-linear-gradient(0deg, transparent 0 169px, var(--line-2) 169px 170px);
+  touch-action: none;
+}
+.sigpad .hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 86px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--faint);
+  pointer-events: none;
+}
+.sigbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.sigbar .grow {
+  flex: 1;
+}
+.sigbar .keep {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.ff-foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 14px 18px calc(14px + var(--safe-b));
+  display: flex;
+  justify-content: center;
+  background: linear-gradient(transparent, var(--bg) 40%);
+  pointer-events: none;
+}
+.ff-foot .pill {
+  pointer-events: auto;
+  min-width: 190px;
+  height: 52px;
+  font-size: 16px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+}
+.form-offer {
+  position: absolute;
+  z-index: 35;
+  left: 14px;
+  right: 14px;
+  bottom: var(--toast-bottom, 110px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 10px 16px;
+  border-radius: 20px;
+  color: var(--r-ink, var(--ink));
+  background: color-mix(in srgb, var(--surface) 64%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow: inset 0 0 0 1px var(--glass-edge), 0 10px 30px rgba(0, 0, 0, 0.18);
+  animation: rise 0.4s var(--spring);
+}
+.form-offer .t {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.25;
+}
+.form-offer b {
+  display: block;
+  font-size: 14.5px;
+}
+.form-offer small {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+}

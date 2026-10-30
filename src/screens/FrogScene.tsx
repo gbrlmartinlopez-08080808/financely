@@ -2,100 +2,130 @@ import { useEffect, useRef, useState } from 'react';
 import { displayName } from '../lib/cheer';
 import { tap } from '../lib/native';
 
-// A small ASCII frog hops across lily pads to the glowing @ that is yesterday's reading mark.
-const W = 40;
-const H = 12;
-const GROUND = 9; // row of the pads
-const SIT = ['(o)(o)', '( -- )', '/|  |\\'];
-const CROUCH = ['(o)(o)', '(____)', '/\\  /\\'];
-const AIR = ['(^)(^)', '( == )', '\\\\  //'];
-const HOPS = 5;
-const FRAMES_PER_HOP = 15;
+// The reward scene: the frog hops off its pad, lights its jetpack and flies across the night sky with one @ behind
+// it for every day you have reached your goal. The newest one (yesterday's) is yellow and joins the line last.
+const W = 46;
+const H = 14;
+const GROUND = 12;
 const esc = (c: string) => (c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '&' ? '&amp;' : c);
 
-function frame(f: number, done: boolean): string {
-  const g: string[][] = Array.from({ length: H }, () => Array.from({ length: W }, () => ' '));
-  const put = (x: number, y: number, s: string) => {
-    for (let i = 0; i < s.length; i++) if (x + i >= 0 && x + i < W && y >= 0 && y < H) g[y][x + i] = s[i];
+const SIT = ['    (o)(o)   ', ' []  ( -- )   ', ' []  /|  |\\   ', ' ##  ^^  ^^   '];
+const CROUCH = ['             ', '    (o)(o)   ', ' []  (____)   ', ' ##  /\\  /\\   '];
+const FLY = ['    (O)(O)   ', ' []  ( -- )   ', ' []  /|  |\\   ', ' ##   ||  || '];
+const FLAMES = [[' vv', ' VV'], [' VV', ' vv'], [' ww', ' VV'], [' VV', ' ww']];
+
+type Cell = { c: string; k?: 'y' | 'f' | 's' };
+const ease = (x: number) => x * x * (3 - 2 * x);
+
+function render(t: number, trailCount: number, shown: number): string {
+  const g: Cell[][] = Array.from({ length: H }, () => Array.from({ length: W }, () => ({ c: ' ' }) as Cell));
+  const put = (x: number, y: number, s: string, k?: Cell['k'], solid = false) => {
+    for (let i = 0; i < s.length; i++) {
+      const xx = Math.round(x) + i;
+      const yy = Math.round(y);
+      if (xx < 0 || xx >= W || yy < 0 || yy >= H) continue;
+      if (s[i] === ' ' && !solid) continue;
+      g[yy][xx] = { c: s[i], k };
+    }
   };
-  // a few stars and the water line
-  [[3, 1], [11, 0], [19, 2], [27, 1], [35, 0], [7, 3], [31, 3]].forEach(([x, y], i) => put(x, y, (f + i * 7) % 24 < 3 ? '+' : '.'));
-  const pads = Array.from({ length: HOPS + 1 }, (_, i) => 3 + Math.round((i * (W - 15)) / HOPS));
-  pads.forEach((x) => put(x - 1, GROUND + 1, '(____)'));
-  put(0, GROUND + 2, '~'.repeat(W).replace(/~~/g, '~-'));
-  // the target pad: yesterday's mark
-  const last = pads[HOPS];
-  const pulse = Math.floor(f / 6) % 2 === 0;
-  put(last + 1, GROUND, '@'); // replaced by markup below
-  if (pulse || done) {
-    put(last - 1, GROUND, '.');
-    put(last + 3, GROUND, '.');
-  }
-  // the frog
-  const hop = Math.min(HOPS - 1, Math.floor(f / FRAMES_PER_HOP));
-  const u = (f % FRAMES_PER_HOP) / FRAMES_PER_HOP;
-  const from = pads[hop];
-  const to = pads[hop + 1];
-  let x = from;
-  let y = GROUND - 2;
+  // parallax stars (three layers scrolling left, faster the nearer they are)
+  const layers: [number, string, number][] = [[3, '.', 4], [6, '+', 9], [11, '*', 15]];
+  const fly = Math.max(0, Math.min(1, (t - 1.0) / 1.4));
+  layers.forEach(([speed, ch, n], li) => {
+    for (let i = 0; i < n; i++) {
+      const bx = (i * 37 + li * 11) % (W * 2);
+      const x = (((bx - t * speed * (0.25 + 0.75 * fly)) % (W * 2)) + W * 2) % (W * 2);
+      if (x < W) put(x, (i * 5 + li * 3) % (GROUND - 1), ch, 's');
+    }
+  });
+  // the pad it starts from
+  const padX = 3 - Math.max(0, (t - 0.8) * 7);
+  put(padX, GROUND + 1, '(______)');
+  put(0, GROUND + 2, '~-'.repeat(W / 2));
+
+  // frog path: sit → crouch → jump → fly
+  let x = 5;
+  let y = GROUND - 3;
   let sprite = SIT;
-  if (done) {
-    x = last - 1;
-    sprite = SIT;
-  } else if (f >= HOPS * FRAMES_PER_HOP) {
-    x = last - 1;
-  } else if (u < 0.22) {
-    sprite = CROUCH;
-    x = from - 1;
-  } else if (u < 0.86) {
-    const a = (u - 0.22) / 0.64;
-    x = Math.round(from - 1 + (to - from) * a);
-    y = GROUND - 2 - Math.round(Math.sin(Math.PI * a) * 4);
-    sprite = AIR;
-  } else {
-    x = to - 1;
+  if (t >= 0.45 && t < 0.8) sprite = CROUCH;
+  if (t >= 0.8) {
+    const u = ease(Math.min(1, (t - 0.8) / 1.5));
+    x = 5 + u * 14;
+    const arc = Math.sin(Math.PI * Math.min(1, (t - 0.8) / 0.9)) * 3;
+    const climb = u * 6;
+    y = GROUND - 3 - climb - arc + (t > 2.3 ? Math.sin(t * 2.4) * 0.9 : 0);
+    sprite = t >= 1.1 ? FLY : SIT;
   }
-  sprite.forEach((row, i) => put(x, y + i, row));
-  // markup: the mark is yellow, the frog green-ish by class
+  // trail of @ (one per light), a gentle wave behind the frog
+  const total = Math.min(trailCount, 14);
+  if (t >= 1.3) {
+    for (let i = 0; i < total; i++) {
+      const born = 1.5 + i * 0.16;
+      if (t < born) continue;
+      const tx = x - 2 - (i + 1) * 3 + 1;
+      const ty = y + 1.4 + Math.sin(t * 4 - i * 0.7) * 1.3;
+      const fresh = i === 0; // the newest light is the one just earned: yellow
+      put(tx, ty, '@', fresh ? 'y' : undefined);
+    }
+  }
+  // sprite and jet flames
+  sprite.forEach((row, i) => put(x, y + i, row, undefined));
+  if (t >= 1.1) {
+    const f = FLAMES[Math.floor(t * 14) % FLAMES.length];
+    put(x + 1, y + 4, f[0], 'f');
+    put(x + 1, y + 5, f[1], 'f');
+    put(x + 8, y + 4, 'v', 'f');
+  }
+  // sparkle when the newest light joins at the end
+  if (t > 6.2 && Math.floor(t * 8) % 2 === 0) put(x - 6, y - 1, '+', 'y');
+  void shown;
   return g
-    .map((row, ry) => row.map((c, cx) => (ry === GROUND && cx === last + 1 && c === '@' ? `<b class="y">@</b>` : esc(c))).join(''))
+    .map((row) =>
+      row
+        .map((cell) => {
+          const ch = esc(cell.c);
+          return cell.k === 'y' ? `<b class="y">${ch}</b>` : cell.k === 'f' ? `<i class="f">${ch}</i>` : cell.k === 's' ? `<u class="s">${ch}</u>` : ch;
+        })
+        .join(''),
+    )
     .join('\n');
 }
 
-export function FrogScene({ minutes, goal, name, onEnd }: { minutes: number; goal: number; name: string; onEnd: () => void }) {
-  const [f, setF] = useState(0);
-  const total = HOPS * FRAMES_PER_HOP + 18;
-  const done = f >= total - 6;
+export function FrogScene({ count, minutes, goal, name, onEnd }: { count: number; minutes: number; goal: number; name: string; onEnd: () => void }) {
+  const [t, setT] = useState(0);
   const ended = useRef(false);
   useEffect(() => {
-    const t = setInterval(() => setF((n) => Math.min(total + 30, n + 1)), 75);
-    return () => clearInterval(t);
-  }, [total]);
+    const t0 = performance.now();
+    let raf = 0;
+    let last = 0;
+    const loop = (now: number) => {
+      raf = requestAnimationFrame(loop);
+      if (now - last < 55) return; // ~18 frames a second: crisp for ASCII, light on the phone
+      last = now;
+      setT((now - t0) / 1000);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const finish = () => {
+    if (ended.current) return;
+    ended.current = true;
+    onEnd();
+  };
   useEffect(() => {
-    if (f > 0 && f % FRAMES_PER_HOP === 0 && f < HOPS * FRAMES_PER_HOP) tap('light');
-    if (f >= total + 24 && !ended.current) {
-      ended.current = true;
-      onEnd();
-    }
-  }, [f]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (t > 0.8 && t < 0.85) tap('medium');
+    if (t >= 9.2) finish();
+  }, [t]); // eslint-disable-line react-hooks/exhaustive-deps
   const who = displayName(name);
   const extra = minutes - goal;
   const line = extra >= goal ? `${minutes} minutes — double your goal.` : extra > 0 ? `${minutes} minutes — ${extra} over your goal.` : `${minutes} minutes — right on your goal.`;
   return (
-    <div
-      className="ascii-card frog"
-      onClick={() => {
-        if (!ended.current) {
-          ended.current = true;
-          onEnd();
-        }
-      }}
-      role="img"
-      aria-label="A frog hops to the light you earned yesterday"
-    >
-      <pre dangerouslySetInnerHTML={{ __html: frame(f, done) }} />
-      <p className={`frog-msg mono${done ? ' in' : ''}`}>
-        <b>yesterday’s light</b>
+    <div className="ascii-card frog" onClick={finish} role="img" aria-label="A frog with a jetpack flies across the sky, towing one @ for every day you reached your goal">
+      <pre dangerouslySetInnerHTML={{ __html: render(t, count, count) }} />
+      <p className={`frog-msg mono${t > 5.6 ? ' in' : ''}`}>
+        <b>
+          yesterday’s light · {count} on your map
+        </b>
         <span>{who ? `${who}, ${line}` : line}</span>
       </p>
       <span className="sig mono">tap to skip</span>

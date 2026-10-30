@@ -3,7 +3,7 @@ import { useStore, updateSettings } from '../lib/store';
 import { displayName } from '../lib/cheer';
 import { lightsFor, renderGlobe } from '../lib/globe';
 import { plantStage } from '../lib/ascii';
-import { GLYPHS, glyphFor } from '../lib/glyphs';
+import { glyphFor, legendFor } from '../lib/glyphs';
 import { Icon } from '../ui/Icon';
 import { Pixel, Ruler, Toggle, toast } from '../ui/kit';
 import { isNative, tap } from '../lib/native';
@@ -253,7 +253,7 @@ function StreakStage({ name }: { name: string }) {
     <Card>
       <p className="ob-cap mono top">{displayName(name) || 'you'} · day {Math.min(streak, 12)} <Pixel name="flame" size={12} style={{ verticalAlign: -1 }} /></p>
       <pre aria-hidden dangerouslySetInnerHTML={{ __html: rows.join('\n') }} />
-      <p className="ob-cap mono">{GLYPHS.map((g) => `${g.ch} ${g.label}`).join('  ')}</p>
+      <p className="ob-cap mono">{legendFor(15).map((g) => `${g.ch}${g.from}`).join('  ')} min</p>
     </Card>
   );
 }

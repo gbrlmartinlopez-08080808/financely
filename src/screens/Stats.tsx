@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore, streakInfo, dayKey, updateSettings, COUNT_MS } from '../lib/store';
-import { GLYPHS, fmtMs, glyphFor } from '../lib/glyphs';
+import { fmtMs, glyphFor, legendFor } from '../lib/glyphs';
 import { plantStage } from '../lib/ascii';
 import { lightsFor, renderGlobe } from '../lib/globe';
 import { Icon } from '../ui/Icon';
@@ -273,6 +273,7 @@ export function StatsBubble({ open, onClose, reward, onRewardDone }: { open: boo
           </div>
           {scene && reward ? (
             <FrogScene
+              count={lights.length}
               minutes={Math.round((days[reward] ?? 0) / 60000)}
               goal={settings.dailyGoal}
               name={settings.name}
@@ -343,12 +344,13 @@ export function StatsBubble({ open, onClose, reward, onRewardDone }: { open: boo
                   })}
                 </div>
                 <div className="cal-legend mono" aria-hidden>
-                  <span>·&nbsp;none</span>
-                  {GLYPHS.map((g) => (
+                  <span>·&nbsp;0</span>
+                  {legendFor(settings.dailyGoal).map((g) => (
                     <span key={g.ch} data-met={g.ch === '@' || undefined}>
-                      {g.ch}&nbsp;{g.label}
+                      {g.ch}&nbsp;{g.from}
                     </span>
                   ))}
+                  <span>min</span>
                 </div>
                 <DayChart date={sel.date} ms={sel.ms} hours={hours[sel.key]} />
               </div>

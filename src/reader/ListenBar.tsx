@@ -3,7 +3,9 @@ import { bestVoice, listVoices, openVoiceInstall, speak, speechText, stopSpeakin
 import { NEURAL_PREFIX, NEURAL_VOICES, NeuralEngine, NeuralPlayer, isNeural, neuralDownload, neuralId, neuralRemove, neuralStored, neuralSupported } from '../lib/neural';
 import { firstVisibleSentence, markSaying, sentenceText, wrapSentences } from './dom';
 import { updateSettings, useStore } from '../lib/store';
-import { isNative, tap } from '../lib/native';
+import { isNative, mediaStart, mediaStop, mediaUpdate, onMediaAction, tap } from '../lib/native';
+import { notifyPermission } from '../lib/reminders';
+import * as db from '../lib/db';
 import { Icon } from '../ui/Icon';
 import { Ruler, Sheet, toast } from '../ui/kit';
 
@@ -13,11 +15,13 @@ interface Props {
   startAt?: number | null; // sentence index to start from (e.g. "Listen from here")
   onPlaying: (p: boolean) => void;
   docId: string;
+  title?: string;
+  coverId?: string;
 }
 
 const SLEEP = [0, 10, 20, 30, 60];
 
-export function ListenBar({ root, scroller, startAt, onPlaying, docId }: Props) {
+export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = 'Frogity', coverId }: Props) {
   const settings = useStore((s) => s.settings);
   const [idx, setIdx] = useState(0);
   const [total, setTotal] = useState(0);
@@ -61,6 +65,39 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId }: Props) 
   useEffect(() => {
     root?.classList.toggle('focus', settings.focusListen && playing);
   }, [root, settings.focusListen, playing]);
+
+  // ---- listening as a "track": lock-screen / notification player, keeps going with the screen off
+  const media = useRef(false);
+  const handlers = useRef<Record<string, () => void>>({});
+  const coverB64 = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!isNative || !coverId) return;
+    db.get<Blob>('blobs', coverId).then((b) => {
+      if (!b) return;
+      const r = new FileReader();
+      r.onload = () => (coverB64.current = String(r.result).split(',')[1]);
+      r.readAsDataURL(b);
+    });
+  }, [coverId]);
+  useEffect(() => {
+    let off = () => {};
+    onMediaAction((a) => handlers.current[a]?.()).then((f) => (off = f));
+    return () => {
+      off();
+      if (media.current) mediaStop();
+      media.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isNative) return;
+    const left = total ? Math.max(1, Math.round(((total - idx) / total) * ((root?.textContent ?? '').split(/\s+/).length || 0) / (165 * settings.ttsRate))) : 0;
+    const subtitle = `${left ? left + ' min left · ' : ''}${idx + 1}/${total || '–'}`;
+    if (playing && !media.current) {
+      media.current = true;
+      notifyPermission(true).finally(() => mediaStart({ title, subtitle, playing: true, cover: coverB64.current }));
+    } else if (media.current) mediaUpdate({ title, subtitle, playing });
+  }, [playing, Math.floor(idx / 8)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     listVoices().then(setVoices);
@@ -247,6 +284,19 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId }: Props) 
       pause();
       setTimeout(() => run(next), 60);
     } else if (root) follow(markSaying(root, next));
+  };
+
+  handlers.current = {
+    toggle: () => (playing ? pause() : run(idxRef.current)),
+    play: () => (playing ? undefined : run(idxRef.current)),
+    pause: () => (playing ? pause() : undefined),
+    next: () => skip(5),
+    prev: () => skip(-5),
+    stop: () => {
+      pause();
+      mediaStop();
+      media.current = false;
+    },
   };
 
   if (!ttsAvailable())

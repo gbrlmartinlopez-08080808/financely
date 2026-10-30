@@ -111,3 +111,7 @@ Do not claim things the app doesn't do, don't mention other apps/brands in the d
 
 ## The name
 - The app is called **Frogity**. The Android package id is still `app.quire.reader` (it cannot change after publishing, and changing it now would stop updates installing over the existing app). If you want a matching id, change `appId` in `capacitor.config.ts`, the `namespace`/`applicationId` in `android/app/build.gradle` and the Java package before the first publish. Check that the name is free as a trademark and on Google Play first.
+
+## 2.1 additions
+- **Forms**: PDFs that look like forms get an auto-fill sheet (detected on-device, nothing uploaded). Details and signature are stored locally only.
+- **Background listening**: a foreground service (`FOREGROUND_SERVICE_MEDIA_PLAYBACK`) with a media notification keeps read-aloud playing with the screen off. Declare the foreground-service use (media playback) in Play Console and note the notification permission in Data safety.

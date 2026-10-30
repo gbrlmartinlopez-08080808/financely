@@ -185,3 +185,24 @@ export async function openExternal(url: string) {
   if (/^(mailto|tel):/i.test(url)) location.href = url;
   else window.open(url, '_blank', 'noopener');
 }
+
+// ------------------------------------------------------------------ "now reading" player (lock screen, notification, keeps going with the screen off)
+interface ListenPlugin {
+  start(o: { title: string; subtitle: string; playing: boolean; cover?: string }): Promise<void>;
+  update(o: { title?: string; subtitle?: string; playing?: boolean }): Promise<void>;
+  stop(): Promise<void>;
+  addListener(event: 'action', cb: (e: { action: string }) => void): Promise<PluginListenerHandle>;
+}
+const Listen = registerPlugin<ListenPlugin>('Listen');
+export const mediaStart = (o: Parameters<ListenPlugin['start']>[0]) => (isNative ? Listen.start(o).catch(() => {}) : Promise.resolve());
+export const mediaUpdate = (o: Parameters<ListenPlugin['update']>[0]) => (isNative ? Listen.update(o).catch(() => {}) : Promise.resolve());
+export const mediaStop = () => (isNative ? Listen.stop().catch(() => {}) : Promise.resolve());
+export async function onMediaAction(cb: (action: string) => void) {
+  if (!isNative) return () => {};
+  try {
+    const h = await Listen.addListener('action', (e) => cb(e.action));
+    return () => h.remove();
+  } catch {
+    return () => {};
+  }
+}
