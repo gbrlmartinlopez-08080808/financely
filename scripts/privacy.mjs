@@ -12,6 +12,7 @@ h1{font-size:28px}h2{margin-top:32px;font-size:20px}table{border-collapse:collap
 td,th{border:1px solid #ddd;padding:8px;text-align:left;vertical-align:top}th{background:#f0efed}
 @media(prefers-color-scheme:dark){body{background:#0d0d0d;color:#eee}td,th{border-color:#333}th{background:#1a1a1a}a{color:#8fb0ff}}
 </style></head><body>
+<p><a href="./">← Frogity</a></p>
 ${marked.parse(md)}
 </body></html>`;
 mkdirSync(new URL('../docs/', import.meta.url), { recursive: true });

@@ -156,3 +156,7 @@ Two files ship inside the app (`public/samples/`) and are added once on first ru
 - **Little Brother** by Cory Doctorow — CC BY-NC-SA 3.0 (https://craphound.com/littlebrother/download/)
 - **The impact of life-saving interventions on fertility** by David Roodman — CC BY-NC-SA 4.0 (arXiv:2007.11388)
 Both licences allow free, non-commercial redistribution with credit and share-alike; credit is in Settings → About. **The app must stay free and ad-free** (no in-app purchases) while these are bundled. If you ever monetise, remove them (`src/lib/samples.ts`, `public/samples/`, the `addSamples` call in `src/App.tsx`).
+
+## Website (docs/)
+`docs/index.html` is a one-page site for Play review and for users: what the app does, screenshots, a plain-language privacy table, why each permission is requested (including the media-playback foreground service), credits, and the support email. `docs/privacy.html` is generated from `PRIVACY.md` (`npm run privacy`).
+To publish: GitHub → Settings → Pages → deploy from the branch that holds `docs/` (folder `/docs`). The URL then is `https://gbrlmartinlopez-08080808.github.io/financely/` and the policy `…/privacy.html` (already set as `PRIVACY_URL` in `src/lib/config.ts`). Paste both into Play Console (store listing website + privacy policy). If you host elsewhere, update `PRIVACY_URL` and the Play link in `docs/index.html`.

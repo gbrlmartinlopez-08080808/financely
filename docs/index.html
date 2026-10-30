@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Frogity — Gamify reading, one jump at a time</title>
+<meta name="description" content="Frogity is a free, ad-free reader for PDFs, books, forms and scans. Streaks, read-aloud that keeps playing with the screen off, form filling and signing. No account, no tracking.">
+<meta property="og:title" content="Frogity — Gamify reading, one jump at a time">
+<meta property="og:description" content="A free, private reader for PDFs, books, forms and scans, with a streak that rewards a little reading every day.">
+<meta property="og:image" content="img/library.jpg">
+<link rel="icon" href="img/icon.png">
+<style>
+:root{
+  --bg:#f3f3f2; --card:#fff; --ink:#0e0e0e; --muted:#6f6e6a; --line:rgba(0,0,0,.09);
+  --yellow:#e0a800; --blue:#4a66ff; --dark:#0a0a0a; --darkink:#ececea;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"JetBrains Mono",SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0d0d0d;--card:#171716;--ink:#f0efec;--muted:#9a9993;--line:rgba(255,255,255,.1);--yellow:#f2c94c}
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.wrap{max-width:1040px;margin:0 auto;padding:0 20px}
+header.top{display:flex;align-items:center;justify-content:space-between;padding:18px 0}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;letter-spacing:-.02em;text-decoration:none}
+.brand img{width:34px;height:34px;border-radius:9px}
+nav a{font:500 13px var(--mono);text-decoration:none;color:var(--muted);margin-left:18px}
+nav a:hover{color:var(--ink)}
+@media(max-width:620px){nav a:not(.keep){display:none}}
+
+.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:36px;align-items:center;padding:34px 0 56px}
+@media(max-width:820px){.hero{grid-template-columns:1fr;padding-top:10px}}
+h1{font-size:clamp(38px,6.4vw,64px);line-height:1.02;letter-spacing:-.04em;margin:0 0 16px;font-weight:800}
+h1 em{font-style:normal;color:var(--muted)}
+.lead{font-size:19px;color:var(--muted);max-width:34em;margin:0 0 24px}
+.cta{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:13px 20px;border-radius:999px;background:var(--ink);color:var(--bg);font-weight:700;text-decoration:none;font-size:15px}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.pills span{font:500 12px var(--mono);padding:7px 12px;border-radius:999px;background:var(--card);box-shadow:0 1px 0 var(--line)}
+
+.frog{background:var(--dark);color:var(--darkink);border-radius:28px;padding:22px 18px;font:13px/1.25 var(--mono);overflow:hidden;position:relative;box-shadow:0 30px 60px -30px rgba(0,0,0,.5)}
+.frog pre{margin:0;white-space:pre;overflow:hidden}
+.frog .y{color:#f2c94c;text-shadow:0 0 10px rgba(242,201,76,.7);font-weight:700;animation:glow 2.2s ease-in-out infinite}
+.frog .f{color:#ff9a3d}
+.frog .s{color:#7d8696}
+.frog .cap{margin-top:12px;color:#8d8c87;font-size:11px;text-align:right}
+@keyframes glow{50%{opacity:.45}}
+@media(prefers-reduced-motion:reduce){.frog .y{animation:none}}
+
+section{padding:46px 0;border-top:1px solid var(--line)}
+h2{font-size:clamp(26px,4vw,36px);letter-spacing:-.03em;line-height:1.1;margin:0 0 10px}
+.sub{color:var(--muted);margin:0 0 28px;max-width:40em}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:860px){.grid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border-radius:22px;padding:20px;box-shadow:0 1px 0 var(--line)}
+.card h3{margin:0 0 6px;font-size:17px;letter-spacing:-.01em}
+.card p{margin:0;color:var(--muted);font-size:15px}
+.card .tag{font:600 11px var(--mono);color:var(--yellow);display:block;margin-bottom:8px;text-transform:lowercase}
+
+.shots{display:flex;gap:16px;overflow-x:auto;padding:4px 20px 18px;margin:0 -20px;scroll-snap-type:x mandatory;scrollbar-width:thin}
+.shots figure{margin:0;flex:0 0 auto;width:210px;scroll-snap-align:start}
+.shots img{width:100%;height:auto;border-radius:22px;display:block;box-shadow:0 14px 30px -14px rgba(0,0,0,.4);background:var(--card)}
+.shots figcaption{font:500 12px var(--mono);color:var(--muted);margin-top:10px;text-align:center}
+
+.legend{font:600 15px var(--mono);display:flex;flex-wrap:wrap;gap:8px 18px;background:var(--dark);color:var(--darkink);border-radius:18px;padding:16px 18px;margin:18px 0 0}
+.legend b{color:#f2c94c}
+.legend i{font-style:normal;color:#5b8dff}
+
+table{width:100%;border-collapse:collapse;font-size:14.5px;background:var(--card);border-radius:18px;overflow:hidden}
+th,td{text-align:left;padding:12px 14px;vertical-align:top;border-bottom:1px solid var(--line)}
+th{font:600 12px var(--mono);color:var(--muted);text-transform:lowercase;background:transparent}
+tr:last-child td{border-bottom:0}
+.scroll{overflow-x:auto}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:760px){.two{grid-template-columns:1fr}}
+ul.tight{margin:8px 0 0;padding-left:20px;color:var(--muted);font-size:15px}
+ul.tight li{margin:4px 0}
+code,.mono{font-family:var(--mono);font-size:.92em}
+footer{padding:36px 0 60px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+footer .row{display:flex;flex-wrap:wrap;gap:8px 22px;justify-content:space-between}
+.note{font-size:13px;color:var(--muted);margin-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="#top"><img src="img/icon.png" alt="" width="34" height="34">Frogity</a>
+    <nav><a href="#features">features</a><a href="#streaks">streaks</a><a href="#screens">screens</a><a class="keep" href="#privacy">privacy</a><a class="keep" href="#support">support</a></nav>
+  </header>
+
+  <main id="top">
+    <div class="hero">
+      <div>
+        <h1>Gamify reading, <em>one jump at a time.</em></h1>
+        <p class="lead">Frogity is a free reader for the files you already have: PDFs, books, forms and scans. Read a little every day and a frog with a jetpack lights up your map, one yellow <b class="mono" style="color:var(--yellow)">@</b> per day you reach your goal.</p>
+        <div class="cta">
+          <a class="btn" href="https://play.google.com/store/apps/details?id=app.frogity.reader">Get it on Google Play</a>
+          <a class="btn ghost" href="#privacy">Privacy policy</a>
+        </div>
+        <div class="pills"><span>no account</span><span>no ads</span><span>no tracking</span><span>works offline</span></div>
+      </div>
+      <div class="frog" role="img" aria-label="An ASCII frog with a jetpack flying across a night sky, towing a trail of at-signs">
+<pre>   *        .          +         *
+        .          *
+ @@@@@@@@@@@@@@@@@@@@@@@@@@@   (O)(O)
+  @@@@@@@@@@@@@@@@@@@@@@@@@@ [] ( -- )
+   @@@@@@@@@@@@@@@@@@@@@@@@@ [] /|  |\
+ <span class="y">@</span>                         ##   ||  ||
+       .      +            <span class="f">VV</span>   <span class="f">v</span>
+ *          .              <span class="f">vv</span>
+~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~</pre>
+        <div class="cap">one @ for every day you reached your goal</div>
+      </div>
+    </div>
+
+    <section id="features">
+      <h2>A calm reader that also keeps you coming back</h2>
+      <p class="sub">Everything runs on your phone. Open anything, read it your way, and let the streak do the nagging.</p>
+      <div class="grid">
+        <div class="card"><span class="tag">read</span><h3>Liquid mode for PDFs</h3><p>Fixed pages reflow into one column that fits your phone. Equations, tables and figures stay intact.</p></div>
+        <div class="card"><span class="tag">listen</span><h3>Read-aloud that keeps playing</h3><p>Natural voices with a highlight that follows along, a media notification and lock-screen controls. It keeps going with the screen off.</p></div>
+        <div class="card"><span class="tag">forms</span><h3>Fill and sign forms</h3><p>Frogity spots forms, lists every field in order, fills what it knows from your saved details, and lets you sign with a saved signature. Export a flattened PDF.</p></div>
+        <div class="card"><span class="tag">scan</span><h3>Scans and photos, read in the background</h3><p>On-device text recognition makes scans searchable and listenable, with a small progress badge instead of a blocking screen.</p></div>
+        <div class="card"><span class="tag">look up</span><h3>Words, origins, pictures</h3><p>Press and hold a word for its definition, roots and a Wikipedia card.</p></div>
+        <div class="card"><span class="tag">free books</span><h3>Find free reading</h3><p>Browse public-domain and open-access books and papers, from classics to more recent work, and add them to your shelf in a tap.</p></div>
+        <div class="card"><span class="tag">share</span><h3>Share a book as a card</h3><p>Turn a cover into a picture: the book in a frosted acrylic holder, with your streak.</p></div>
+        <div class="card"><span class="tag">widget</span><h3>Home-screen widget</h3><p>Your streak, the last seven days and today’s progress, in ASCII.</p></div>
+        <div class="card"><span class="tag">ask</span><h3>Ask your document (optional)</h3><p>Summaries and explanations from a free AI service. Off until you turn it on, and it says exactly what is sent.</p></div>
+      </div>
+    </section>
+
+    <section id="streaks">
+      <h2>Streaks that scale to you</h2>
+      <p class="sub">Set your own daily goal. Every mark in the calendar is measured against it, one freeze day a week saves a missed day, and you can earn more.</p>
+      <div class="two">
+        <div class="card"><h3>What the marks mean</h3><p>For a 15-minute goal:</p>
+          <div class="legend"><span>· 0</span><span>: 1</span><span>+ 4</span><span>* 8</span><span>% 12</span><span><b>@ 15</b></span><span><i>~ freeze</i></span></div>
+          <p class="note">Change the goal and the minutes behind each mark change with it.</p></div>
+        <div class="card"><h3>The reward</h3><p>Reach your goal and the next morning a frog with a jetpack flies across your night sky. The more days you’ve kept your word, the further it carries them, then it lands and your map lights up.</p>
+          <ul class="tight"><li>A day counts after one minute of reading or listening</li><li>One free freeze day each week, more can be earned</li><li>Optional evening reminder, made on your phone</li></ul></div>
+      </div>
+    </section>
+
+    <section id="screens">
+      <h2>Screens</h2>
+      <p class="sub">Light and dark, built for one hand.</p>
+      <div class="shots" tabindex="0" aria-label="App screenshots, scroll sideways">
+        <figure><img src="img/library.jpg" alt="The library with a book in an acrylic holder" loading="lazy" width="432" height="864"><figcaption>library</figcaption></figure>
+        <figure><img src="img/globe.jpg" alt="The reading globe lit by your reading days" loading="lazy" width="432" height="864"><figcaption>reading globe</figcaption></figure>
+        <figure><img src="img/streak.jpg" alt="The streak calendar" loading="lazy" width="432" height="864"><figcaption>streak calendar</figcaption></figure>
+        <figure><img src="img/liquid.jpg" alt="A research paper in liquid mode" loading="lazy" width="432" height="864"><figcaption>liquid mode</figcaption></figure>
+        <figure><img src="img/lookup.jpg" alt="Looking up a word" loading="lazy" width="432" height="864"><figcaption>look up</figcaption></figure>
+        <figure><img src="img/free-books.jpg" alt="Finding free books" loading="lazy" width="432" height="864"><figcaption>free books</figcaption></figure>
+        <figure><img src="img/voices.jpg" alt="Choosing a voice" loading="lazy" width="432" height="864"><figcaption>voices</figcaption></figure>
+        <figure><img src="img/ask.jpg" alt="Asking a question about a document" loading="lazy" width="432" height="864"><figcaption>ask</figcaption></figure>
+      </div>
+      <p class="note">Some screenshots show excerpts of “Mamba: Linear-Time Sequence Modeling with Selective State Spaces” (Gu &amp; Dao, arXiv:2312.00752, CC BY 4.0) and public-domain text.</p>
+    </section>
+
+    <section id="privacy">
+      <h2>Privacy</h2>
+      <p class="sub">Frogity has no accounts, no ads and no analytics. Your library, reading history, streaks, form details and signature stay on your phone and are never sent to us. Uninstalling the app deletes them.</p>
+      <div class="scroll"><table>
+        <thead><tr><th>feature</th><th>what leaves the phone</th><th>to whom</th></tr></thead>
+        <tbody>
+          <tr><td>Look up a word</td><td>The selected word, your IP address</td><td>Wikipedia / Wiktionary, dictionaryapi.dev</td></tr>
+          <tr><td>Save a web link</td><td>The address you chose</td><td>That website</td></tr>
+          <tr><td>Ask this document <i>(optional, off by default)</i></td><td>Your question and a few short excerpts</td><td>Pollinations (open AI service)</td></tr>
+          <tr><td>Find free books</td><td>Your search words; the file you pick is downloaded</td><td>Project Gutenberg, Internet Archive, arXiv, Google Books, Open Library</td></tr>
+          <tr><td>Studio voice <i>(only if you download one)</i></td><td>Nothing about you; voice files are downloaded once</td><td>Hugging Face, jsDelivr / cdnjs</td></tr>
+          <tr><td>Send feedback <i>(optional)</i></td><td>The rating and note you write, in an email you review</td><td>Our support mailbox, through your email app</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">Full text: <a href="privacy.html">Privacy Policy</a>. There are no accounts, so there is nothing to delete on a server. To remove your data, clear the app’s storage or uninstall it.</p>
+
+      <h3 style="margin-top:34px">Why the app asks for…</h3>
+      <div class="scroll"><table>
+        <thead><tr><th>permission</th><th>why</th></tr></thead>
+        <tbody>
+          <tr><td><code>INTERNET</code></td><td>Word lookups, saving links, Find free books, optional Ask, optional voice downloads.</td></tr>
+          <tr><td><code>POST_NOTIFICATIONS</code></td><td>The optional evening reminder and the listening player’s notification. Asked only when you turn one on.</td></tr>
+          <tr><td><code>FOREGROUND_SERVICE</code> · media playback</td><td>Keeps read-aloud playing when the screen turns off or the app is in the background, with a media notification and lock-screen controls. It runs only while you are listening.</td></tr>
+          <tr><td><code>VIBRATE</code></td><td>Light haptic feedback (can be switched off in Settings).</td></tr>
+          <tr><td>Files you choose</td><td>Documents are opened through Android’s own file picker. Frogity does <b>not</b> request “all files access”.</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">No location, contacts, microphone, camera roll or advertising ID access. Not directed to children under 13.</p>
+    </section>
+
+    <section id="credits">
+      <h2>Credits and licences</h2>
+      <div class="two">
+        <div class="card"><h3>Open source</h3><p>PDF.js, Tesseract.js, Capacitor, React, KaTeX, pdf-lib, JSZip, jsPDF, mammoth, SheetJS, ONNX Runtime Web and Piper voices (each under its own permissive licence). Fonts are SIL OFL 1.1. Natural Earth map data is public domain. Wikipedia and Wiktionary text is CC BY-SA 4.0.</p></div>
+        <div class="card"><h3>Samples on the first shelf</h3><p><i>Little Brother</i> by Cory Doctorow (CC BY-NC-SA 3.0) and <i>The impact of life-saving interventions on fertility</i> by David Roodman (CC BY-NC-SA 4.0), shared by their authors for free, non-commercial reading.</p></div>
+      </div>
+    </section>
+
+    <section id="support">
+      <h2>Support</h2>
+      <p class="sub">Questions, bug reports, or an AI answer that went wrong? Write to <a href="mailto:gbrlmartinlopez40@gmail.com">gbrlmartinlopez40@gmail.com</a>. Please include your Android version and phone model; there is no tracking, so we only know what you tell us.</p>
+      <div class="cta"><a class="btn" href="mailto:gbrlmartinlopez40@gmail.com?subject=Frogity%20support">Email support</a><a class="btn ghost" href="privacy.html">Privacy policy</a></div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="row"><span>Frogity · free · no ads · no accounts · no tracking</span><span>Developer: Gabriel Martin Lopez · <a href="mailto:gbrlmartinlopez40@gmail.com">contact</a></span></div>
+    <p class="note">Wikipedia and other names belong to their owners. Frogity is not affiliated with any of the services it links to.</p>
+  </footer>
+</div>
+</body>
+</html>
