@@ -85,7 +85,7 @@ export async function generatedCover(title: string, kind: DocKind, author?: stri
   }
   ctx.font = '400 13px "JetBrains Mono", monospace';
   ctx.fillStyle = pal.sub;
-  ctx.fillText(author ? author.slice(0, 34) : '— quire', 30, COVER_H - 46);
+  ctx.fillText(author ? author.slice(0, 34) : '— frogity', 30, COVER_H - 46);
   return new Promise((r) => c.toBlob((b) => r(b!), 'image/png'));
 }
 

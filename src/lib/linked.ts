@@ -1,4 +1,4 @@
-// Documents that stay where they are on the phone. Quire remembers the Android document URI and reads the
+// Documents that stay where they are on the phone. Frogity remembers the Android document URI and reads the
 // file only when you open it, so linking a thousand PDFs costs almost no space.
 import * as db from './db';
 import { detectKind, titleFromFile } from './formats/detect';

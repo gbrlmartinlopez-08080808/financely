@@ -13,7 +13,7 @@ export interface Item {
   blurb?: string;
   cover?: string;
   year?: number;
-  /** a file Quire can fetch for you (always free) */
+  /** a file Frogity can fetch for you (always free) */
   get?: { url: string; name: string; alt?: string[]; as?: 'jats' };
   /** where to read more / buy / borrow (opens the web) */
   web?: string;

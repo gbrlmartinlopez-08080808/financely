@@ -79,7 +79,7 @@ export function AskSheet({
               Free, no account. When you ask, your question and a few short excerpts from this document are sent to an open AI service
               (Pollinations). Nothing else leaves your phone.
             </p>
-            <p className="muted">Skip it for private documents. Everything else in Quire stays on the device.</p>
+            <p className="muted">Skip it for private documents. Everything else in Frogity stays on the device.</p>
             <button className="pill" onClick={onConsent}>
               Turn on Ask
             </button>
@@ -107,7 +107,7 @@ export function AskSheet({
                     <button
                       className="ask-report"
                       onClick={() =>
-                        openExternal(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Quire: problem with an AI answer')}&body=${encodeURIComponent(`Question: ${msgs[i - 1]?.content ?? ''}\n\nAnswer: ${m.content}\n\nWhat was wrong:\n`)}`)
+                        openExternal(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Frogity: problem with an AI answer')}&body=${encodeURIComponent(`Question: ${msgs[i - 1]?.content ?? ''}\n\nAnswer: ${m.content}\n\nWhat was wrong:\n`)}`)
                       }
                     >
                       Report this answer

@@ -97,7 +97,7 @@ const toBase64 = (blob: Blob) =>
     r.readAsDataURL(blob);
   });
 
-/** Saves into Documents/Quire on Android (falls back to the share sheet), or downloads on the web. */
+/** Saves into Documents/Frogity on Android (falls back to the share sheet), or downloads on the web. */
 export async function saveFile(blob: Blob, name: string): Promise<string> {
   if (!isNative) {
     const a = document.createElement('a');
@@ -112,8 +112,8 @@ export async function saveFile(blob: Blob, name: string): Promise<string> {
   const { Filesystem, Directory } = await import('@capacitor/filesystem');
   const data = await toBase64(blob);
   try {
-    await Filesystem.writeFile({ path: `Quire/${name}`, data, directory: Directory.Documents, recursive: true });
-    return 'Saved to Documents/Quire';
+    await Filesystem.writeFile({ path: `Frogity/${name}`, data, directory: Directory.Documents, recursive: true });
+    return 'Saved to Documents/Frogity';
   } catch {
     await shareFile(blob, name);
     return 'Shared';

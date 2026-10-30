@@ -1059,39 +1059,125 @@
 }
 .ob-chat {
   display: grid;
-  gap: 10px;
-  padding: 4px 8px;
-  min-height: 150px;
+  gap: 12px;
+  padding: 6px 6px 2px;
+  min-height: 176px;
+  align-content: start;
 }
 .ob-chat .u {
   justify-self: end;
-  background: #f2f2f0;
+  max-width: 78%;
+  background: #f4f2ec;
   color: #111;
-  border-radius: 18px 18px 4px 18px;
-  padding: 9px 14px;
-  font-size: 12.5px;
+  border-radius: 20px 20px 6px 20px;
+  padding: 11px 16px;
+  font: 500 14.5px/1.35 var(--sans);
+  opacity: 0;
+  transform: translateY(8px) scale(0.97);
+  transform-origin: right bottom;
+  transition: opacity 0.35s var(--ease), transform 0.35s var(--spring);
+}
+.ob-chat .line {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.35s var(--ease), transform 0.35s var(--ease);
+}
+.ob-chat .u.in,
+.ob-chat .line.in {
+  opacity: 1;
+  transform: none;
+}
+.ob-chat .av {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, #3a4cff, #e8cf9a);
+  color: #fff;
 }
 .ob-chat .a {
-  justify-self: start;
-  max-width: 88%;
-  background: #1f1f1f;
-  border-radius: 18px 18px 18px 4px;
-  padding: 10px 14px;
-  font-size: 12.5px;
-  line-height: 1.5;
+  width: 82%;
+  min-height: 40px;
+  background: #202020;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  border-radius: 20px 20px 20px 6px;
+  padding: 11px 16px;
+  font: 14.5px/1.45 var(--sans);
+  color: #eceae4;
+}
+.typing {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  height: 18px;
+}
+.typing i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #aaa;
+  animation: typing 1s infinite ease-in-out;
+}
+.typing i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.typing i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes typing {
+  40% {
+    transform: translateY(-4px);
+    background: #fff;
+  }
 }
 .ob-icons {
   display: flex;
-  justify-content: space-around;
+  justify-content: center;
+  gap: 28px;
   font-family: var(--mono);
   font-size: 11px;
-  margin-top: 12px;
+  margin-top: 16px;
 }
 .ob-icons span {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   justify-items: center;
-  opacity: 0.85;
+  opacity: 0.9;
+}
+.ob-icons b {
+  width: 46px;
+  height: 46px;
+  border-radius: 15px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+.ob-remind {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.ob-remind b {
+  display: block;
+  font-size: 15px;
+}
+.ob-remind small {
+  display: block;
+  margin-top: 3px;
+  font-size: 10.5px;
+  color: var(--muted);
+  line-height: 1.35;
 }
 .ob h1 {
   font-size: 30px;
@@ -1293,21 +1379,24 @@
 
 /* choosing several books to remove */
 .shelf-row .tick {
-  width: 24px;
-  height: 24px;
   flex: none;
-  border-radius: 8px;
-  box-shadow: inset 0 0 0 1.6px var(--line-2);
   display: grid;
   place-items: center;
-  font-size: 14px;
-  font-weight: 700;
   margin-right: 2px;
+  color: var(--faint);
+  transition: transform 0.18s var(--spring), color 0.15s;
 }
 .shelf-row .tick.on {
-  background: var(--ink);
-  color: var(--bg);
-  box-shadow: none;
+  color: var(--ink);
+  animation: tick-pop 0.28s var(--spring);
+}
+@keyframes tick-pop {
+  0% {
+    transform: scale(0.7);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 .shelf-row.choosing .dots {
   display: none;
@@ -1662,4 +1751,149 @@
   50% {
     opacity: 0.45;
   }
+}
+
+/* the three selection buttons: frosted glass you can actually see */
+.sel-bar {
+  gap: 10px;
+}
+.sel-bar .pill {
+  background: color-mix(in srgb, var(--surface) 62%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  backdrop-filter: blur(22px) saturate(1.5);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--glass-edge), inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 8px 26px rgba(0, 0, 0, 0.16);
+}
+.sel-bar .pill.danger {
+  background: color-mix(in srgb, #c4351f 38%, var(--surface) 40%);
+  color: #8a1f0e;
+  box-shadow: inset 0 0 0 1px rgba(255, 120, 100, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 8px 26px rgba(196, 53, 31, 0.28);
+  font-weight: 700;
+}
+:root[data-app-theme='dark'] .sel-bar .pill.danger {
+  color: #ffb4a6;
+}
+
+.time-field {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 0;
+  font-family: var(--mono);
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.toast.tappable {
+  cursor: pointer;
+  pointer-events: auto;
+  padding: 12px 18px;
+}
+/* the frog scene */
+.ascii-card.frog {
+  padding: 18px 8px 14px;
+}
+.ascii-card.frog pre {
+  font-size: 12.5px;
+  line-height: 1.1;
+  color: #cfd6c6;
+  text-align: left;
+  width: fit-content;
+  margin: 0 auto;
+}
+.ascii-card.frog pre b.y {
+  color: #ffd23f;
+  font-weight: 800;
+  text-shadow: 0 0 10px #ffd23f, 0 0 22px rgba(255, 196, 40, 0.8);
+}
+.frog-msg {
+  margin: 10px 14px 6px;
+  display: grid;
+  gap: 4px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.5s, transform 0.5s;
+  text-align: left;
+  font-size: 12px;
+  color: #e9e6dc;
+}
+.frog-msg.in {
+  opacity: 1;
+  transform: none;
+}
+.frog-msg b {
+  color: #ffd23f;
+  font-weight: 600;
+}
+
+/* the background-reading badge */
+.scan-badge {
+  position: fixed;
+  z-index: 95;
+  top: calc(var(--safe-t) + 74px);
+  right: 12px;
+  height: 46px;
+  max-width: 46px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-radius: 23px;
+  overflow: hidden;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow: inset 0 0 0 1px var(--glass-edge), 0 8px 24px rgba(0, 0, 0, 0.16);
+  transition: max-width 0.45s var(--spring), padding 0.3s;
+  animation: fade 0.3s;
+}
+.scan-badge.open {
+  max-width: 270px;
+  padding-right: 16px;
+}
+.scan-badge .ring {
+  position: relative;
+  flex: none;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+}
+.scan-badge .ring svg {
+  position: absolute;
+}
+.scan-badge .ring > i {
+  display: grid;
+  place-items: center;
+}
+.scan-badge .txt {
+  display: grid;
+  text-align: left;
+  white-space: nowrap;
+  padding-left: 2px;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.scan-badge.open .txt {
+  opacity: 1;
+  transition-delay: 0.12s;
+}
+.scan-badge b {
+  font-size: 13px;
+}
+.scan-badge small {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.ob-chat .a.t {
+  width: auto;
+}
+.toast.tappable {
+  white-space: normal;
+  max-width: 86vw;
+  text-align: center;
 }

@@ -5,7 +5,7 @@ import { loadContent } from './library';
 import type { DocMeta } from './types';
 
 /** The built-in welcome guide is the app's own manual, never a source of quotes or favourite words. */
-export const isGuide = (d: DocMeta) => d.name === 'Welcome to Quire' || d.fileName === 'Welcome to Quire.md';
+export const isGuide = (d: DocMeta) => /^Welcome to (Frogity|Quire)(\.md)?$/.test(d.name) || /^Welcome to (Frogity|Quire)\.md$/.test(d.fileName);
 
 export interface Harvest {
   quotes: string[];

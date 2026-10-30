@@ -5,7 +5,7 @@
 import * as db from './db';
 import { wikiHtmlToRich } from './mathtext';
 
-const HDRS = { 'Api-User-Agent': 'Quire/1.1 (personal reading app)' };
+const HDRS = { 'Api-User-Agent': 'Frogity/1.1 (personal reading app)' };
 
 export interface Definition {
   word: string;

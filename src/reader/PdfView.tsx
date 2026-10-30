@@ -38,6 +38,7 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
   const queue = useRef(new Set<number>());
   const busy = useRef(false);
   const findQ = useRef('');
+  const tasks = useRef(new Set<{ cancel: () => void }>()); // renders in flight (so a new gesture can stop them at once)
   const gesturing = useRef(false); // true while fingers are pinching: no canvas work, so the gesture stays at 60fps
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
@@ -99,11 +100,28 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
     if (!alive.current || !pageEls.current[i] || !visible.current.has(i)) return;
     const tl = document.createElement('div');
     tl.className = 'textLayer';
+    // built once at this size; later zooms just scale the whole layer (one cheap transform, no re-layout of the words)
+    const w0 = pageW(i);
+    tl.dataset.w0 = String(w0);
+    const h0 = pageH(i);
+    const fix = () => {
+      const st = tl.style;
+      st.inset = 'auto';
+      st.left = '0';
+      st.top = '0';
+      st.width = `${w0}px`;
+      st.height = `${h0}px`;
+      st.transformOrigin = '0 0';
+      st.setProperty('--total-scale-factor', String(w0 / sizes[i].w));
+    };
+    fix();
     el.appendChild(tl);
-    const cssScale = pageW(i) / sizes[i].w;
+    const cssScale = w0 / sizes[i].w;
     try {
       const layer = new pdfjs.TextLayer({ textContentSource: page.streamTextContent(), container: tl, viewport: page.getViewport({ scale: cssScale }) });
+      fix(); // pdf.js sizes the layer itself; keep the size this layer was built at
       await layer.render();
+      fix();
       if (findQ.current) markFind(tl, findQ.current);
     } catch {
       /* page was recycled */
@@ -113,9 +131,12 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
   const draw = async (i: number) => {
     const el = pageEls.current[i];
     if (!el || !sizes[i] || !visible.current.has(i)) return;
-    const scale = targetScale(i);
+    // When zoomed in, the full page is drawn at "fit width" sharpness only; detail tiles (below) carry the zoom.
+    // So zooming never means re-drawing whole pages, and zooming out never re-draws anything.
+    const zoomedIn = zoomRef.current > 1.15;
+    const scale = zoomedIn ? Math.min(Math.round((pageW(i) / zoomRef.current) * devPx()) / sizes[i].w, targetScale(i)) : targetScale(i);
     const prev = done.current.get(i);
-    if (prev !== undefined && Math.abs(prev - scale) / scale < 0.04) {
+    if (prev !== undefined && (zoomedIn || (prev >= scale * 0.92 && prev <= scale * 2.6))) {
       await ensureText(i);
       return;
     }
@@ -125,11 +146,17 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
     try {
       const viewport = page.getViewport({ scale });
       // exact device-pixel size of the page box: one canvas pixel per screen pixel
-      const exact = Math.abs(viewport.width - pageW(i) * devPx()) < 1.5;
+      const exact = !zoomedIn && Math.abs(viewport.width - pageW(i) * devPx()) < 1.5;
       canvas.width = exact ? Math.round(pageW(i) * devPx()) : Math.round(viewport.width);
       canvas.height = exact ? Math.round(pageH(i) * devPx()) : Math.round(viewport.height);
       const ctx = canvas.getContext('2d', { alpha: false })!;
-      await page.render({ canvas, canvasContext: ctx, viewport }).promise;
+      const task = page.render({ canvas, canvasContext: ctx, viewport });
+      tasks.current.add(task);
+      try {
+        await task.promise;
+      } finally {
+        tasks.current.delete(task);
+      }
       if (!alive.current || !pageEls.current[i] || !visible.current.has(i)) return;
       const old = el.querySelector('canvas:not(.hi)');
       if (old) old.replaceWith(canvas);
@@ -161,8 +188,8 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
     const pr = el.getBoundingClientRect();
     const vr = sc.getBoundingClientRect();
     const zoomed = pr.width / el.offsetWidth || 1; // 1 unless a pinch transform is mid-flight
-    const mx = vr.width * 0.3;
-    const my = vr.height * 0.3;
+    const mx = vr.width * 0.18;
+    const my = vr.height * 0.18;
     // tile edges sit on whole device pixels, like the page itself
     const x0 = Math.floor(Math.max(0, (vr.left - mx - pr.left) / zoomed) * dpr) / dpr;
     const y0 = Math.floor(Math.max(0, (vr.top - my - pr.top) / zoomed) * dpr) / dpr;
@@ -185,11 +212,16 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
     canvas.height = Math.round(rh * k);
     // percentages of the page box, so the tile scales with the page if the size changes before it is replaced
     const cssH = pageH(i);
-    canvas.style.cssText = `left:${(x0 / cssW) * 100}%;top:${(y0 / cssH) * 100}%;width:${(rw / cssW) * 100}%;height:${(rh / cssH) * 100}%;inset:auto;right:auto;bottom:auto`;
+    // (inset first: the shorthand would otherwise wipe out left/top)
+    canvas.style.cssText = `inset:auto;left:${(x0 / cssW) * 100}%;top:${(y0 / cssH) * 100}%;width:${(rw / cssW) * 100}%;height:${(rh / cssH) * 100}%`;
+    const task = page.render({ canvas, canvasContext: canvas.getContext('2d', { alpha: false })!, viewport });
+    tasks.current.add(task);
     try {
-      await page.render({ canvas, canvasContext: canvas.getContext('2d', { alpha: false })!, viewport }).promise;
+      await task.promise;
     } catch {
       return;
+    } finally {
+      tasks.current.delete(task);
     }
     if (!alive.current || !visible.current.has(i) || Math.abs(pageW(i) - cssW) > 1) return;
     el.querySelector('canvas.hi')?.remove();
@@ -201,12 +233,13 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
     if (busy.current || gesturing.current) return;
     busy.current = true;
     try {
-      while (queue.current.size && alive.current && !gesturing.current) {
+      const nearest = (set: Set<number>, ok: (i: number) => boolean = () => true) => {
         const sc = scroller;
         const mid = sc ? sc.scrollTop + sc.clientHeight / 2 : 0;
         let best = -1;
         let bd = Infinity;
-        for (const i of queue.current) {
+        for (const i of set) {
+          if (!ok(i)) continue;
           const el = pageEls.current[i];
           const d = el ? Math.abs(el.offsetTop + el.offsetHeight / 2 - mid) : 1e9;
           if (d < bd) {
@@ -214,16 +247,27 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
             best = i;
           }
         }
-        queue.current.delete(best);
-        await draw(best);
-        await new Promise((r) => requestAnimationFrame(() => r(null)));
-      }
-      // sharp detail for what's on screen, once the base pages are in
-      while (hiQueue.current.size && !queue.current.size && alive.current && !gesturing.current) {
-        const i = hiQueue.current.values().next().value as number;
-        hiQueue.current.delete(i);
-        await drawHi(i);
-        await new Promise((r) => requestAnimationFrame(() => r(null)));
+        return best;
+      };
+      const frame = () => new Promise((r) => requestAnimationFrame(() => r(null)));
+      while ((queue.current.size || hiQueue.current.size) && alive.current && !gesturing.current) {
+        const zoomedIn = zoomRef.current > 1.15;
+        // zoomed in: the sharp tile for what you are looking at comes before anything else
+        const hiFirst = zoomedIn ? nearest(hiQueue.current, (i) => done.current.has(i)) : -1;
+        if (hiFirst >= 0) {
+          hiQueue.current.delete(hiFirst);
+          await drawHi(hiFirst);
+        } else if (queue.current.size) {
+          const i = nearest(queue.current);
+          queue.current.delete(i);
+          await draw(i);
+        } else {
+          const i = nearest(hiQueue.current);
+          if (i < 0) break;
+          hiQueue.current.delete(i);
+          await drawHi(i);
+        }
+        await frame();
       }
     } finally {
       busy.current = false;
@@ -267,9 +311,11 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
 
   // zoom / width / page sizes changed: keep what's on screen, rescale text layers by CSS, then sharpen
   useLayoutEffect(() => {
-    sizes.forEach((s, i) => {
-      const el = pageEls.current[i];
-      if (el && s) el.style.setProperty('--total-scale-factor', String(pageW(i) / s.w));
+    pageEls.current.forEach((el, i) => {
+      const tl = el?.querySelector<HTMLElement>(':scope > .textLayer');
+      if (!tl || !sizes[i]) return;
+      const r = pageW(i) / Number(tl.dataset.w0 || pageW(i));
+      tl.style.transform = Math.abs(r - 1) < 0.001 ? '' : `scale(${r})`;
     });
     const wr = wrap.current;
     if (wr) {
@@ -469,6 +515,8 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
         start = { d: dist(e.touches), cx: m.x, cy: m.y, sl: el.scrollLeft, st: el.scrollTop };
         live = { scale: 1, dx: 0, dy: 0 };
         gesturing.current = true;
+        tasks.current.forEach((t) => t.cancel());
+        tasks.current.clear();
         inner.style.transition = '';
         inner.style.transformOrigin = `${start.cx + start.sl}px ${start.cy + start.st}px`;
         inner.style.willChange = 'transform';
@@ -488,6 +536,8 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
           const real = clampTotal(want);
           const my = ++gen;
           gesturing.current = true;
+          tasks.current.forEach((t) => t.cancel());
+          tasks.current.clear();
           // glide to the new size, then lay out once
           inner.style.transformOrigin = `${cx + sl}px ${cy + st}px`;
           inner.style.willChange = 'transform';

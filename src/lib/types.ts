@@ -79,6 +79,8 @@ export interface Settings {
   justify: boolean;
   haptics: boolean;
   dailyGoal: number; // minutes
+  reminders: boolean; // a gentle evening notification
+  reminderTime: string; // HH:MM
   streakView: 'globe' | 'plant'; // the ASCII picture shown on the streak page (kept until you change it)
   wpm: number; // learned reading speed in liquid/text views (words per minute)
   secPerPage: number; // learned seconds per page in page view
@@ -104,6 +106,8 @@ export const DEFAULT_SETTINGS: Settings = {
   justify: true,
   haptics: true,
   dailyGoal: 15,
+  reminders: false,
+  reminderTime: '20:30',
   streakView: 'globe',
   wpm: 230,
   secPerPage: 100,

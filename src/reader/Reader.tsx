@@ -15,10 +15,10 @@ import { ContentsSheet, MoreSheet, THEMES, TypeSheet, type MoreAction } from './
 import { BinaryView, CodeView, ImageView, MediaView, SheetView } from './OtherViews';
 import { anchorFromSelection, applyHighlights, clearMarks, findAll, wordAt, wrapSentences } from './dom';
 import { AskSheet } from './Ask';
+import { LQ_VERSION, queueScan, reportScan, useScan } from '../lib/scan';
 import { KIND_LABEL } from '../lib/formats/detect';
 import { fontById } from '../lib/fonts';
 
-const LQ_VERSION = 'lq8';
 
 const AUTO_MARK_MS = 120_000; // read for two minutes in total and the app keeps your place
 
@@ -51,9 +51,10 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [thumbs, setThumbs] = useState(false);
   const [scanned, setScanned] = useState<number[]>([]);
-  // scanned (picture-only) PDFs: read them once with OCR in the background; until it works, liquid/listen aren't offered
-  const [textless, setTextless] = useState(false);
-  const [ocrJob, setOcrJob] = useState<{ done: number; total: number } | null>(null);
+  // scanned (picture-only) PDFs are read in the background from the moment they are added; until that has worked,
+  // liquid and listen aren't offered
+  const scan = useScan(doc.id);
+  const textless = doc.kind === 'pdf' && (scan?.status === 'running' || scan?.status === 'none');
   const [ocrText, setOcrText] = useState<{ text: string; busy: boolean; p: number } | null>(null);
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const flowRef = useRef<HTMLDivElement>(null);
@@ -154,7 +155,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
         setScanned(res.scannedPages);
         await db.put('cache', key, { blocks: res.blocks, scanned: res.scannedPages });
         afterLiquid(root);
-        if (res.scannedPages.length && !ocrBusy.current) setTimeout(() => runOcr(true), 600);
+        if (res.scannedPages.length) setTimeout(() => runOcr(true), 600);
       } catch (e) {
         if ((e as Error).name !== 'AbortError') {
           console.error(e);
@@ -170,78 +171,9 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     };
   }, [content, liquid]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ---------------------------------------------------------------- scanned PDFs: recognise the text automatically
-  const ocrBusy = useRef(false);
-  /** OCR every scanned-page picture in `blocks`, turning each into paragraphs. */
-  const recogniseBlocks = async (blocks: LBlock[], isAlive: () => boolean): Promise<{ out: LBlock[]; chars: number }> => {
-    const { recognize } = await import('../lib/ocr');
-    const total = blocks.filter((b) => b.t === 'img' && b.kind === 'scan').length;
-    const out: LBlock[] = [];
-    let done = 0;
-    let chars = 0;
-    setOcrJob({ done: 0, total });
-    for (const b of blocks) {
-      if (!isAlive()) throw new DOMException('aborted', 'AbortError');
-      if (b.t === 'img' && b.kind === 'scan') {
-        const r = await recognize(b.blob);
-        done++;
-        setOcrJob({ done, total });
-        chars += r.text.length;
-        for (const para of r.text.split(/\n\n+/)) if (para.trim()) out.push({ t: 'p', html: para.replace(/&/g, '&amp;').replace(/</g, '&lt;'), page: b.page });
-      } else out.push(b);
-    }
-    return { out, chars };
-  };
-
   useEffect(() => {
-    if (!pdf || content?.type !== 'pdf') return;
-    let alive = true;
-    const ac = new AbortController();
-    (async () => {
-      const key = `${id}:${LQ_VERSION}`;
-      const cached = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', key);
-      if (!alive) return;
-      if (cached && cached.scanned.length === 0) {
-        const hasText = cached.blocks.some((b) => b.t === 'p');
-        if (!hasText) setTextless(true); // recognised before, nothing readable
-        return;
-      }
-      // does this PDF have a text layer at all? look at a handful of pages
-      const n = pdf.numPages;
-      const sample = [1, 2, 3, Math.ceil(n / 2), n].filter((v, i, a) => v >= 1 && v <= n && a.indexOf(v) === i);
-      let withText = 0;
-      for (const pn of sample) {
-        const tc = await (await pdf.getPage(pn)).getTextContent();
-        if (tc.items.reduce((a, it) => a + ('str' in it ? it.str.trim().length : 0), 0) > 25) withText++;
-      }
-      if (!alive || withText / sample.length > 0.4) return;
-      setTextless(true);
-      if (ocrBusy.current) return;
-      ocrBusy.current = true;
-      try {
-        const base = cached?.blocks ?? (await pdfToLiquid(content.data, () => {}, ac.signal)).blocks;
-        const { out, chars } = await recogniseBlocks(base, () => alive);
-        if (!alive) return;
-        if (chars < 60) {
-          toast('No readable text was found in this scan');
-          return; // stays "page view only": liquid and listen are not offered
-        }
-        await db.put('cache', key, { blocks: out, scanned: [] });
-        setScanned([]);
-        setTextless(false);
-        toast('Text recognised — Liquid mode and Listen are ready');
-      } catch (e) {
-        if ((e as Error).name !== 'AbortError') console.warn('auto OCR failed', e);
-      } finally {
-        ocrBusy.current = false;
-        if (alive) setOcrJob(null);
-      }
-    })();
-    return () => {
-      alive = false;
-      ac.abort();
-    };
-  }, [pdf]); // eslint-disable-line react-hooks/exhaustive-deps
+    queueScan(doc); // no-op if it was already looked at when it was added
+  }, [doc.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const restoredLiquid = useRef(false);
   const restoreLiquidPage = (root: HTMLElement) => {
@@ -809,7 +741,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
           if (b.t === 'img' && b.kind === 'scan') {
             const r = await recognize(b.blob, (p) => !silent && setOcrText({ text, busy: true, p: (done + p) / Math.max(1, total) }));
             done++;
-            if (silent) setOcrJob({ done, total });
+            if (silent) reportScan(id, doc.name, done, total);
             text += r.text + '\n\n';
             for (const para of r.text.split(/\n\n+/)) if (para.trim()) out.push({ t: 'p', html: para.replace(/&/g, '&amp;').replace(/</g, '&lt;'), page: b.page });
           } else out.push(b);
@@ -824,7 +756,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     } catch (e) {
       if (!silent) setOcrText({ text: `OCR failed: ${(e as Error).message}`, busy: false, p: 1 });
     } finally {
-      if (silent) setOcrJob(null);
+      if (silent) reportScan(id, doc.name, 1, 1, true);
     }
   };
 
@@ -874,7 +806,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     { id: 'convert', label: 'Convert / export…', pixel: 'convert' },
     { id: 'share', label: 'Share original', icon: 'share' },
     { id: 'info', label: 'About this file', icon: 'info' },
-    { id: 'remove', label: doc.uri ? 'Remove from shelf' : 'Delete from Quire', icon: 'trash' },
+    { id: 'remove', label: doc.uri ? 'Remove from shelf' : 'Delete from Frogity', icon: 'trash' },
   ];
 
   const onMore = async (a: string) => {
@@ -1023,12 +955,6 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
 
       {liquid && <div className="r-fade" style={{ opacity: chrome || listen ? 1 : 0.55 }} />}
 
-      {ocrJob && (
-        <div className="r-chip" role="status">
-          <PixelLoader size={4} gap={2} /> reading the scan · {ocrJob.done}/{ocrJob.total}
-        </div>
-      )}
-
       <div className={`r-dock${chrome || listen ? '' : ' hide'}`}>
         {listen && (
           <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
@@ -1128,7 +1054,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
       <Sheet open={sheet === 'remove'} onClose={() => setSheet(null)} title={doc.uri ? 'Remove from shelf?' : 'Delete this file?'}>
         <div className="sheet-body">
           <p className="muted" style={{ marginTop: 0, fontSize: 14 }}>
-            {doc.uri ? 'The file stays where it is on your phone; only its place on your shelf (with bookmarks and highlights) goes.' : 'The copy inside Quire, its bookmarks and highlights are deleted. Originals you opened from other apps are untouched.'}
+            {doc.uri ? 'The file stays where it is on your phone; only its place on your shelf (with bookmarks and highlights) goes.' : 'The copy inside Frogity, its bookmarks and highlights are deleted. Originals you opened from other apps are untouched.'}
           </p>
           <button
             className="pill danger"

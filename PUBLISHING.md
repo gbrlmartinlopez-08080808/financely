@@ -1,4 +1,4 @@
-# Publishing Quire on Google Play
+# Publishing Frogity on Google Play
 
 This is the checklist, in the order you should do it. Items marked **BLOCKER** will get the app rejected or cause trouble later if skipped. Policies change, so confirm anything marked *(verify)* in Play Console → *Policy and programs* before submitting.
 
@@ -6,7 +6,7 @@ This is the checklist, in the order you should do it. Items marked **BLOCKER** w
 
 ## 0. Decide these first (they are hard to change later)
 
-1. **BLOCKER – the name.** "Quire" is already the name of a well-known project-management product (quire.io) and probably registered as a trademark in software classes. Google can remove an app after a trademark complaint. Pick a name that is unique, then search: Google Play, USPTO TESS, EUIPO eSearch, WIPO Global Brand Database, plus the web. Do not put another company's brand (Adobe, Google, "PDF") in the name.
+1. **BLOCKER – the name.** "Frogity" is already the name of a well-known project-management product (quire.io) and probably registered as a trademark in software classes. Google can remove an app after a trademark complaint. Pick a name that is unique, then search: Google Play, USPTO TESS, EUIPO eSearch, WIPO Global Brand Database, plus the web. Do not put another company's brand (Adobe, Google, "PDF") in the name.
 2. **BLOCKER – the application ID.** Currently `app.quire.reader` (in `android/app/build.gradle` → `applicationId`, `namespace`, `capacitor.config.ts` → `appId`, `AndroidManifest`, Java package folders). **It can never change after the first upload.** Use a domain you control or a unique string, e.g. `com.yourname.pages`.
    Changing it also means the phone currently running the test build treats the new app as a different app (uninstall the old one).
 3. **Contact details.** A support email and a public privacy-policy URL. Put them in `src/lib/config.ts` (`SUPPORT_EMAIL`, `PRIVACY_URL`) – the app links to them from *Settings → About* and from the "Report this answer" button.
@@ -78,7 +78,7 @@ Do not claim things the app doesn't do, don't mention other apps/brands in the d
 3. **Free third-party services have no guarantees.** `api.dictionaryapi.dev`, Wikimedia's APIs and Pollinations' text API are free and can rate-limit, change or disappear. Wikimedia asks apps to send an identifying `User-Agent`/`Api-User-Agent` with contact info – put your email in `src/lib/lookup.ts` (`HDRS`) before launch. Read each service's current terms. If the app becomes popular, put your own small proxy in front of them (and of the AI) so you can switch providers without an update.
 4. **AI service terms & privacy.** Pollinations is a third party; its terms govern the data you send. The app asks for consent before first use and says what is sent. Keep that wording accurate if you change providers.
 5. **Privacy law (GDPR/UK-GDPR/CCPA).** With no accounts and no servers you collect almost nothing, but IP addresses reach the third parties above. Your privacy policy must say so, name them, and give a contact. If you serve EU users, a short "data controller" line with your name/contact is expected.
-6. **User content & copyright.** Quire reads files the user already owns. Do not add features that strip DRM or download paywalled content. The *Convert* and *Save link* features should be described as personal-use tools.
+6. **User content & copyright.** Frogity reads files the user already owns. Do not add features that strip DRM or download paywalled content. The *Convert* and *Save link* features should be described as personal-use tools.
 7. **Children.** Don't market to under-13s (COPPA) – the 13+/18+ target audience above handles this.
 8. **Trademarks in assets.** The icon and artwork here are original. Don't add screenshots showing other brands' logos or copyrighted book covers/pages you don't have rights to – use public-domain material (the screenshots in `store/` use only generated/public-domain content).
 9. **Open-source obligations if you modify libraries** – none are copyleft here, so no source-disclosure duty, but keep notices.
@@ -104,3 +104,10 @@ Do not claim things the app doesn't do, don't mention other apps/brands in the d
 - The speech engine's phonemizer comes from `piper-phonemize` built for the web (the loader script is vendored in `src/lib/vendor/piper-phonemize.js`, MIT, from `@diffusionstudio/vits-web`). Its WebAssembly binary and the espeak-ng voice data (**espeak-ng is GPL-3.0**) are **not in the APK**: they are downloaded once from jsDelivr when someone installs a studio voice, and kept in the app's private storage. If you want to be extra careful about GPL, either keep it that way and say so in the store listing / About, or remove the "Studio voices" section (`src/lib/neural.ts`, `src/lib/piper.worker.ts`, the Voice sheet) and ship only phone voices.
 - Free catalogues: only files that the catalogues themselves offer for free are fetched (Gutenberg, Internet Archive, arXiv); Google Books / Open Library results are descriptions with links to the web. Rights belong to those sites; the app says so on screen.
 - Ask is capped at 30 questions per day per phone (`DAILY_ASK_CAP` in `src/lib/ai.ts`) to stay inside the free service's limits.
+
+## Notifications
+- The evening reminder uses `@capacitor/local-notifications` (notifications made on the phone; nothing is sent anywhere). It needs the `POST_NOTIFICATIONS` permission on Android 13+, which the app asks for only when the user switches reminders on. The plugin's `SCHEDULE_EXACT_ALARM` permission is removed in `AndroidManifest.xml` on purpose (not needed, and Play restricts it).
+- Data safety form: no data collected or shared by notifications.
+
+## The name
+- The app is called **Frogity**. The Android package id is still `app.quire.reader` (it cannot change after publishing, and changing it now would stop updates installing over the existing app). If you want a matching id, change `appId` in `capacitor.config.ts`, the `namespace`/`applicationId` in `android/app/build.gradle` and the Java package before the first publish. Check that the name is free as a trademark and on Google Play first.

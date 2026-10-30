@@ -7,7 +7,7 @@ const ENDPOINT = 'https://text.pollinations.ai/openai';
 
 /**
  * The free service is shared by everyone, so it rate-limits. To stay inside it (and keep Ask free for
- * you) Quire allows this many questions a day on this phone; the counter resets at midnight.
+ * you) Frogity allows this many questions a day on this phone; the counter resets at midnight.
  */
 export const DAILY_ASK_CAP = 30;
 export async function askQuota(): Promise<{ used: number; left: number; cap: number }> {
@@ -81,7 +81,7 @@ const SUMMARY = /\b(summar|overview|tl;?dr|main (idea|point)|key (idea|point|tak
 
 export async function ask(opts: { title: string; passages: string[]; question: string; history: Msg[]; selection?: string; signal?: AbortSignal }): Promise<string> {
   const { title, passages, question, history, selection, signal } = opts;
-  if ((await askQuota()).left <= 0) throw new Error(`That’s today’s ${DAILY_ASK_CAP} free questions. Ask resets at midnight — everything else in Quire stays free and unlimited.`);
+  if ((await askQuota()).left <= 0) throw new Error(`That’s today’s ${DAILY_ASK_CAP} free questions. Ask resets at midnight — everything else in Frogity stays free and unlimited.`);
   const excerpts = selection ? [selection] : SUMMARY.test(question) ? sample(passages) : retrieve(passages, question + ' ' + history.slice(-2).map((m) => m.content).join(' '));
   const context = excerpts.join('\n---\n').slice(0, 6500);
   const system =

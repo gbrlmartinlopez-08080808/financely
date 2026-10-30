@@ -1359,16 +1359,36 @@
   font-size: 11.5px;
 }
 .row {
-  min-height: 54px;
+  min-height: 58px;
+  padding: 13px 0;
+  gap: 16px;
 }
 .row-label {
   font-size: 15px;
+  line-height: 1.3;
 }
 .row-sub {
   font-size: 12.5px;
+  line-height: 1.4;
+  margin-top: 3px;
+  padding-right: 4px;
+}
+.row > svg:first-child,
+.row > .pixel:first-child {
+  flex: none;
+  width: 24px;
+}
+.row .pill.sm,
+.row .toggle,
+.row .time-field {
+  flex: none;
 }
 .section-label {
-  margin: 20px 0 6px;
+  margin: 28px 0 6px;
+}
+.sheet-body .ruler + .row,
+.sheet-body .ruler-wrap + .row {
+  margin-top: 8px;
 }
 .chip {
   height: 40px;

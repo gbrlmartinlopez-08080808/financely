@@ -4,6 +4,7 @@ import * as db from '../lib/db';
 import { Icon } from '../ui/Icon';
 import { Ruler, Segmented, Sheet, Toggle, toast } from '../ui/kit';
 import { isNative } from '../lib/native';
+import { notifyPermission, refreshReminder } from '../lib/reminders';
 import { getFolders, linkFolder, rescanAll, unlinkFolder, type LinkedFolder } from '../lib/linked';
 import { formatSize } from '../lib/library';
 import { FontsSheet } from '../reader/sheets';
@@ -110,6 +111,41 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
           <Toggle on={s.haptics} onChange={(v) => updateSettings({ haptics: v })} label="Haptic feedback" />
         </div>
 
+        <div className="section-label">reminders</div>
+        <div className="row">
+          <Icon name="timer" />
+          <div className="grow">
+            <div className="row-label">Evening reminder</div>
+            <div className="row-sub">{isNative ? 'A quiet nudge to keep your streak. Skipped on days you’ve already reached your goal.' : 'Available in the Android app.'}</div>
+          </div>
+          <Toggle
+            on={s.reminders}
+            onChange={async (v) => {
+              if (v && !(await notifyPermission(true))) return toast('Allow notifications for Frogity in Android settings to get reminders');
+              updateSettings({ reminders: v });
+              setTimeout(refreshReminder, 450);
+            }}
+            label="Evening reminder"
+          />
+        </div>
+        {s.reminders && (
+          <div className="row">
+            <div className="grow">
+              <div className="row-label">Remind me at</div>
+            </div>
+            <input
+              type="time"
+              className="time-field"
+              value={s.reminderTime}
+              onChange={(e) => {
+                updateSettings({ reminderTime: e.target.value || '20:30' });
+                setTimeout(refreshReminder, 450);
+              }}
+              aria-label="Reminder time"
+            />
+          </div>
+        )}
+
         <div className="section-label">ask (free ai)</div>
         <div className="row">
           <Icon name="ask" />
@@ -186,10 +222,10 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
         <div className="row">
           <Icon name="book" />
           <div className="grow">
-            <div className="row-label">Make Quire your default reader</div>
+            <div className="row-label">Make Frogity your default reader</div>
             <div className="row-sub">
               {isNative
-                ? 'Open any PDF/EPUB/DOCX in your file manager → “Open with” → Quire → “Always”. Quire also appears in the Share menu.'
+                ? 'Open any PDF/EPUB/DOCX in your file manager → “Open with” → Frogity → “Always”. Frogity also appears in the Share menu.'
                 : 'Install the Android app to open files straight from your file manager.'}
             </div>
           </div>
@@ -217,7 +253,7 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
           <Icon name="ask" />
           <div className="grow">
             <div className="row-label">Replay the introduction</div>
-            <div className="row-sub">The short tour of everything Quire does</div>
+            <div className="row-sub">The short tour of everything Frogity does</div>
           </div>
           <Icon name="right" size={18} />
         </button>
@@ -230,7 +266,7 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
           <Icon name="right" size={18} />
         </button>
         <div style={{ textAlign: 'center', padding: '26px 0 10px' }} className="mono muted">
-          <div style={{ fontSize: 11 }}>quire {APP_VERSION} · free · no ads · no accounts · no tracking</div>
+          <div style={{ fontSize: 11 }}>frogity {APP_VERSION} · free · no ads · no accounts · no tracking</div>
           <div style={{ fontSize: 10.5, marginTop: 6, lineHeight: 1.5 }}>
             Your library stays on this phone.
             <br />

@@ -270,10 +270,10 @@ export function Ruler({
 }
 
 // ------------------------------------------------------------------ toasts
-let toastMsg: { text: string; id: number; kind?: 'award' } | null = null;
+let toastMsg: { text: string; id: number; kind?: 'award'; onClick?: () => void } | null = null;
 const toastSubs = new Set<() => void>();
-export function toast(text: string, kind?: 'award') {
-  toastMsg = { text, id: Date.now(), kind };
+export function toast(text: string, kind?: 'award', onClick?: () => void) {
+  toastMsg = { text, id: Date.now(), kind, onClick };
   toastSubs.forEach((s) => s());
   const id = toastMsg.id;
   setTimeout(() => {
@@ -281,7 +281,7 @@ export function toast(text: string, kind?: 'award') {
       toastMsg = null;
       toastSubs.forEach((s) => s());
     }
-  }, kind ? 4200 : 2400);
+  }, onClick ? 9000 : kind ? 4200 : 2400);
 }
 export function Toasts() {
   const msg = useSyncExternalStore(
@@ -292,8 +292,20 @@ export function Toasts() {
     () => toastMsg,
   );
   return msg ? (
-    <div className={`toast${msg.kind ? ' ' + msg.kind : ''}`} key={msg.id} role="status">
+    <div
+      className={`toast${msg.kind ? ' ' + msg.kind : ''}${msg.onClick ? ' tappable' : ''}`}
+      key={msg.id}
+      role={msg.onClick ? 'button' : 'status'}
+      onClick={() => {
+        const f = msg.onClick;
+        if (!f) return;
+        toastMsg = null;
+        toastSubs.forEach((x) => x());
+        f();
+      }}
+    >
       {msg.text}
+      {msg.onClick && <span aria-hidden> →</span>}
     </div>
   ) : null;
 }

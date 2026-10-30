@@ -358,7 +358,7 @@ export function Library({
               />
             ))}
           </div>
-          <div className="lib-foot">{'· · ·\nquire'}</div>
+          <div className="lib-foot">{'· · ·\nfrogity'}</div>
         </>
       )}
       <div className="lib-pad" />
@@ -389,7 +389,7 @@ export function Library({
       <Sheet open={confirmDel} onClose={() => setConfirmDel(false)} title={`Remove ${picked?.size ?? 0} from your shelf?`}>
         <div className="sheet-body">
           <p className="muted" style={{ marginTop: 0, fontSize: 14 }}>
-            Books and files you added are deleted from Quire. Files you opened in place (from your phone’s storage) stay exactly where they are — only the shelf entry goes. Bookmarks and highlights for these are removed too.
+            Books and files you added are deleted from Frogity. Files you opened in place (from your phone’s storage) stay exactly where they are — only the shelf entry goes. Bookmarks and highlights for these are removed too.
           </p>
           <button
             className="pill danger"
@@ -449,7 +449,11 @@ function ShelfRow({ doc, onOpen, onMenu, picked }: { doc: DocMeta; onOpen: () =>
       onTouchEnd={() => clearTimeout(press.current)}
       onTouchMove={() => clearTimeout(press.current)}
     >
-      {picked !== undefined && <span className={`tick${picked ? ' on' : ''}`} aria-hidden>{picked ? '✓' : ''}</span>}
+      {picked !== undefined && (
+        <span className={`tick${picked ? ' on' : ''}`} aria-hidden>
+          <Pixel name={picked ? 'boxon' : 'box'} size={26} />
+        </span>
+      )}
       <Cover doc={doc} className="thumb" />
       <div className="info">
         <div className="name">{doc.name}</div>
@@ -596,7 +600,7 @@ function DocMenu({ doc, onClose, onOpen, onConvert, onSelect }: { doc: DocMeta |
                 <span className="ic">
                   <Icon name="trash" />
                 </span>
-                {confirm ? 'Tap again to delete' : d.uri ? 'Remove from shelf' : 'Delete from Quire'}
+                {confirm ? 'Tap again to delete' : d.uri ? 'Remove from shelf' : 'Delete from Frogity'}
               </button>
             </div>
           )}

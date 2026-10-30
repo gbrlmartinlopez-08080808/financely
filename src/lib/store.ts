@@ -59,9 +59,12 @@ export async function init() {
 const sortDocs = (d: DocMeta[]) => [...d].sort((a, b) => b.openedAt - a.openedAt);
 
 export async function saveDoc(doc: DocMeta) {
+  const isNew = !state.docs.some((d) => d.id === doc.id);
   await db.put('docs', doc.id, doc);
   const others = state.docs.filter((d) => d.id !== doc.id);
   set({ docs: sortDocs([...others, doc]) });
+  // a new PDF is looked at straight away: if it is a scan, its text is read in the background
+  if (isNew && doc.kind === 'pdf') import('./scan').then((m) => m.queueScan(doc));
 }
 
 export async function patchDoc(id: string, patch: Partial<DocMeta>, resort = false) {

@@ -10,6 +10,7 @@ import { cheer, displayName } from '../lib/cheer';
 import { harvestRecent, type Harvest } from '../lib/harvest';
 import { pickQuote, quoteArt } from '../lib/quotes';
 import { onBack, tap } from '../lib/native';
+import { FrogScene } from './FrogScene';
 
 const MESSAGES: [number, string][] = [
   [0, 'Every shelf starts with a single page.'],
@@ -114,10 +115,14 @@ function DayChart({ date, ms, hours }: { date: Date; ms: number; hours?: number[
   );
 }
 
-export function StatsBubble({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function StatsBubble({ open, onClose, reward, onRewardDone }: { open: boolean; onClose: () => void; reward?: string | null; onRewardDone?: () => void }) {
   const days = useStore((s) => s.days);
   const hours = useStore((s) => s.hours);
   const [pick, setPick] = useState<string | null>(null);
+  const [scene, setScene] = useState(false);
+  useEffect(() => {
+    setScene(!!(open && reward));
+  }, [open, reward]);
   const docs = useStore((s) => s.docs);
   const settings = useStore((s) => s.settings);
   const [full, setFull] = useState(false);
@@ -176,7 +181,7 @@ export function StatsBubble({ open, onClose }: { open: boolean; onClose: () => v
         .sort(),
     [days, goal],
   );
-  const lights = useMemo(() => lightsFor(readingDays, dayKey()), [readingDays]);
+  const lights = useMemo(() => lightsFor(readingDays, reward ?? dayKey()), [readingDays, reward]);
   const msg = [...MESSAGES].reverse().find(([n]) => info.current >= n)?.[1] ?? MESSAGES[0][1];
   const todayDone = info.today >= COUNT_MS;
   const met = info.today >= goal;
@@ -266,7 +271,20 @@ export function StatsBubble({ open, onClose }: { open: boolean; onClose: () => v
               </form>
             )}
           </div>
-          <Globe lights={lights} view={view} onToggle={() => setView((v) => (v === 'globe' ? 'plant' : 'globe'))} />
+          {scene && reward ? (
+            <FrogScene
+              minutes={Math.round((days[reward] ?? 0) / 60000)}
+              goal={settings.dailyGoal}
+              name={settings.name}
+              onEnd={() => {
+                setScene(false);
+                onRewardDone?.();
+                tap('medium');
+              }}
+            />
+          ) : (
+            <Globe lights={lights} view={reward ? 'globe' : view} onToggle={() => setView((v) => (v === 'globe' ? 'plant' : 'globe'))} />
+          )}
           <div className="bubble-cap">
             <b className="mono">
               {lights.length} light{lights.length === 1 ? '' : 's'} on your map

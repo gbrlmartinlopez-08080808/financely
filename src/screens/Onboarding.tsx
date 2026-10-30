@@ -5,8 +5,9 @@ import { lightsFor, renderGlobe } from '../lib/globe';
 import { plantStage } from '../lib/ascii';
 import { GLYPHS, glyphFor } from '../lib/glyphs';
 import { Icon } from '../ui/Icon';
-import { Pixel, Ruler } from '../ui/kit';
-import { tap } from '../lib/native';
+import { Pixel, Ruler, Toggle, toast } from '../ui/kit';
+import { isNative, tap } from '../lib/native';
+import { notifyPermission, refreshReminder } from '../lib/reminders';
 import type { PixelName } from '../lib/pixels';
 
 export type Finish = 'add' | 'guide' | 'none';
@@ -96,7 +97,7 @@ function AnythingStage() {
           </div>
         </div>
       ))}
-      <pre aria-hidden>{`\n   \\   \\   |   /   /\n    \\   \\  |  /   /\n     '-._\\ | /_.-'\n         \\|/\n     .----'----.\n     |  quire  |\n     '---------'`}</pre>
+      <pre aria-hidden>{`\n   \\   \\   |   /   /\n    \\   \\  |  /   /\n     '-._\\ | /_.-'\n         \\|/\n     .----'----.\n     | frogity |\n     '---------'`}</pre>
       <p className="ob-cap mono">opens in place · nothing is copied</p>
     </Card>
   );
@@ -141,7 +142,7 @@ function LiquidStage() {
 
 function ListenStage() {
   const t = useClock(80);
-  const words = 'Quire reads every page aloud while the sentence stays lit.'.split(' ');
+  const words = 'Frogity reads every page aloud while the sentence stays lit.'.split(' ');
   const cur = Math.floor(t * 2.6) % (words.length + 3);
   const BL = '▁▂▃▄▅▆▇█';
   const bars = Array.from({ length: 34 }, (_, i) => BL[Math.floor((Math.sin(t * 5 + i * 0.7) * 0.5 + 0.5) * (Math.sin(t * 1.7 + i * 0.25) * 0.4 + 0.6) * 7.99)]).join('');
@@ -177,22 +178,57 @@ function LookupStage() {
 }
 
 function AskStage() {
-  const t = useClock(70);
-  const q = 'what is the main idea?';
-  const a = 'Slow reading is a different kind of attention, not a lack of speed.';
-  const loop = t % 9;
-  const qs = loop > 8.4 ? '' : q.slice(0, Math.floor(loop * 14));
-  const as = loop > 2.2 && loop < 8.4 ? a.slice(0, Math.floor((loop - 2.2) * 22)) : '';
+  const t = useClock(80);
+  const q = 'What is the main idea?';
+  const a = 'Slow reading is a different kind of attention — not a lack of speed.';
+  const loop = t % 10;
+  const showQ = loop > 0.4 && loop < 9.4;
+  const typing = loop > 1.5 && loop < 2.9;
+  const words = a.split(' ');
+  const n = loop >= 2.9 && loop < 9.4 ? Math.min(words.length, Math.floor((loop - 2.9) * 3.4) + 1) : 0;
   return (
     <Card tall>
-      <div className="ob-chat">
-        <div className="u mono" style={{ opacity: qs ? 1 : 0 }}>{qs || q}</div>
-        {as && <div className="a mono">{as}▍</div>}
+      <div className="ob-chat" aria-hidden>
+        <div className={`u${showQ ? ' in' : ''}`}>{q}</div>
+        <div className={`line${typing || n ? ' in' : ''}`}>
+          <span className="av">
+            <Pixel name="spark" size={13} />
+          </span>
+          <div className={`a${typing ? ' t' : ''}`}>
+            {typing ? (
+              <span className="typing">
+                <i />
+                <i />
+                <i />
+              </span>
+            ) : (
+              <>
+                {words.slice(0, n).join(' ')}
+                <span style={{ opacity: 0 }}>{n && n < words.length ? ' ' : ''}{words.slice(n).join(' ')}</span>
+              </>
+            )}
+          </div>
+        </div>
       </div>
       <div className="ob-icons" aria-hidden>
-        <span><Pixel name="spark" size={20} />ask</span>
-        <span><Pixel name="scan" size={20} />scan</span>
-        <span><Pixel name="convert" size={20} />convert</span>
+        <span>
+          <b>
+            <Pixel name="spark" size={20} />
+          </b>
+          ask
+        </span>
+        <span>
+          <b>
+            <Pixel name="scan" size={20} />
+          </b>
+          scan
+        </span>
+        <span>
+          <b>
+            <Pixel name="convert" size={20} />
+          </b>
+          convert
+        </span>
       </div>
     </Card>
   );
@@ -244,7 +280,7 @@ interface StepDef {
 }
 
 const STEPS: StepDef[] = [
-  { id: 'hello', title: () => 'Read anything. Beautifully.', body: () => 'Quire is a quiet place for everything you read. Free, private, and yours — no account, no ads.', cta: 'Begin' },
+  { id: 'hello', title: () => 'Read anything. Beautifully.', body: () => 'Frogity is a quiet place for everything you read. Free, private, and yours — no account, no ads.', cta: 'Begin' },
   { id: 'name', title: () => 'What should I call you?', body: () => 'Only for little hellos. It never leaves this phone.', cta: 'Continue' },
   { id: 'why', title: (n) => (n ? `${n}, why read at all?` : 'Why read at all?'), body: () => 'Because the best part of your day might be the part where nothing is asking for you.', cta: 'I’m in' },
   { id: 'anything', title: () => 'Open absolutely anything.', body: () => 'PDFs, books, Word, slides, spreadsheets, web links, scans, even code. Files open where they live — no copies, no clutter.', cta: 'Next' },
@@ -347,6 +383,26 @@ export function Onboarding({ onDone }: { onDone: (f: Finish) => void }) {
           {step.id === 'goal' && (
             <div className="ob-ruler">
               <Ruler value={settings.dailyGoal} min={5} max={120} step={5} onChange={(v) => updateSettings({ dailyGoal: v })} format={(v) => `${v} min`} label="Daily goal" />
+              {isNative && (
+                <div className="ob-remind">
+                  <div className="grow">
+                    <b>Remind me each evening</b>
+                    <small className="mono">{settings.reminders ? 'a quiet nudge, never when you’ve done your day' : 'optional — you can change this any time'}</small>
+                  </div>
+                  {settings.reminders && (
+                    <input type="time" className="time-field" value={settings.reminderTime} onChange={(e) => (updateSettings({ reminderTime: e.target.value || '20:30' }), setTimeout(refreshReminder, 450))} aria-label="Reminder time" />
+                  )}
+                  <Toggle
+                    on={settings.reminders}
+                    label="Remind me each evening"
+                    onChange={async (v) => {
+                      if (v && !(await notifyPermission(true))) return toast('Allow notifications for Frogity in Android settings');
+                      updateSettings({ reminders: v });
+                      setTimeout(refreshReminder, 450);
+                    }}
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>

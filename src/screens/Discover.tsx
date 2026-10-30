@@ -212,7 +212,7 @@ export function Discover({ onClose, onOpen }: { onClose: () => void; onOpen: (id
           </button>
         )}
         <p className="disc-fine mono">
-          Quire only fetches files these sites offer for free (public-domain and open-access works). Rights and licences are the sites’ own — check the page behind the globe icon if you plan to share anything.
+          Frogity only fetches files these sites offer for free (public-domain and open-access works). Rights and licences are the sites’ own — check the page behind the globe icon if you plan to share anything.
         </p>
       </div>
     </div>

@@ -10,7 +10,10 @@ import { Reader } from './reader/Reader';
 import { StatsBubble } from './screens/Stats';
 import { AddSheet } from './screens/AddSheet';
 import { Discover } from './screens/Discover';
+import { ScanBadge } from './screens/ScanBadge';
 import { prefetch as prefetchCatalog } from './lib/catalog';
+import { isGuide } from './lib/harvest';
+import { refreshReminder } from './lib/reminders';
 import { importUrl, looksLikeUrl } from './lib/links';
 import { Settings } from './screens/Settings';
 import { Onboarding, type Finish } from './screens/Onboarding';
@@ -26,6 +29,7 @@ export default function App() {
   const onboarded = useStore((s) => s.settings.onboarded);
   const [openId, setOpenId] = useState<string | null>(null);
   const [stats, setStats] = useState(false);
+  const [reward, setReward] = useState<string | null>(null);
   const [settings, setSettings] = useState(false);
   const [convert, setConvert] = useState<{ doc: DocMeta; root?: HTMLElement | null } | null>(null);
   const [scanFiles, setScanFiles] = useState<File[] | null>(null);
@@ -147,6 +151,19 @@ export default function App() {
     }
   };
 
+  // plan the evening reminder again whenever things change
+  useEffect(() => {
+    if (!ready) return;
+    const go = () => refreshReminder();
+    go();
+    document.addEventListener('visibilitychange', go);
+    window.addEventListener('quire:goal', go);
+    return () => {
+      document.removeEventListener('visibilitychange', go);
+      window.removeEventListener('quire:goal', go);
+    };
+  }, [ready]);
+
   // warm the free-books catalogue quietly, so opening it is instant
   useEffect(() => {
     if (!ready) return;
@@ -165,7 +182,10 @@ export default function App() {
       const last = await db.get<string>('kv', 'awarded');
       if (last && last >= y) return;
       await db.put('kv', 'awarded', y);
-      toast('Yesterday’s light is on your map', 'award');
+      toast('Yesterday’s light is on your map', 'award', () => {
+        setReward(y);
+        setStats(true);
+      });
     };
     window.addEventListener('quire:goal', onGoal);
     const t = setTimeout(checkAward, 2500);
@@ -182,8 +202,8 @@ export default function App() {
   // end of the introduction: the welcome guide goes on the shelf (once), then whatever they chose
   const finishIntro = async (f: Finish) => {
     updateSettings({ onboarded: true });
-    let guide = docs.find((d) => d.name === 'Welcome to Quire');
-    if (!guide) guide = await importFile(new Blob([welcome], { type: 'text/markdown' }), 'Welcome to Quire.md', { title: 'Welcome to Quire' });
+    let guide = docs.find(isGuide);
+    if (!guide) guide = await importFile(new Blob([welcome], { type: 'text/markdown' }), 'Welcome to Frogity.md', { title: 'Welcome to Frogity' });
     if (f === 'guide') setOpenId(guide.id);
     else if (f === 'add') setAddOpen(true);
   };
@@ -225,9 +245,9 @@ export default function App() {
         onSettings={() => setSettings(true)}
         onConvert={(doc) => setConvert({ doc })}
         onDiscover={() => setDiscover(true)}
-        onSample={() => importFile(new Blob([welcome], { type: 'text/markdown' }), 'Welcome to Quire.md', { title: 'Welcome to Quire' }).then((m) => setOpenId(m.id))}
+        onSample={() => importFile(new Blob([welcome], { type: 'text/markdown' }), 'Welcome to Frogity.md', { title: 'Welcome to Frogity' }).then((m) => setOpenId(m.id))}
       />
-      <StatsBubble open={stats} onClose={() => setStats(false)} />
+      <StatsBubble open={stats} onClose={() => (setStats(false), setReward(null))} reward={reward} onRewardDone={() => {}} />
       {openDoc && <Reader key={openDoc.id} doc={openDoc} onClose={() => setOpenId(null)} onConvert={(doc, root) => setConvert({ doc, root })} />}
       <Settings open={settings} onClose={() => setSettings(false)} />
       <ConvertSheet doc={convert?.doc ?? null} root={convert?.root} onClose={() => setConvert(null)} onOpenDoc={setOpenId} />
@@ -262,6 +282,7 @@ export default function App() {
         error={linkErr}
       />
       {discover && <Discover onClose={() => setDiscover(false)} onOpen={setOpenId} />}
+      <ScanBadge />
       <Toasts />
       <input
         ref={fileIn}

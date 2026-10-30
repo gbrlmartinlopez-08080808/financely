@@ -199,7 +199,7 @@ async function drawRich(L: Layout, runs: Run[], size: number, opts: { indent?: n
 /** Render liquid/flow HTML (already in the DOM) to a clean PDF. */
 export async function flowToPdf(root: HTMLElement, title: string, onProgress?: (p: number) => void): Promise<Blob> {
   const doc = await newPdf();
-  doc.setProperties({ title, creator: 'Quire' });
+  doc.setProperties({ title, creator: 'Frogity' });
   const margin = 56;
   const L: Layout = { doc, y: margin, margin, width: doc.internal.pageSize.getWidth() - margin * 2, pageH: doc.internal.pageSize.getHeight(), imgCache: new Map() };
   const body = 11;
