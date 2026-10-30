@@ -11,6 +11,7 @@ public class MainActivity extends BridgeActivity {
         IncomingPlugin.setLaunchIntent(getIntent());
         registerPlugin(IncomingPlugin.class);
         registerPlugin(ListenPlugin.class);
+        registerPlugin(WidgetPlugin.class);
         super.onCreate(savedInstanceState);
         // Let the page choose its own layout width (the app scales its interface to fit).
         WebSettings s = getBridge().getWebView().getSettings();

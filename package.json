@@ -11,7 +11,8 @@
     "android:sync": "npm run build && npx cap sync android",
     "android:apk": "npm run android:sync && cd android && ./gradlew assembleRelease",
     "predev": "node scripts/copy-assets.mjs",
-    "prebuild": "node scripts/copy-assets.mjs"
+    "prebuild": "node scripts/copy-assets.mjs",
+    "privacy": "node scripts/privacy.mjs"
   },
   "dependencies": {
     "@capacitor-community/text-to-speech": "^8.0.2",

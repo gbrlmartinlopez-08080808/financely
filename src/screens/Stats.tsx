@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useStore, streakInfo, dayKey, updateSettings, COUNT_MS } from '../lib/store';
+import { useStore, streakInfo, dayKey, updateSettings, freezeStatus, COUNT_MS } from '../lib/store';
 import { fmtMs, glyphFor, legendFor } from '../lib/glyphs';
 import { plantStage } from '../lib/ascii';
 import { lightsFor, renderGlobe } from '../lib/globe';
@@ -118,6 +118,8 @@ function DayChart({ date, ms, hours }: { date: Date; ms: number; hours?: number[
 export function StatsBubble({ open, onClose, reward, onRewardDone }: { open: boolean; onClose: () => void; reward?: string | null; onRewardDone?: () => void }) {
   const days = useStore((s) => s.days);
   const hours = useStore((s) => s.hours);
+  const frozen = useStore((s) => s.freeze);
+  const fz = freezeStatus(frozen);
   const [pick, setPick] = useState<string | null>(null);
   const [scene, setScene] = useState(false);
   useEffect(() => {
@@ -324,15 +326,17 @@ export function StatsBubble({ open, onClose, reward, onRewardDone }: { open: boo
                 </div>
                 <div className="cal-grid" role="grid" aria-label="Reading days">
                   {grid.map((c) => {
-                    const g = glyphFor(c.ms, goal);
+                    const ice = c.ms < COUNT_MS && frozen.used.includes(c.key);
+                    const g = ice ? { ch: '~', level: 0, met: false } : glyphFor(c.ms, goal);
                     return (
                       <button
                         key={c.key}
+                        data-ice={ice || undefined}
                         data-l={g.level}
                         data-met={g.met || undefined}
                         className={`${c.today ? 'today' : ''}${c.key === sel.key ? ' sel' : ''}`}
                         style={{ visibility: c.future ? 'hidden' : 'visible' }}
-                        aria-label={`${c.date.toDateString()}: ${fmtMs(c.ms)}`}
+                        aria-label={`${c.date.toDateString()}: ${ice ? 'freeze day' : fmtMs(c.ms)}`}
                         onClick={() => {
                           tap('select');
                           setPick(c.key === pick ? null : c.key);
@@ -351,6 +355,7 @@ export function StatsBubble({ open, onClose, reward, onRewardDone }: { open: boo
                     </span>
                   ))}
                   <span>min</span>
+                  <span data-ice>~&nbsp;freeze</span>
                 </div>
                 <DayChart date={sel.date} ms={sel.ms} hours={hours[sel.key]} />
               </div>
@@ -360,6 +365,13 @@ export function StatsBubble({ open, onClose, reward, onRewardDone }: { open: boo
                   <div className="v">
                     {info.longest}
                     <small>days</small>
+                  </div>
+                </div>
+                <div className="tile freeze" data-ready={fz.available > 0 || undefined}>
+                  <div className="k">freeze day</div>
+                  <div className="v mono">
+                    {fz.available > 0 ? 'ready' : 'used'}
+                    <small>{fz.bonus > 0 ? `+${fz.bonus} earned` : fz.weekly ? 'resets Monday' : 'back Monday'}</small>
                   </div>
                 </div>
                 <div className="tile">

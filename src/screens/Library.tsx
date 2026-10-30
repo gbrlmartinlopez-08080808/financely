@@ -571,6 +571,18 @@ function DocMenu({ doc, onClose, onOpen, onConvert, onSelect }: { doc: DocMeta |
               <button
                 className="action"
                 onClick={async () => {
+                  toast('Making the card…');
+                  await (await import('../lib/shareCard')).shareBookCard(d).catch(() => toast('Couldn’t make the card'));
+                }}
+              >
+                <span className="ic">
+                  <Pixel name="page" size={16} />
+                </span>
+                Share as a book card
+              </button>
+              <button
+                className="action"
+                onClick={async () => {
                   await patchDoc(d.id, { finished: !d.finished, progress: d.finished ? d.progress : 1 });
                   toast(d.finished ? 'Back on the reading pile' : 'Finished. Nicely done.');
                   onClose();

@@ -828,6 +828,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     { id: 'ocr', label: 'Recognise text (OCR)', pixel: 'scan', hidden: !(content?.type === 'image' || (isPdf && liquid && scanned.length > 0 && !textless)), right: isPdf ? `${scanned.length} scanned` : undefined },
     { id: 'convert', label: 'Convert / export…', pixel: 'convert' },
     { id: 'share', label: 'Share original', icon: 'share' },
+    { id: 'card', label: 'Share as a book card', icon: 'share' },
     { id: 'info', label: 'About this file', icon: 'info' },
     { id: 'remove', label: doc.uri ? 'Remove from shelf' : 'Delete from Frogity', icon: 'trash' },
   ];
@@ -845,6 +846,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     else if (a === 'ocr') runOcr();
     else if (a === 'info') setSheet('info');
     else if (a === 'remove') setSheet('remove');
+    else if (a === 'card') (await import('../lib/shareCard')).shareBookCard(doc).catch(() => toast('Couldn’t make the card'));
     else if (a === 'share') {
       const f = await getFile(id);
       if (f) shareFile(f, doc.fileName).catch(() => {});

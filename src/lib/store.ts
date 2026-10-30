@@ -9,9 +9,17 @@ interface State {
   settings: Settings;
   days: Record<string, number>; // yyyy-mm-dd -> ms read
   hours: Record<string, number[]>; // yyyy-mm-dd -> ms read in each hour of that day
+  freeze: FreezeState;
 }
 
-let state: State = { ready: false, docs: [], settings: DEFAULT_SETTINGS, days: {}, hours: {} };
+/** One free "freeze day" per week keeps a streak alive over a missed day; more can be earned. */
+export interface FreezeState {
+  used: string[]; // days a freeze was spent on (they bridge the streak without adding to it)
+  paid?: string[]; // the subset of `used` that was paid for from the bonus
+  bonus: number; // extra freezes earned (e.g. for sending feedback)
+}
+
+let state: State = { ready: false, docs: [], settings: DEFAULT_SETTINGS, days: {}, hours: {}, freeze: { used: [], bonus: 0 } };
 const listeners = new Set<() => void>();
 
 function set(patch: Partial<State>) {
@@ -32,11 +40,12 @@ export function useStore<T>(sel: (s: State) => T): T {
 export const getState = () => state;
 
 export async function init() {
-  const [docs, settings, dayEntries, hours] = await Promise.all([
+  const [docs, settings, dayEntries, hours, freeze] = await Promise.all([
     db.all<DocMeta>('docs'),
     db.get<Settings>('kv', 'settings'),
     db.entries<number>('days'),
     db.get<Record<string, number[]>>('kv', 'hours'),
+    db.get<FreezeState>('kv', 'freeze'),
   ]);
   const merged: Settings = { ...DEFAULT_SETTINGS, ...settings };
   merged.font = migrateFontId(merged.font);
@@ -53,7 +62,9 @@ export async function init() {
     settings: merged,
     days: Object.fromEntries(dayEntries),
     hours: hours ?? {},
+    freeze: { used: freeze?.used ?? [], paid: freeze?.paid ?? [], bonus: freeze?.bonus ?? 0 },
   });
+  applyFreeze();
 }
 
 const sortDocs = (d: DocMeta[]) => [...d].sort((a, b) => b.openedAt - a.openedAt);
@@ -125,14 +136,16 @@ export async function addReading(ms: number, docId?: string) {
 /** A day "counts" once you have read for at least a minute. */
 export const COUNT_MS = 60_000;
 
-export function streakInfo(days: Record<string, number>) {
+export function streakInfo(days: Record<string, number>, frozen: string[] = state.freeze.used) {
+  const fz = new Set(frozen);
   const counts = (k: string) => (days[k] ?? 0) >= COUNT_MS;
   const d = new Date();
   let current = 0;
   // Today not yet counted shouldn't break the streak.
   if (!counts(dayKey(d))) d.setDate(d.getDate() - 1);
-  while (counts(dayKey(d))) {
-    current++;
+  // A frozen day keeps the chain going without adding to it.
+  while (counts(dayKey(d)) || fz.has(dayKey(d))) {
+    if (counts(dayKey(d))) current++;
     d.setDate(d.getDate() - 1);
   }
   let longest = 0;
@@ -142,10 +155,66 @@ export function streakInfo(days: Record<string, number>) {
   for (const k of keys) {
     const [y, m, dd] = k.split('-').map(Number);
     const date = new Date(y, m - 1, dd);
-    run = prev && Math.round((date.getTime() - prev.getTime()) / 864e5) === 1 ? run + 1 : 1;
+    const gap = prev ? Math.round((date.getTime() - prev.getTime()) / 864e5) : 0;
+    const bridged = prev && gap === 2 && fz.has(dayKey(new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1)));
+    run = prev && (gap === 1 || bridged) ? run + 1 : 1;
     longest = Math.max(longest, run);
     prev = date;
   }
   const total = Object.values(days).reduce((a, b) => a + b, 0);
   return { current, longest, total, today: days[dayKey()] ?? 0, activeDays: keys.length };
+}
+
+// ---------- freeze days ----------
+
+const parseDay = (k: string) => {
+  const [y, m, d] = k.split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
+
+/** Monday of the week a day falls in (weeks run Monday to Sunday). */
+const weekOf = (d: Date) => {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return dayKey(x);
+};
+
+/** Is this week's own freeze still unspent? Freezes paid for from the earned bonus don't count against it. */
+export function freezeStatus(f: FreezeState = state.freeze) {
+  const thisWeek = weekOf(new Date());
+  const weekly = !f.used.some((k) => !(f.paid ?? []).includes(k) && weekOf(parseDay(k)) === thisWeek);
+  return { weekly, bonus: f.bonus, available: (weekly ? 1 : 0) + f.bonus };
+}
+
+/** If yesterday was missed but the streak was alive before it, spend a freeze on it (once, automatically). */
+export function applyFreeze() {
+  const y = new Date();
+  y.setDate(y.getDate() - 1);
+  const yk = dayKey(y);
+  const before = new Date(y);
+  before.setDate(before.getDate() - 1);
+  const bk = dayKey(before);
+  const { days, freeze } = state;
+  const counts = (k: string) => (days[k] ?? 0) >= COUNT_MS;
+  if (counts(yk) || freeze.used.includes(yk)) return;
+  if (!counts(bk) && !freeze.used.includes(bk)) return; // there was no streak to save
+  const st = freezeStatus(freeze);
+  if (!st.available) return;
+  const next: FreezeState = st.weekly
+    ? { ...freeze, used: [...freeze.used, yk] }
+    : { used: [...freeze.used, yk], paid: [...(freeze.paid ?? []), yk], bonus: freeze.bonus - 1 };
+  saveFreeze(next);
+  // let the screen settle first, so the toast isn't missed
+  setTimeout(() => window.dispatchEvent(new CustomEvent('quire:freeze', { detail: { day: yk } })), 1800);
+}
+
+/** Gives the reader an extra freeze day (e.g. a thank-you for feedback). */
+export function grantFreeze(n = 1) {
+  saveFreeze({ ...state.freeze, bonus: state.freeze.bonus + n });
+}
+
+function saveFreeze(freeze: FreezeState) {
+  db.put('kv', 'freeze', freeze);
+  // a fresh `days` object makes everything that shows the streak redraw
+  set({ freeze, days: { ...state.days } });
 }

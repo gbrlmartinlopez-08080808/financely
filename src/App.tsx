@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { init, useStore, updateSettings, getState, dayKey } from './lib/store';
+import { init, useStore, updateSettings, getState, dayKey, applyFreeze, streakInfo } from './lib/store';
 import * as db from './lib/db';
 import { importFile, importText, upgradeCovers } from './lib/library';
-import { initBackButton, isNative, listenIncoming, manageSelectionMenu, readIncoming, setStatusBar, tap } from './lib/native';
+import { initBackButton, isNative, listenIncoming, manageSelectionMenu, readIncoming, setStatusBar, tap, widgetUpdate } from './lib/native';
+import { glyphFor } from './lib/glyphs';
 import { linkFolder, linkPickedFiles, rescanAll } from './lib/linked';
 import type { DocMeta } from './lib/types';
 import { Library } from './screens/Library';
@@ -16,6 +17,7 @@ import { isGuide } from './lib/harvest';
 import { refreshReminder } from './lib/reminders';
 import { importUrl, looksLikeUrl } from './lib/links';
 import { Settings } from './screens/Settings';
+import { RateSheet } from './screens/RateSheet';
 import { Onboarding, type Finish } from './screens/Onboarding';
 import { ConvertSheet } from './screens/Convert';
 import { ScanSheet } from './screens/Scan';
@@ -30,6 +32,7 @@ export default function App() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [stats, setStats] = useState(false);
   const [reward, setReward] = useState<string | null>(null);
+  const [rate, setRate] = useState(false);
   const [settings, setSettings] = useState(false);
   const [convert, setConvert] = useState<{ doc: DocMeta; root?: HTMLElement | null } | null>(null);
   const [scanFiles, setScanFiles] = useState<File[] | null>(null);
@@ -199,6 +202,64 @@ export default function App() {
     };
   }, [ready]);
 
+  // a missed day is covered by a freeze (once a week, plus any you've earned)
+  useEffect(() => {
+    if (!ready) return;
+    const onFreeze = () => toast(`A freeze day saved your ${streakInfo(getState().days).current}-day streak`, 'award');
+    const check = () => document.visibilityState === 'visible' && applyFreeze();
+    window.addEventListener('quire:freeze', onFreeze);
+    document.addEventListener('visibilitychange', check);
+    const t = setTimeout(check, 1500);
+    return () => {
+      window.removeEventListener('quire:freeze', onFreeze);
+      document.removeEventListener('visibilitychange', check);
+      clearTimeout(t);
+    };
+  }, [ready]);
+
+  // keep the home-screen widget's numbers fresh
+  const days = useStore((st) => st.days);
+  const dailyGoal = useStore((st) => st.settings.dailyGoal);
+  useEffect(() => {
+    if (!ready || !isNative) return;
+    const t = setTimeout(() => {
+      const st = getState();
+      const goalMs = dailyGoal * 60_000;
+      let week = '';
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const k = dayKey(d);
+        const ms = st.days[k] ?? 0;
+        week += ms < 60_000 && st.freeze.used.includes(k) ? '~' : glyphFor(ms, goalMs).ch;
+      }
+      widgetUpdate({ day: dayKey(), streak: streakInfo(st.days).current, today: Math.floor((st.days[dayKey()] ?? 0) / 60_000), goal: dailyGoal, week });
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [ready, days, dailyGoal]);
+
+  // after the first streak milestone (3 days) ask, once, how it's going — and offer a freeze day for feedback
+  const idle = !openId && !stats && !settings && !addOpen && !discover && !convert && !scanFiles;
+  useEffect(() => {
+    if (!ready || !onboarded || !idle || rate) return;
+    let alive = true;
+    const t = setTimeout(async () => {
+      const seen = await db.get<{ at: number; asks: number; done?: boolean }>('kv', 'rate');
+      if (!alive || seen?.done) return;
+      if (seen && (seen.asks >= 2 || Date.now() - seen.at < 14 * 864e5)) return;
+      if (streakInfo(getState().days).current >= 3) setRate(true);
+    }, 5000);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [ready, onboarded, idle, rate]);
+  const closeRate = async (sent: boolean) => {
+    setRate(false);
+    const seen = await db.get<{ at: number; asks: number }>('kv', 'rate');
+    await db.put('kv', 'rate', { at: Date.now(), asks: (seen?.asks ?? 0) + 1, done: sent });
+  };
+
   // end of the introduction: the welcome guide goes on the shelf (once), then whatever they chose
   const finishIntro = async (f: Finish) => {
     updateSettings({ onboarded: true });
@@ -250,6 +311,7 @@ export default function App() {
       <StatsBubble open={stats} onClose={() => (setStats(false), setReward(null))} reward={reward} onRewardDone={() => {}} />
       {openDoc && <Reader key={openDoc.id} doc={openDoc} onClose={() => setOpenId(null)} onConvert={(doc, root) => setConvert({ doc, root })} />}
       <Settings open={settings} onClose={() => setSettings(false)} />
+      <RateSheet open={rate} onClose={closeRate} streak={streakInfo(getState().days).current} />
       <ConvertSheet doc={convert?.doc ?? null} root={convert?.root} onClose={() => setConvert(null)} onOpenDoc={setOpenId} />
       <ScanSheet
         files={scanFiles}

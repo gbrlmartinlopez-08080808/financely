@@ -6,7 +6,7 @@ This is the checklist, in the order you should do it. Items marked **BLOCKER** w
 
 ## 0. Decide these first (they are hard to change later)
 
-1. **BLOCKER – the name.** "Frogity" is already the name of a well-known project-management product (quire.io) and probably registered as a trademark in software classes. Google can remove an app after a trademark complaint. Pick a name that is unique, then search: Google Play, USPTO TESS, EUIPO eSearch, WIPO Global Brand Database, plus the web. Do not put another company's brand (Adobe, Google, "PDF") in the name.
+1. **BLOCKER – the name.** The app's old working name, "Quire", is the name of a well-known project-management product (quire.io); "Frogity" and probably registered as a trademark in software classes. Google can remove an app after a trademark complaint. Check that "Frogity" is unique, then search: Google Play, USPTO TESS, EUIPO eSearch, WIPO Global Brand Database, plus the web. Do not put another company's brand (Adobe, Google, "PDF") in the name.
 2. **BLOCKER – the application ID.** Currently `app.quire.reader` (in `android/app/build.gradle` → `applicationId`, `namespace`, `capacitor.config.ts` → `appId`, `AndroidManifest`, Java package folders). **It can never change after the first upload.** Use a domain you control or a unique string, e.g. `com.yourname.pages`.
    Changing it also means the phone currently running the test build treats the new app as a different app (uninstall the old one).
 3. **Contact details.** A support email and a public privacy-policy URL. Put them in `src/lib/config.ts` (`SUPPORT_EMAIL`, `PRIVACY_URL`) – the app links to them from *Settings → About* and from the "Report this answer" button.
@@ -112,6 +112,41 @@ Do not claim things the app doesn't do, don't mention other apps/brands in the d
 ## The name
 - The app is called **Frogity**. The Android package id is still `app.quire.reader` (it cannot change after publishing, and changing it now would stop updates installing over the existing app). If you want a matching id, change `appId` in `capacitor.config.ts`, the `namespace`/`applicationId` in `android/app/build.gradle` and the Java package before the first publish. Check that the name is free as a trademark and on Google Play first.
 
-## 2.1 additions
+## Play Console declarations for 2.2 (copy these answers)
+
+### Foreground service declaration (Policy → App content → Foreground service permissions)
+- **Type:** Media playback (`FOREGROUND_SERVICE_MEDIA_PLAYBACK`). Service: `app.quire.reader.ListenService`.
+- **What it does:** keeps the "read aloud" feature playing when the screen turns off or the app is in the background, with a media notification (title, cover, play/pause, skip) and lock-screen controls through a `MediaSession`. It starts only when the user taps play and stops when they pause, finish, or dismiss it.
+- **User impact if it didn't run:** audio would stop the moment the screen locks, which defeats listening to a book while walking or commuting.
+- **Video:** Play asks for a short screen recording: open a document → tap Listen → press the power button → show the notification and lock-screen controls → pause from the notification.
+- It is **not** used for location, data sync, or anything that isn't audible playback.
+
+### Data safety form (answers)
+| Question | Answer |
+|---|---|
+| Collects or shares user data? | **Yes** (optional features only) |
+| Data types | **App activity → in-app search history** (words looked up, book searches) and **User-generated content → other** (question + short excerpts when *Ask* is on). Shared with third parties, **optional**, encrypted in transit, **not** used for ads, **not** required to use the app. |
+| Stored on device only (not "collected") | library, reading history, streaks and freeze days, notes/highlights, saved form details and signature, settings |
+| Notifications | the permission only creates notifications on the phone; no data collected |
+| Feedback email | sent by the user from their own email app; not collected by the app |
+| Data encrypted in transit | Yes (HTTPS) |
+| Users can request deletion | No server-side data exists; uninstalling removes everything. |
+| Independent security review / Families | No |
+
+### Privacy policy URL
+`PRIVACY.md` is the source. `npm run privacy` writes `docs/privacy.html`; enable **GitHub Pages → /docs** (or upload the file anywhere), then paste the public URL into Play Console **and** `PRIVACY_URL` in `src/lib/config.ts`. Fill in the contact line first. The app links to it from Settings → About.
+
+### Content rating (IARC)
+Category *Utility/Reference*. Answer **No** to violence, sex, gambling, drugs, profanity produced by the app. Answer **Yes** to *users can view/ interact with user-generated or web content* and *AI chat* (the optional Ask feature). Expect **Everyone / PEGI 3 – Teen**. Target audience **13+** (not children).
+
+### Target API level
+`targetSdk` and `compileSdk` are 36 (Android 16), which satisfies Play's requirement for new apps and updates through 2026 *(verify the August 2026+ deadline)*. `minSdk` 24. The foreground-service type and `POST_NOTIFICATIONS` are declared for API 34+/33+.
+
+### Other 2.1 policy notes
+- **Ratings prompt:** the in-app prompt asks for *feedback* and rewards that with a freeze day. It never rewards a Google Play rating or review (Play's user-ratings policy forbids incentivised ratings), and the "Rate on Google Play" link is separate and gives nothing.
+- **Widget:** declared as an `AppWidgetProvider`; no extra permissions.
+- **Sharing book cards:** images are generated on the phone; no copyrighted cover is bundled. Users can share covers of files they own; the share text contains no data beyond the title/author they already see.
+
+## 2.1–2.2 additions
 - **Forms**: PDFs that look like forms get an auto-fill sheet (detected on-device, nothing uploaded). Details and signature are stored locally only.
 - **Background listening**: a foreground service (`FOREGROUND_SERVICE_MEDIA_PLAYBACK`) with a media notification keeps read-aloud playing with the screen off. Declare the foreground-service use (media playback) in Play Console and note the notification permission in Data safety.

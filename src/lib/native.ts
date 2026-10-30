@@ -120,10 +120,10 @@ export async function saveFile(blob: Blob, name: string): Promise<string> {
   }
 }
 
-export async function shareFile(blob: Blob, name: string) {
+export async function shareFile(blob: Blob, name: string, text?: string) {
   if (!isNative) {
     const file = new File([blob], name, { type: blob.type });
-    if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: name });
+    if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: name, text });
     else await saveFile(blob, name);
     return;
   }
@@ -131,7 +131,7 @@ export async function shareFile(blob: Blob, name: string) {
   const { Share } = await import('@capacitor/share');
   const data = await toBase64(blob);
   const res = await Filesystem.writeFile({ path: `share/${name}`, data, directory: Directory.Cache, recursive: true });
-  await Share.share({ title: name, files: [res.uri] });
+  await Share.share({ title: name, text, files: [res.uri] });
 }
 
 export async function shareText(text: string, title?: string) {
@@ -206,3 +206,10 @@ export async function onMediaAction(cb: (action: string) => void) {
     return () => {};
   }
 }
+
+// ------------------------------------------------------------------ home-screen widget
+interface WidgetPlugin {
+  update(o: { day: string; streak: number; today: number; goal: number; week: string }): Promise<void>;
+}
+const Widget = registerPlugin<WidgetPlugin>('Widget');
+export const widgetUpdate = (o: Parameters<WidgetPlugin['update']>[0]) => (isNative ? Widget.update(o).catch(() => {}) : Promise.resolve());
