@@ -50,7 +50,7 @@ export async function refreshReminder() {
     const metToday = (getState().days[dayKey()] ?? 0) >= s.dailyGoal * 60_000;
     if (at.getTime() <= Date.now() + 30_000 || metToday) at.setDate(at.getDate() + 1);
     const w = words();
-    await LocalNotifications.schedule({ notifications: [{ id: ID, title: w.title, body: w.body, schedule: { at, allowWhileIdle: true }, smallIcon: 'ic_stat_frogity', iconColor: '#111111' }] });
+    await LocalNotifications.schedule({ notifications: [{ id: ID, title: w.title, body: w.body, schedule: { at, allowWhileIdle: true }, isExactNotification: false, smallIcon: 'ic_stat_frogity', iconColor: '#111111' }] });
   } catch (e) {
     console.warn('reminder not planned', e);
   }
