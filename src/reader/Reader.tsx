@@ -19,7 +19,7 @@ import { anchorFromSelection, applyHighlights, clearMarks, findAll, wordAt, wrap
 import { AskSheet } from './Ask';
 import { FormSheet } from './FormSheet';
 import { detectForm, type FormModel } from '../lib/forms';
-import { LQ_VERSION, enqueue, queueFigures, queueScan, reportLiquid, reportScan, scanVerdict, useScan } from '../lib/scan';
+import { LQ_VERSION, enqueue, pageStore, queueFigures, queueScan, reportLiquid, reportScan, scanVerdict, useScan } from '../lib/scan';
 import { KIND_LABEL } from '../lib/formats/detect';
 import { fontById } from '../lib/fonts';
 
@@ -61,7 +61,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   // scanned (picture-only) PDFs are read in the background from the moment they are added; until that has worked,
   // liquid and listen aren't offered
   const scan = useScan(doc.id);
-  const textless = doc.kind === 'pdf' && (scan?.status === 'running' || scan?.status === 'none');
+  const textless = doc.kind === 'pdf' && ((scan?.status === 'running' && !scan.mixed) || scan?.status === 'none');
   const [ocrText, setOcrText] = useState<{ text: string; busy: boolean; p: number } | null>(null);
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const flowRef = useRef<HTMLDivElement>(null);
@@ -139,10 +139,23 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
       const cached = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', key);
       if (!alive) return;
       if (cached) {
-        root.innerHTML = blocksToHtml(cached.blocks, urls.current);
-        setScanned(cached.scanned);
+        let { blocks: cb, scanned: cs } = cached;
+        if (cs.length) {
+          // pages that were read in the background since this view was made take the place of their pictures
+          const { applyStored } = await import('../lib/ocrpage');
+          const m = await applyStored(cb, pageStore(id));
+          if (m.replaced) {
+            cb = m.blocks;
+            cs = m.left ? cs : [];
+            await db.put('cache', key, { blocks: cb, scanned: cs });
+          }
+        }
+        if (!alive) return;
+        root.innerHTML = blocksToHtml(cb, urls.current);
+        setScanned(cs);
         afterLiquid(root);
-        queueFigures(doc);
+        if (cs.length) setTimeout(() => void enqueue(() => runOcr(true)), 600);
+        else queueFigures(doc);
         return;
       }
       // a picture-only document is being read page by page: wait for that instead of doing the same work again
@@ -172,10 +185,23 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
           ac.signal,
         );
         if (!alive) return;
-        setScanned(res.scannedPages);
-        await db.put('cache', key, { blocks: res.blocks, scanned: res.scannedPages });
+        // picture-only pages that the background reading has already done are put in place at once
+        let fin = res.blocks;
+        let left = res.scannedPages;
+        if (left.length) {
+          const { applyStored } = await import('../lib/ocrpage');
+          const m = await applyStored(fin, pageStore(id));
+          if (m.replaced) {
+            fin = m.blocks;
+            if (!m.left) left = [];
+            root.innerHTML = blocksToHtml(fin, urls.current);
+            delete root.dataset.wrapped;
+          }
+        }
+        setScanned(left);
+        await db.put('cache', key, { blocks: fin, scanned: left });
         afterLiquid(root);
-        if (res.scannedPages.length) setTimeout(() => void enqueue(() => runOcr(true)), 600);
+        if (left.length) setTimeout(() => void enqueue(() => runOcr(true)), 600);
         else queueFigures(doc);
       } catch (e) {
         if ((e as Error).name !== 'AbortError') {
@@ -205,7 +231,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
       delete root.dataset.wrapped;
       afterLiquid(root);
       if (scroller) scroller.scrollTop = top;
-      toast('Pictures with writing were turned into text');
+      toast('Scanned pages and pictures with writing were turned into text');
     };
     window.addEventListener('frogity:figures', on);
     return () => window.removeEventListener('frogity:figures', on);
@@ -820,10 +846,15 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
         const { ocrBlocks } = await import('../lib/ocrpage');
         const data = await (await getFile(id))?.arrayBuffer();
         if (!data) throw new Error('The file is not available');
-        const res = await ocrBlocks(data, cached.blocks, (d, total) => {
-          if (silent) reportScan(id, doc.name, d, total);
-          else setOcrText({ text: '', busy: true, p: d / Math.max(1, total) });
-        });
+        const res = await ocrBlocks(
+          data,
+          cached.blocks,
+          (d, total) => {
+            if (silent) reportScan(id, doc.name, d, total);
+            else setOcrText({ text: '', busy: true, p: d / Math.max(1, total) });
+          },
+          pageStore(id),
+        );
         const out = res.blocks;
         const text = out.flatMap((b) => (b.t === 'p' || b.t === 'h' ? [b.html.replace(/<[^>]+>/g, '')] : [])).join('\n\n');
         await db.put('cache', key, { blocks: out, scanned: [] });

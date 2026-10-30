@@ -281,65 +281,108 @@ export interface PageStore {
   save(page: number, blocks: LBlock[]): Promise<void>;
 }
 
+/** Reads the given pages (finished ones come from the store), saving each as it is done, and retrying failures once. */
+async function readPages(
+  pdf: import('./formats/pdf').PDFDocumentProxy,
+  pages: number[],
+  store: PageStore | undefined,
+  onProgress?: (done: number, total: number) => void,
+): Promise<{ per: Map<number, LBlock[]>; lost: number[] }> {
+  const { renderPage } = await import('./formats/pdf');
+  const { OCR_POOL } = await import('./ocr');
+  const per = new Map<number, LBlock[]>();
+  const failed: number[] = [];
+  const lost: number[] = [];
+  const total = pages.length;
+  let n = 0;
+  const todo: number[] = [];
+  for (const pn of pages) {
+    const have = await store?.load(pn);
+    if (have) {
+      per.set(pn, have);
+      n++;
+    } else todo.push(pn);
+  }
+  onProgress?.(n, total);
+  const pass = async (list: number[], isRetry: boolean) => {
+    await mapLimit(list, OCR_POOL, async (pn) => {
+      const r = await readPdfPage(pdf, pn, renderPage);
+      if (r.failed) {
+        if (!isRetry) failed.push(pn);
+        else lost.push(pn); // gave up: reported, and the page keeps whatever it had
+        return;
+      }
+      per.set(pn, r.blocks);
+      await store?.save(pn, r.blocks);
+      onProgress?.(++n, total);
+      await breathe(40); // a breath, so the rest of the app stays quick
+    });
+  };
+  await pass(todo, false);
+  if (failed.length) await pass(failed.splice(0), true);
+  return { per, lost };
+}
+
 /**
  * Reads a whole picture-only PDF page by page, without first building the Liquid view of it. Every finished page is
- * saved straight away, so a restart carries on from where it stopped. A page that fails is tried again before it is
- * given up on. Returns the document's blocks, page markers included.
+ * saved straight away, so a restart carries on from where it stopped. Returns the document's blocks, page markers included.
  */
 export async function ocrPages(
   data: ArrayBuffer | Blob,
   onProgress?: (done: number, total: number) => void,
   store?: PageStore,
 ): Promise<{ blocks: LBlock[]; chars: number; failedPages: number[] }> {
-  const { openPdf, openPdfBlob, renderPage } = await import('./formats/pdf');
-  const { OCR_POOL } = await import('./ocr');
+  const { openPdf, openPdfBlob } = await import('./formats/pdf');
   const pdf = data instanceof Blob ? await openPdfBlob(data) : await openPdf(data);
   const total = pdf.numPages;
-  const per: LBlock[][] = new Array(total);
-  const failed: number[] = [];
-  let n = 0;
+  let res: Awaited<ReturnType<typeof readPages>>;
   try {
-    const todo: number[] = [];
-    for (let pn = 1; pn <= total; pn++) {
-      const have = await store?.load(pn);
-      if (have) {
-        per[pn - 1] = have;
-        n++;
-      } else todo.push(pn);
-    }
-    onProgress?.(n, total);
-    const pass = async (pages: number[], isRetry: boolean) => {
-      await mapLimit(pages, OCR_POOL, async (pn) => {
-        const r = await readPdfPage(pdf, pn, renderPage);
-        if (r.failed) {
-          if (!isRetry) failed.push(pn);
-          else per[pn - 1] = []; // gave up: the page stays empty and is reported
-          return;
-        }
-        per[pn - 1] = r.blocks;
-        await store?.save(pn, r.blocks);
-        onProgress?.(++n, total);
-        await breathe(40); // a breath, so the rest of the app stays quick
-      });
-    };
-    await pass(todo, false);
-    if (failed.length) {
-      const again = failed.splice(0);
-      await pass(again, true);
-    }
+    res = await readPages(pdf, Array.from({ length: total }, (_, i) => i + 1), store, onProgress);
   } finally {
     pdf.loadingTask.destroy();
   }
   const blocks: LBlock[] = [];
   const lost: number[] = [];
   let chars = 0;
-  for (let i = 0; i < total; i++) {
-    const bs = per[i] ?? [];
-    if (!bs.length) lost.push(i + 1);
-    blocks.push({ t: 'page', page: i + 1 }, ...bs);
+  for (let i = 1; i <= total; i++) {
+    const bs = res.per.get(i) ?? [];
+    if (!bs.length) lost.push(i);
+    blocks.push({ t: 'page', page: i }, ...bs);
     for (const x of bs) if (x.t === 'p' || x.t === 'h') chars += x.html.length;
   }
   return { blocks, chars, failedPages: lost };
+}
+
+/** Reads only some pages of a PDF (the picture-only pages of a book that is mostly ordinary text). Results go to the store. */
+export async function ocrSome(data: Blob, pages: number[], onProgress?: (done: number, total: number) => void, store?: PageStore): Promise<{ lost: number[] }> {
+  const { openPdfBlob } = await import('./formats/pdf');
+  const pdf = await openPdfBlob(data);
+  try {
+    const r = await readPages(pdf, pages, store, onProgress);
+    return { lost: r.lost };
+  } finally {
+    pdf.loadingTask.destroy();
+  }
+}
+
+/** Puts finished page readings in place of the page pictures of a Liquid view. Pages not read yet stay as they are. */
+export async function applyStored(blocks: LBlock[], store: PageStore): Promise<{ blocks: LBlock[]; replaced: number; left: number }> {
+  const out: LBlock[] = [];
+  let replaced = 0;
+  let left = 0;
+  for (const b of blocks) {
+    if (b.t === 'img' && b.kind === 'scan') {
+      const have = await store.load(b.page);
+      if (have?.length) {
+        out.push(...have);
+        replaced++;
+        continue;
+      }
+      left++;
+    }
+    out.push(b);
+  }
+  return { blocks: out, replaced, left };
 }
 
 /**
@@ -347,28 +390,25 @@ export async function ocrPages(
  * place: text and headings where there is writing, pictures where there are diagrams. A page that has nothing
  * readable keeps its picture. Pages are drawn again from the PDF at a size made for reading, not the preview size.
  */
-export async function ocrBlocks(data: ArrayBuffer, blocks: LBlock[], onProgress?: (done: number, total: number) => void): Promise<{ blocks: LBlock[]; chars: number }> {
-  const { openPdf, renderPage } = await import('./formats/pdf');
-  const { OCR_POOL } = await import('./ocr');
+export async function ocrBlocks(data: ArrayBuffer, blocks: LBlock[], onProgress?: (done: number, total: number) => void, store?: PageStore): Promise<{ blocks: LBlock[]; chars: number }> {
+  const { openPdf } = await import('./formats/pdf');
   const pics = blocks.filter((b): b is Extract<LBlock, { t: 'img' }> => b.t === 'img' && b.kind === 'scan');
-  const pdf = await openPdf(data.slice(0));
-  let n = 0;
-  let results: LBlock[][] = [];
+  const pdf = await openPdf(data);
+  let res: Awaited<ReturnType<typeof readPages>>;
   try {
-    results = await mapLimit(pics, OCR_POOL, async (b) => {
-      const r = await readPdfPage(pdf, b.page, renderPage);
-      onProgress?.(++n, pics.length);
-      return r.failed ? [b] : r.blocks; // a page that could not be read keeps its picture
-    });
+    res = await readPages(pdf, [...new Set(pics.map((b) => b.page))], store, onProgress);
   } finally {
     pdf.loadingTask.destroy();
   }
   const out: LBlock[] = [];
-  let k = 0;
   let chars = 0;
   for (const b of blocks) {
     if (b.t === 'img' && b.kind === 'scan') {
-      const r = results[k++];
+      const r = res.per.get(b.page);
+      if (!r?.length) {
+        out.push(b); // could not be read: keeps its picture
+        continue;
+      }
       out.push(...r);
       for (const x of r) if (x.t === 'p' || x.t === 'h') chars += x.html.length;
     } else out.push(b);

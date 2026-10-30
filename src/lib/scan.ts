@@ -8,6 +8,7 @@ import { getFile } from './library';
 import { openPdfBlob } from './formats/pdf';
 import type { LBlock } from './formats/liquidPdf';
 import { mapLimit } from './ocrpage';
+import { slice } from './ocr';
 import type { DocMeta } from './types';
 
 export const LQ_VERSION = 'lq9';
@@ -21,6 +22,8 @@ export interface ScanJob {
   kind: JobKind;
   /** checking = looking for a text layer · running = at work · done = finished · none = nothing readable · text = ordinary PDF */
   status: 'checking' | 'running' | 'done' | 'none' | 'text';
+  /** a book that is mostly ordinary text with some picture-only pages: Liquid mode stays available while those are read */
+  mixed?: boolean;
   /** 0‥1 */
   progress: number;
   done: number;
@@ -102,7 +105,7 @@ export function enqueue<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /** How a document turned out to be, once it has been looked at (so Liquid mode knows whether to wait for the reading). */
-export type Verdict = 'text' | 'scanning' | 'done' | 'none' | 'other';
+export type Verdict = 'text' | 'scanning' | 'mixed' | 'done' | 'none' | 'other';
 const verdicts = new Map<string, { p: Promise<Verdict>; ok: (v: Verdict) => void }>();
 const verdictOf = (id: string) => {
   let v = verdicts.get(id);
@@ -144,7 +147,7 @@ export function queueScan(doc: DocMeta) {
   if (doc.kind === 'pdf') {
     // 1) quick look, straight away  2) the long reading goes into the queue (and picks up where it left off)
     void look(() => classify(doc))
-      .then((plan) => plan && enqueue(() => readScan(doc, plan.pages)))
+      .then((plan) => plan && enqueue(() => readScan(doc, plan)))
       .catch(fail);
   } else void enqueue(() => (doc.kind === 'image' ? runImage(doc) : runScanDoc(doc))).catch(fail);
 }
@@ -211,8 +214,24 @@ async function runScanDoc(doc: DocMeta) {
   finish(doc);
 }
 
-/** What kind of PDF is this? Cheap: a handful of pages, read straight from the stored file. */
-async function classify(doc: DocMeta): Promise<{ pages: number } | null> {
+const store = (id: string) => ({
+  load: async (p: number) => (await db.get<{ blocks: LBlock[] }>('cache', `ocrpg:${id}:${p}`))?.blocks,
+  save: (p: number, blocks: LBlock[]) => db.put('cache', `ocrpg:${id}:${p}`, { blocks }),
+});
+export const pageStore = store;
+
+interface Plan {
+  pages: number;
+  /** the pages that are pictures only (no text layer) */
+  scanned: number[];
+  mixed: boolean;
+}
+
+/**
+ * What kind of PDF is this? Every page is looked at (only its text layer, which is quick), because a book can have a
+ * typed title page and a scanned body, or typed chapters among scanned notes: looking at five pages is not enough.
+ */
+async function classify(doc: DocMeta): Promise<Plan | null> {
   const v = verdictOf(doc.id);
   const remembered = await db.get<string>('kv', `scan:${doc.id}`);
   if (remembered === 'text') {
@@ -230,49 +249,78 @@ async function classify(doc: DocMeta): Promise<{ pages: number } | null> {
     return null;
   }
   const blob = await getFile(doc.id);
-  if (!blob) { v.ok('other'); return null; }
+  if (!blob) {
+    v.ok('other');
+    return null;
+  }
   const pdf = await openPdfBlob(blob);
   try {
     const n = pdf.numPages;
-    if (remembered !== 'pending') {
-      start(doc.id, doc.name, 'scan', 'checking');
-      let withText = 0;
-      const pick = [1, 2, 3, Math.ceil(n / 2), n].filter((x, i, a) => x >= 1 && x <= n && a.indexOf(x) === i);
-      for (const pn of pick) {
+    let scanned = (await db.get<number[]>('kv', `scanpages:${doc.id}`)) ?? [];
+    if (remembered !== 'pending' || !scanned.length) {
+      start(doc.id, doc.name, 'scan', 'checking', n);
+      scanned = [];
+      for (let pn = 1; pn <= Math.min(n, 4000); pn++) {
         const page = await pdf.getPage(pn);
         const tc = await page.getTextContent();
         page.cleanup();
-        if (tc.items.reduce((a, it) => a + ('str' in it ? it.str.trim().length : 0), 0) > 25) withText++;
+        if (tc.items.reduce((a, it) => a + ('str' in it ? it.str.trim().length : 0), 0) <= 25) scanned.push(pn);
+        if (pn % 8 === 0) await slice(0); // let the app breathe while a long book is looked through
       }
-      if (withText / Math.max(1, pick.length) > 0.4) {
+      if (!scanned.length || (scanned.length <= 2 && n > 20 && scanned.every((p) => p === 1 || p === n))) {
+        // all text (a blank or picture-only cover or back page doesn't count)
         await db.put('kv', `scan:${doc.id}`, 'text');
         end(doc.id);
-        { v.ok('text'); return null; }
+        v.ok('text');
+        return null;
       }
+      await db.put('kv', `scanpages:${doc.id}`, scanned);
     }
-    // a picture-only document: from here on Liquid mode waits for this reading instead of doing the same work again
+    const mixed = scanned.length < n * 0.85;
     await db.put('kv', `scan:${doc.id}`, 'pending'); // remembered, so a restart carries on instead of starting over
-    start(doc.id, doc.name, 'scan', 'running', n);
-    v.ok('scanning');
-    window.dispatchEvent(new CustomEvent('frogity:started', { detail: { title: doc.name, pages: n } }));
-    return { pages: n };
+    start(doc.id, doc.name, 'scan', 'running', mixed ? scanned.length : n);
+    if (mixed) set(doc.id, { mixed: true });
+    // a picture-only book: Liquid mode waits for this reading. A mixed one stays usable while its picture pages are read.
+    v.ok(mixed ? 'mixed' : 'scanning');
+    window.dispatchEvent(new CustomEvent('frogity:started', { detail: { title: doc.name, pages: mixed ? scanned.length : n } }));
+    return { pages: n, scanned, mixed };
   } finally {
     pdf.loadingTask.destroy();
   }
 }
 
-/** Reads a picture-only PDF page by page, saving each page as it is finished. */
-async function readScan(doc: DocMeta, pages: number) {
+/** Reads the picture-only pages of a PDF, saving each page as it is finished. */
+async function readScan(doc: DocMeta, plan: Plan) {
   const ckey = `${doc.id}:${LQ_VERSION}`;
   const blob = await getFile(doc.id);
   if (!blob) return end(doc.id);
-  if (!jobs.has(doc.id)) start(doc.id, doc.name, 'scan', 'running', pages);
-  const { ocrPages } = await import('./ocrpage');
-  const store = {
-    load: async (p: number) => (await db.get<{ blocks: LBlock[] }>('cache', `ocrpg:${doc.id}:${p}`))?.blocks,
-    save: (p: number, blocks: LBlock[]) => db.put('cache', `ocrpg:${doc.id}:${p}`, { blocks }),
-  };
-  const res = await ocrPages(blob, (d, total) => set(doc.id, { done: d, total, progress: 0.02 + 0.98 * (d / Math.max(1, total)) }), store);
+  const total = plan.mixed ? plan.scanned.length : plan.pages;
+  if (!jobs.has(doc.id)) start(doc.id, doc.name, 'scan', 'running', total);
+  if (plan.mixed) set(doc.id, { mixed: true });
+  const st = store(doc.id);
+  const { ocrPages, ocrSome, applyStored } = await import('./ocrpage');
+  const progress = (d: number, t: number) => set(doc.id, { done: d, total: t, progress: 0.02 + 0.98 * (d / Math.max(1, t)) });
+
+  if (plan.mixed) {
+    // the typed pages need nothing; read the picture pages and put them where they belong
+    const r = await ocrSome(blob, plan.scanned, progress, st);
+    // if Liquid mode was made meanwhile, its page pictures are replaced by what was read (the reader refreshes itself)
+    const cached = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', ckey);
+    if (cached?.blocks.some((b) => b.t === 'img' && b.kind === 'scan')) {
+      const m = await applyStored(cached.blocks, st);
+      if (m.replaced) {
+        await db.put('cache', ckey, { blocks: m.blocks, scanned: m.left ? cached.scanned : [] });
+        window.dispatchEvent(new CustomEvent('frogity:figures', { detail: { id: doc.id, changed: m.replaced } }));
+      }
+    }
+    if (r.lost.length) await db.put('kv', `scanfail:${doc.id}`, r.lost);
+    await db.put('kv', `scan:${doc.id}`, 'done2');
+    set(doc.id, { status: 'done', progress: 1 });
+    finish(doc);
+    return;
+  }
+
+  const res = await ocrPages(blob, progress, st);
   if (res.chars < 60) {
     await db.put('kv', `scan:${doc.id}`, 'none');
     await db.delPrefix('cache', `ocrpg:${doc.id}:`);
