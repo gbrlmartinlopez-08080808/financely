@@ -19,6 +19,17 @@ interface Slot {
 const slots: Slot[] = [];
 const waiters: ((s: Slot) => void)[] = [];
 
+/** `p`, or an error if it has not finished in `ms`. */
+function within<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  return new Promise<T>((res, rej) => {
+    const t = setTimeout(() => rej(new Error(what)), ms);
+    p.then(
+      (v) => (clearTimeout(t), res(v)),
+      (e) => (clearTimeout(t), rej(e)),
+    );
+  });
+}
+
 function makeSlot(): Slot {
   const slot: Slot = { cb: null, busy: true, p: null as unknown as Promise<Worker> };
   slot.p = (async () => {
@@ -101,16 +112,18 @@ export async function recognize(img: Blob | HTMLCanvasElement, onProgress?: (p: 
   let data: Awaited<ReturnType<Worker['recognize']>>['data'];
   try {
     slot.cb = onProgress ?? null;
-    const w = await slot.p;
+    // nothing may wait for ever: a reader that does not start, or a page that does not finish, is given up on and replaced
+    const w = await within(slot.p, 60_000, 'the text reader did not start');
     if (slot.psm !== psm) {
-      await w.setParameters({ tessedit_pageseg_mode: String(psm) as never });
+      await within(w.setParameters({ tessedit_pageseg_mode: String(psm) as never }), 30_000, 'the text reader did not answer');
       slot.psm = psm;
     }
-    ({ data } = await w.recognize(img as Blob, {}, { text: true, blocks: true }));
+    ({ data } = await within(w.recognize(img as Blob, {}, { text: true, blocks: true }), 150_000, 'a page took too long to read'));
   } catch (e) {
-    // a worker that failed to start must not stay in the pool
+    // a worker that failed to start (or got stuck) must not stay in the pool
     const i = slots.indexOf(slot);
     if (i >= 0) slots.splice(i, 1);
+    slot.p.then((w) => w.terminate()).catch(() => {});
     throw e;
   } finally {
     slot.cb = null;

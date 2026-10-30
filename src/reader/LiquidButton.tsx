@@ -13,6 +13,8 @@ export function LiquidButton({
   active,
   tip,
   onTip,
+  info,
+  eta,
   onClick,
 }: {
   ready: boolean;
@@ -20,6 +22,8 @@ export function LiquidButton({
   active: boolean;
   tip: boolean;
   onTip: (v: boolean) => void;
+  info: string;
+  eta: number | null;
   onClick: () => void;
 }) {
   const id = useId().replace(/:/g, '');
@@ -27,7 +31,7 @@ export function LiquidButton({
   const y = 22 - level * 19.4; // top of the water, in the drop's own units
   useEffect(() => {
     if (!tip) return;
-    const t = setTimeout(() => onTip(false), 3200);
+    const t = setTimeout(() => onTip(false), 4200);
     return () => clearTimeout(t);
   }, [tip]); // eslint-disable-line react-hooks/exhaustive-deps
   const pct = Math.round(progress * 100);
@@ -58,7 +62,18 @@ export function LiquidButton({
       </button>
       {tip && (
         <span className="liq-tip" role="status">
-          {ready ? 'Liquid mode is ready' : <>Liquid mode is being prepared · <b>{pct}%</b><small>Keep reading the pages. It opens here as soon as it is full.</small></>}
+          {ready ? (
+            'Liquid mode is ready'
+          ) : (
+            <>
+              Preparing Liquid mode · <b>{pct}%</b>
+              <small>
+                {info}
+                {eta ? ` · about ${eta < 90 ? eta + ' s' : Math.round(eta / 60) + ' min'} left` : ''}
+              </small>
+              <small>What is ready is shown; the rest arrives by itself. Listen needs the whole book.</small>
+            </>
+          )}
         </span>
       )}
     </span>

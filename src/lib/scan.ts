@@ -95,13 +95,37 @@ export interface Prep {
   /** 0‥1, over everything that has to be done */
   progress: number;
   busy: boolean;
+  /** what is happening right now, in words ("typed pages 12 of 40") */
+  info: string;
+  /** seconds left, once it can be told */
+  eta: number | null;
 }
-const IDLE: Prep = { known: false, ready: false, none: false, progress: 0, busy: false };
+const IDLE: Prep = { known: false, ready: false, none: false, progress: 0, busy: false, info: '', eta: null };
 let preps = new Map<string, Prep>();
 const setPrep = (id: string, patch: Partial<Prep>) => {
-  preps = new Map(preps).set(id, { ...(preps.get(id) ?? IDLE), ...patch });
+  const was = preps.get(id) ?? IDLE;
+  preps = new Map(preps).set(id, { ...was, ...patch });
+  if (patch.progress !== undefined && patch.progress !== was.progress) moved.set(id, Date.now());
   emit();
 };
+// a book whose preparation has not moved for a while is looked at again, so nothing can sit at 0% for ever
+const moved = new Map<string, number>();
+const docsById = new Map<string, DocMeta>();
+if (typeof window !== 'undefined')
+  setInterval(() => {
+    const now = Date.now();
+    for (const [id, pr] of preps) {
+      if (!pr.busy || pr.ready) continue;
+      const idle = now - (moved.get(id) ?? now);
+      if (idle > 20_000 && !pr.info.startsWith('waiting')) setPrep(id, { info: 'waiting for its turn' });
+      const working = [...jobs.values()].some((j) => j.id === id && j.status === 'running');
+      const d = docsById.get(id);
+      if (idle > 60_000 && !working && d) {
+        moved.set(id, now); // try once a minute
+        prepareNow(d);
+      }
+    }
+  }, 6000);
 /** Readiness of one document's Liquid view (drives the button that fills up like a glass). */
 export function useLiquid(id: string): Prep {
   return useSyncExternalStore(
@@ -111,18 +135,45 @@ export function useLiquid(id: string): Prep {
 }
 export const liquidState = (id: string) => preps.get(id) ?? IDLE;
 
-// ---------------------------------------------------------------- one queue for the heavy work
-let chain: Promise<void> = Promise.resolve();
+// ---------------------------------------------------------------- lanes for the heavy work
 const queued = new Set<string>();
-/** Runs `fn` after everything queued before it. */
-export function enqueue<T>(fn: () => Promise<T>): Promise<T> {
-  const r = chain.then(fn, fn);
-  chain = r.then(
-    () => {},
-    () => {},
-  );
-  return r;
+let focused = '';
+/** The book that is open on screen: its work goes first in every lane. */
+export const focusDoc = (id: string) => {
+  focused = id;
+};
+/**
+ * A lane runs one job at a time, the open book's first. Liquid building (the screen's own thread) and text reading
+ * (workers) are different lanes, so a long scan never makes another book wait at 0%.
+ */
+class Lane {
+  private q: { id: string; fn: () => Promise<unknown>; res: (v: unknown) => void; rej: (e: unknown) => void }[] = [];
+  private busy = false;
+  add<T>(id: string, fn: () => Promise<T>): Promise<T> {
+    return new Promise<T>((res, rej) => {
+      this.q.push({ id, fn, res: res as (v: unknown) => void, rej });
+      this.pump();
+    });
+  }
+  private pump() {
+    if (this.busy) return;
+    const i = this.q.findIndex((t) => t.id === focused);
+    const t = this.q.splice(i >= 0 ? i : 0, 1)[0];
+    if (!t) return;
+    this.busy = true;
+    t.fn()
+      .then(t.res, t.rej)
+      .finally(() => {
+        this.busy = false;
+        this.pump();
+      });
+  }
 }
+const liquidLane = new Lane();
+const ocrLane = new Lane();
+const miscLane = new Lane();
+/** Runs `fn` after the other small jobs (kept for the small things: pictures in documents, photos). */
+export const enqueue = <T,>(fn: () => Promise<T>): Promise<T> => miscLane.add('', fn);
 /** A second, light queue: finding out what a file is takes a moment and must never wait behind hours of reading. */
 let lookChain: Promise<void> = Promise.resolve();
 const look = <T>(fn: () => Promise<T>): Promise<T> => {
@@ -138,6 +189,7 @@ const look = <T>(fn: () => Promise<T>): Promise<T> => {
 export function queueScan(doc: DocMeta) {
   if (!['pdf', 'image', 'scan'].includes(doc.kind) || queued.has(doc.id)) return;
   queued.add(doc.id);
+  docsById.set(doc.id, doc);
   const fail = (e: unknown) => {
     console.warn('preparing failed', doc.name, e);
     end(doc.id);
@@ -148,9 +200,9 @@ export function queueScan(doc: DocMeta) {
   if (doc.kind === 'pdf') {
     // 1) a quick look, straight away  2) the long work goes into the queue (and picks up where it left off)
     void look(() => plan(doc))
-      .then((p) => p && enqueue(() => prepareDoc(doc, p)))
+      .then((p) => p && prepareDoc(doc, p))
       .catch(fail);
-  } else void enqueue(() => (doc.kind === 'image' ? runImage(doc) : runScanDoc(doc))).catch(fail);
+  } else void ocrLane.add(doc.id, () => (doc.kind === 'image' ? runImage(doc) : runScanDoc(doc))).catch(fail);
 }
 
 /** After the app starts: carry on with anything that was still being prepared when it was closed (or the phone locked). */
@@ -167,7 +219,18 @@ const store = (prefix: string, id: string) => ({
   save: (p: number, blocks: LBlock[]) => db.put('cache', `${prefix}:${id}:${p}`, { blocks }),
 });
 /** where the readings of picture-only pages wait until they are put into the Liquid view */
-export const pageStore = (id: string) => store('ocrpg', id);
+export const pageStore = (id: string) => {
+  const st = store('ocrpg', id);
+  return {
+    load: st.load,
+    save: async (p: number, blocks: LBlock[]) => {
+      await st.save(p, blocks);
+      window.dispatchEvent(new CustomEvent('frogity:ocrpage', { detail: { id, page: p } }));
+    },
+  };
+};
+/** the finished pages of a Liquid view that is still being built (so it can be opened and read as it grows) */
+export const liquidPageStore = (id: string) => store('lqpg', id);
 
 const settle = (doc: DocMeta, status: 'done' | 'none') => {
   jobs.set(doc.id, { id: doc.id, title: doc.name, kind: 'scan', status, progress: 1, done: 1, total: 1, startedAt: Date.now() });
@@ -308,6 +371,7 @@ async function buildLiquid(doc: DocMeta, progress: (f: number) => void): Promise
       have,
       onPage: async (page, blocks, scanned) => {
         await st.save(page, blocks);
+        window.dispatchEvent(new CustomEvent('frogity:page', { detail: { id: doc.id, page } }));
         meta.done.push(page);
         if (scanned) meta.scanned.push(page);
         if (meta.done.length % 6 === 0) await db.put('kv', `lqmeta:${doc.id}`, meta); // often enough to lose little, rarely enough to stay light
@@ -325,70 +389,112 @@ async function buildLiquid(doc: DocMeta, progress: (f: number) => void): Promise
   return scanned;
 }
 
-/** Does everything a PDF needs to be ready for Liquid mode and Listen. */
+/** Reads picture-only pages (all of them for a scan, some for a mixed book); for a scan it also returns the whole text. */
+async function readPictures(doc: DocMeta, p: Plan, pages: number[], progress: (f: number) => void) {
+  const blob = await getFile(doc.id);
+  if (!blob) throw new Error('file missing');
+  start(doc.id, doc.name, 'scan', 'running', pages.length);
+  if (p.kind !== 'scan') set(doc.id, { mixed: true });
+  const cb = (d: number, t: number) => {
+    set(doc.id, { done: d, total: t, progress: 0.02 + 0.98 * (d / Math.max(1, t)) });
+    progress(d / Math.max(1, t));
+  };
+  const { ocrPages, ocrSome } = await import('./ocrpage');
+  const st = pageStore(doc.id);
+  try {
+    if (p.kind === 'scan') return { whole: await ocrPages(blob, cb, st), lost: [] as number[] };
+    const r = await ocrSome(blob, pages, cb, st);
+    return { whole: null, lost: r.lost };
+  } finally {
+    end(doc.id);
+  }
+}
+
+/**
+ * Does everything a PDF needs to be ready for Liquid mode and Listen. The Liquid view of the typed pages and the reading
+ * of the picture-only pages run side by side (different lanes), each page saved as it is finished; the book can be
+ * opened in Liquid mode at any moment and grows as the pages arrive.
+ */
 async function prepareDoc(doc: DocMeta, p: Plan) {
   await db.put('kv', `liquid:${doc.id}`, 'pending');
   setPrep(doc.id, { known: true, busy: true });
   const ckey = `${doc.id}:${LQ_VERSION}`;
-  const wLiquid = p.kind === 'text' ? 1 : p.kind === 'mixed' ? 0.55 : 0;
-  let scanned = p.kind === 'scan' ? [] : p.scanned;
+  const wLiquid = p.kind === 'text' ? 1 : p.kind === 'mixed' ? 0.5 : 0;
+  let pLiq = p.kind === 'scan' ? 1 : 0;
+  let pOcr = 0;
+  const t0 = Date.now();
+  let liqInfo = p.kind === 'scan' ? '' : `typed pages · 0 of ${p.pages}`;
+  let ocrInfo = '';
+  const bump = () => {
+    const f = Math.max(0.01, wLiquid * pLiq + (1 - wLiquid) * pOcr);
+    const el = (Date.now() - t0) / 1000;
+    setPrep(doc.id, { progress: f, eta: f > 0.04 && el > 4 ? Math.max(1, Math.round((el / f) * (1 - f))) : null, info: [liqInfo, ocrInfo].filter(Boolean).join(' · ') || 'starting' });
+  };
+  bump();
   window.dispatchEvent(new CustomEvent('frogity:started', { detail: { id: doc.id, title: doc.name, pages: p.kind === 'scan' ? p.pages : p.scanned.length, kind: p.kind } }));
-  // 1) the Liquid view of the typed pages
-  if (p.kind !== 'scan') {
-    const existing = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', ckey);
-    const reuse = existing && (await db.get<string>('kv', `lqmeta:${doc.id}`)) === undefined && existing.blocks.length > 0;
-    if (reuse) scanned = existing.scanned;
-    else {
-      start(doc.id, doc.name, 'liquid', 'running', p.pages);
-      try {
-        scanned = await buildLiquid(doc, (f) => {
-          set(doc.id, { progress: f, done: Math.round(f * p.pages), total: p.pages }, 'liquid');
-          setPrep(doc.id, { progress: Math.max(0.01, f * wLiquid) });
-        });
-      } finally {
-        end(doc.id, 'liquid');
-      }
-    }
-  }
-  // 2) the picture-only pages: read them, and put the writing where the pictures were
   const st = pageStore(doc.id);
-  const needOcr = p.kind === 'scan' || scanned.length > 0;
-  if (needOcr) {
-    const blob = await getFile(doc.id);
-    if (!blob) throw new Error('file missing');
-    const total = p.kind === 'scan' ? p.pages : scanned.length;
-    start(doc.id, doc.name, 'scan', 'running', total);
-    if (p.kind !== 'scan') set(doc.id, { mixed: true });
-    const progress = (d: number, t: number) => {
-      set(doc.id, { done: d, total: t, progress: 0.02 + 0.98 * (d / Math.max(1, t)) });
-      setPrep(doc.id, { progress: wLiquid + (1 - wLiquid) * (d / Math.max(1, t)) });
-    };
-    const { ocrPages, ocrSome, applyStored } = await import('./ocrpage');
-    if (p.kind === 'scan') {
-      const res = await ocrPages(blob, progress, st);
-      if (res.chars < 60) {
-        await db.put('kv', `liquid:${doc.id}`, 'none');
-        await db.delPrefix('cache', `ocrpg:${doc.id}:`);
-        end(doc.id);
-        setPrep(doc.id, { known: true, none: true, busy: false });
-        return;
-      }
-      await db.put('cache', ckey, { blocks: res.blocks, scanned: [] });
-      if (res.failedPages.length) await db.put('kv', `scanfail:${doc.id}`, res.failedPages);
-    } else {
-      const r = await ocrSome(blob, scanned, progress, st);
-      const cached = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', ckey);
-      if (cached) {
-        const m = await applyStored(cached.blocks, st);
-        await db.put('cache', ckey, { blocks: m.blocks, scanned: m.left ? cached.scanned : [] });
-      }
-      if (r.lost.length) await db.put('kv', `scanfail:${doc.id}`, r.lost);
+
+  // the typed pages → Liquid view, in its own lane
+  const liquidJob: Promise<number[]> =
+    p.kind === 'scan'
+      ? Promise.resolve([])
+      : liquidLane.add(doc.id, async () => {
+          const existing = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', ckey);
+          if (existing && (await db.get<string>('kv', `lqmeta:${doc.id}`)) === undefined && existing.blocks.length > 0) {
+            pLiq = 1;
+            liqInfo = '';
+            bump();
+            return existing.scanned;
+          }
+          start(doc.id, doc.name, 'liquid', 'running', p.pages);
+          try {
+            return await buildLiquid(doc, (f) => {
+              pLiq = f;
+              liqInfo = f >= 1 ? '' : `typed pages · ${Math.round(f * p.pages)} of ${p.pages}`;
+              set(doc.id, { progress: f, done: Math.round(f * p.pages), total: p.pages }, 'liquid');
+              bump();
+            });
+          } finally {
+            end(doc.id, 'liquid');
+          }
+        });
+  // the picture pages → text, in the reading lane (starts at once when their numbers are known)
+  const all = Array.from({ length: p.pages }, (_, i) => i + 1);
+  const read = (pages: number[]) =>
+    ocrLane.add(doc.id, () =>
+      readPictures(doc, p, pages, (f) => {
+        pOcr = f;
+        ocrInfo = f >= 1 ? '' : `scanned pages · ${Math.round(f * pages.length)} of ${pages.length}`;
+        bump();
+      }),
+    );
+  const ocrNow = p.kind === 'scan' ? read(all) : p.kind === 'mixed' ? read(p.scanned) : null;
+
+  const scanned = await liquidJob;
+  const ocr = ocrNow ? await ocrNow : scanned.length ? await read(scanned) : null;
+
+  // put it together
+  if (ocr?.whole) {
+    if (ocr.whole.chars < 60) {
+      await db.put('kv', `liquid:${doc.id}`, 'none');
+      await db.delPrefix('cache', `ocrpg:${doc.id}:`);
+      setPrep(doc.id, { known: true, none: true, busy: false });
+      return;
     }
-    await db.delPrefix('cache', `ocrpg:${doc.id}:`);
-    await db.put('kv', `scan:${doc.id}`, 'done2');
-    settle(doc, 'done');
-  } else await db.put('kv', `scan:${doc.id}`, 'text');
-  // 3) done: the Liquid button is full
+    await db.put('cache', ckey, { blocks: ocr.whole.blocks, scanned: [] });
+    if (ocr.whole.failedPages.length) await db.put('kv', `scanfail:${doc.id}`, ocr.whole.failedPages);
+  } else if (ocr) {
+    const { applyStored } = await import('./ocrpage');
+    const cached = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', ckey);
+    if (cached) {
+      const m = await applyStored(cached.blocks, st);
+      await db.put('cache', ckey, { blocks: m.blocks, scanned: m.left ? cached.scanned : [] });
+    }
+    if (ocr.lost.length) await db.put('kv', `scanfail:${doc.id}`, ocr.lost);
+  }
+  await db.delPrefix('cache', `ocrpg:${doc.id}:`);
+  await db.put('kv', `scan:${doc.id}`, ocr ? 'done2' : 'text');
+  if (ocr) settle(doc, 'done');
   await db.put('kv', `liquid:${doc.id}`, 'ready');
   setPrep(doc.id, { known: true, ready: true, busy: false, progress: 1 });
   finish(doc);
@@ -410,7 +516,7 @@ export function queueFigures(doc: DocMeta) {
   const k = `figs:${doc.id}`;
   if (queued.has(k)) return;
   queued.add(k);
-  void enqueue(async () => {
+  void miscLane.add(doc.id, async () => {
     if ((await db.get<string>('kv', k)) === LQ_VERSION) return;
     const ckey = `${doc.id}:${LQ_VERSION}`;
     const cached = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', ckey);

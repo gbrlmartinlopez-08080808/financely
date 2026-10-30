@@ -1170,3 +1170,29 @@
     animation: none;
   }
 }
+
+/* a page that is still being read, inside a Liquid view that is still growing */
+.flow .lq-wait,
+.flow .lq-tail {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 1.2em 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--r-ink) 6%, transparent);
+  color: color-mix(in srgb, var(--r-ink) 70%, transparent);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.flow .lq-wait i,
+.flow .lq-tail i {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--r-ink) 25%, transparent);
+  border-top-color: var(--r-ink);
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}

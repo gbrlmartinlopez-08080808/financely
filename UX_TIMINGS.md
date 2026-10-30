@@ -13,6 +13,8 @@ Re-measure with the scripts described at the bottom after any change to reading,
 | Import a 40-page text PDF → first page on screen | 0.8 s | < 1.5 s | the reader opens at once; nothing waits for Liquid |
 | …its Liquid view complete (made in the background) | 5.7 s | < 10 s per 40 pages | the drop in the top bar fills up meanwhile |
 | Tap the full drop → Liquid text on screen | 0.5 s | < 0.8 s | |
+| Tap the drop **before** it is full → Liquid opens with what is ready | ≈ 1.7 s (30-page scan, 7 pages read) | < 2.5 s | the rest arrives page by page; waiting pages show a small "being read" card |
+| A normal paper added while a 30-page scan is being read | Liquid complete in 17 s | < 20 s | typed pages and scanned pages use separate lanes, the open book first |
 | Back to the pages | 0.4 s | < 0.8 s | |
 | Import a 30-page scan → reader + empty drop | 1.0 s | < 1.5 s | |
 | 30 scanned pages read and Liquid complete | ≈ 55–70 s | ≈ 2–2.5 s/page on one reader, about half that on a phone with 2–3 | each page is saved the moment it is read |
@@ -32,7 +34,9 @@ Re-measure with the scripts described at the bottom after any change to reading,
 | Leave the book immediately | Reading goes on (it is not tied to the screen). The book's cover in the library shows a small ring with a percentage while you scroll past it; nothing else is shown. |
 | Lock the phone / switch app | A foreground service keeps it going and a notification shows progress. |
 | Close the app or it is killed | Every finished page was saved; the next start carries on from the first unfinished page. |
-| Tap Liquid or Listen too early | A short tip explains Liquid is being prepared and how far it is; nothing breaks and nothing opens half-made. |
+| Tap Liquid too early | Liquid opens at once with the pages that are ready and grows as the rest arrive. The tip gives the percentage, what is being done ("scanned pages · 7 of 30") and about how long is left. |
+| Tap Listen too early | The same tip: Listen needs the whole book. |
+| Something gets stuck | Each page read has a time limit (a stuck reader is replaced); a book that has not moved for 20 s says it is waiting for its turn, and after a minute it is started again. |
 | Come back later | The drop is already full; Liquid opens in half a second. |
 | Add three books at once | They are prepared one after the other (never fighting); opening any of them is still instant. |
 | Open a book that was left in Liquid mode before it was complete | It opens on the pages, quietly. |
@@ -42,6 +46,6 @@ Re-measure with the scripts described at the bottom after any change to reading,
 ## Rules these numbers come from
 1. Nothing the reader wants to do waits for background work. Pages first, always.
 2. Background work saves after every page and reports its progress in one place per book (its cover in the library, its drop in the book).
-3. No pop-up for "it is ready": the drop is the notification.
+3. No pop-up for "it is ready": the drop is the notification. It is never disabled and never sits at 0% without saying why.
 4. The main thread never stalls more than ~250 ms for reading work; timers are not used for pacing in the background.
 5. A tap answers within 100 ms (a state change), and anything that cannot finish by then shows progress.

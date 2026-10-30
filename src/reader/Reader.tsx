@@ -20,7 +20,7 @@ import { anchorFromSelection, applyHighlights, clearMarks, findAll, wordAt, wrap
 import { AskSheet } from './Ask';
 import { FormSheet } from './FormSheet';
 import { detectForm, type FormModel } from '../lib/forms';
-import { LQ_VERSION, pageStore, prepareNow, queueScan, useLiquid } from '../lib/scan';
+import { LQ_VERSION, focusDoc, liquidPageStore, pageStore, prepareNow, queueScan, useLiquid } from '../lib/scan';
 import { KIND_LABEL } from '../lib/formats/detect';
 import { fontById } from '../lib/fonts';
 
@@ -62,6 +62,10 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   // scanned (picture-only) PDFs are read in the background from the moment they are added; until that has worked,
   // liquid and listen aren't offered
   const liq = useLiquid(doc.id);
+  useEffect(() => {
+    focusDoc(doc.id); // the open book's preparation goes first
+    return () => focusDoc('');
+  }, [doc.id]);
   const [liqTip, setLiqTip] = useState(false);
   const [ocrText, setOcrText] = useState<{ text: string; busy: boolean; p: number } | null>(null);
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
@@ -73,8 +77,9 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   const [flowReady, setFlowReady] = useState(0);
 
   const isPdf = doc.kind === 'pdf';
-  // a PDF's Liquid view is prepared in the background from the moment it is added; it can be opened once it is complete
-  const liquid = !isPdf || (mode === 'liquid' && liq.ready);
+  // a PDF's Liquid view is prepared in the background from the moment it is added. It can be opened at any moment:
+  // what is ready is shown and the rest arrives as it is finished (no waiting at 0%).
+  const liquid = !isPdf || (mode === 'liquid' && liq.known && !liq.none);
   const theme = THEMES.find((t) => t.id === settings.readerTheme) ?? THEMES[0];
   const dark = settings.readerTheme === 'dusk' || settings.readerTheme === 'night';
 
@@ -137,13 +142,12 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     delete root.dataset.wrapped;
     (async () => {
       const key = `${id}:${LQ_VERSION}`;
-      const cached = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', key);
+      const cached = liq.ready ? await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', key) : undefined;
       if (!alive) return;
       if (!cached) {
-        // should not happen (the button only opens a finished view): go back to the pages and prepare it again
-        setMode('page');
-        prepareNow(doc);
-        return;
+        // not complete yet: show what is ready now and let the view grow as pages arrive
+        if (liq.ready) prepareNow(doc); // "ready" but nothing saved: prepare it again
+        return startLive(root, () => alive);
       }
       let { blocks: cb, scanned: cs } = cached;
       if (cs.length) {
@@ -163,8 +167,90 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     })();
     return () => {
       alive = false;
+      liveStop.current();
     };
-  }, [content, liquid]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [content, liquid, liq.ready]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /**
+   * The Liquid view of a book that is still being prepared: the pages that are done are shown at once, pages that are
+   * still being read show a small "being read" card, and everything is swapped in place as it arrives. The reader can
+   * start reading straight away and the view is complete by the time they reach the end.
+   */
+  const liveStop = useRef<() => void>(() => {});
+  const startLive = async (root: HTMLElement, alive: () => boolean) => {
+    const total = doc.pages ?? 0;
+    const lst = liquidPageStore(id);
+    const ost = pageStore(id);
+    const waitHtml = (pn: number) => `<figure class="lq lq-wait" data-wait="${pn}"><i></i><span>Page ${pn} is being read…</span></figure>`;
+    const tailHtml = '<div class="lq-tail" data-tail><i></i><span>Preparing the next pages…</span></div>';
+    let next = 1;
+    root.innerHTML = '';
+    delete root.dataset.wrapped;
+    const pageHtml = async (pn: number): Promise<string | null> => {
+      let bs = await lst.load(pn);
+      if (!bs) {
+        const read = await ost.load(pn); // a picture-only book: the pages come straight from the reading
+        if (!read) return null;
+        bs = [{ t: 'page', page: pn }, ...read];
+      }
+      const keep: LBlock[] = [];
+      let waiting = false;
+      for (const b of bs) {
+        if (b.t === 'img' && b.kind === 'scan') {
+          const read = await ost.load(pn);
+          if (read?.length) keep.push(...read);
+          else waiting = true;
+        } else keep.push(b);
+      }
+      return blocksToHtml(keep, urls.current) + (waiting ? waitHtml(pn) : '');
+    };
+    let busy = false;
+    const flush = async () => {
+      if (busy || !alive()) return;
+      busy = true;
+      try {
+        root.querySelector('[data-tail]')?.remove();
+        // new pages, in order
+        while (next <= (total || 1e6)) {
+          const h = await pageHtml(next);
+          if (h === null) break;
+          if (!alive()) return;
+          root.insertAdjacentHTML('beforeend', h);
+          next++;
+        }
+        // pictures that have been read since: swap them in
+        for (const el of Array.from(root.querySelectorAll<HTMLElement>('[data-wait]'))) {
+          const pn = Number(el.dataset.wait);
+          const read = await ost.load(pn);
+          if (read?.length) {
+            const tpl = document.createElement('template');
+            tpl.innerHTML = blocksToHtml(read.filter((b) => b.t !== 'page'), urls.current);
+            el.replaceWith(tpl.content);
+          }
+        }
+        if (total && next <= total) root.insertAdjacentHTML('beforeend', tailHtml);
+        afterLiquid(root);
+      } finally {
+        busy = false;
+      }
+    };
+    let timer = 0;
+    const kick = () => {
+      clearTimeout(timer);
+      timer = window.setTimeout(flush, 250);
+    };
+    const onEv = (e: Event) => (e as CustomEvent<{ id: string }>).detail.id === id && kick();
+    window.addEventListener('frogity:page', onEv);
+    window.addEventListener('frogity:ocrpage', onEv);
+    const iv = window.setInterval(flush, 2000);
+    liveStop.current = () => {
+      window.removeEventListener('frogity:page', onEv);
+      window.removeEventListener('frogity:ocrpage', onEv);
+      clearInterval(iv);
+      clearTimeout(timer);
+    };
+    await flush();
+  };
 
   // pictures that turned out to be writing were turned into text in the background: show the better version (not mid-listen)
   useEffect(() => {
@@ -577,13 +663,11 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
 
   const toggleListen = (v: 'read' | 'listen') => {
     if (v === 'listen') {
-      if (!liquid) {
-        if (!liq.ready) {
-          setLiqTip(true); // Listen reads the Liquid view: it is still being prepared
-          return;
-        }
-        switchMode('liquid');
+      if (isPdf && !liq.ready) {
+        setLiqTip(true); // Listen reads the whole Liquid view: it is still being prepared
+        return;
       }
+      if (!liquid) switchMode('liquid');
       setListen(true);
       setChrome(true);
     } else setListen(false);
@@ -981,7 +1065,12 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
               active={liquid}
               tip={liqTip}
               onTip={setLiqTip}
-              onClick={() => (liq.ready ? switchMode(liquid ? 'page' : 'liquid') : setLiqTip(true))}
+              info={liq.info}
+              eta={liq.eta}
+              onClick={() => {
+                if (!liq.ready && !liquid) setLiqTip(true);
+                switchMode(liquid ? 'page' : 'liquid');
+              }}
             />
           )}
           <button className="r-ibtn" onClick={() => setFind('')} aria-label="Search">
@@ -1077,7 +1166,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
           setLookup(w);
         }}
         onHighlight={liquid ? addHighlight : undefined}
-        onListen={liquid ? listenFromSelection : undefined}
+        onListen={liquid && (!isPdf || liq.ready) ? listenFromSelection : undefined}
         onAsk={() => {
           setAskSel(selectionText().slice(0, 1500));
           clearSel();

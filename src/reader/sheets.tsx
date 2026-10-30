@@ -27,13 +27,13 @@ export function TypeSheet({ open, onClose, isPdf, mode, onMode, liquidReady = tr
               light
               className="w100"
               value={mode}
-              onChange={(v) => (v === 'liquid' && !liquidReady ? undefined : onMode(v))}
+              onChange={onMode}
               options={[
                 { value: 'page', label: <><Icon name="page" size={16} /> Page</> },
                 { value: 'liquid', label: <><Icon name="liquid" size={16} /> {liquidReady ? 'Liquid' : `Liquid ${Math.round(liquidProgress * 100)}%`}</> },
               ]}
             />
-            {!liquidReady && <p className="muted" style={{ fontSize: 12.5, margin: '10px 4px 0' }}>Liquid mode is being prepared in the background. Keep reading the pages: it opens as soon as it is complete.</p>}
+            {!liquidReady && <p className="muted" style={{ fontSize: 12.5, margin: '10px 4px 0' }}>Liquid mode is still being prepared in the background. It opens now with what is ready, and the rest arrives by itself. Listen needs the whole book.</p>}
             {liquidReady && mode === 'page' && <p className="muted" style={{ fontSize: 12.5, margin: '10px 4px 0' }}>Liquid reflows the PDF to fit your screen — equations and figures are kept intact.</p>}
           </>
         )}
