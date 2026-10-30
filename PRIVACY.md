@@ -38,9 +38,9 @@ Internet access (for the features above), vibration (haptic feedback), notificat
 The app is not directed to children under 13 and the AI feature is intended for users 13 and older.
 
 ## Your rights
-Because we hold no personal data about you, there is nothing for us to export or delete. For requests concerning the third-party services above, contact them directly. If you have questions: [SUPPORT EMAIL].
+Because we hold no personal data about you, there is nothing for us to export or delete. For requests concerning the third-party services above, contact them directly. If you have questions: gbrlmartinlopez40@gmail.com.
 
 ## Changes
 If this policy changes, the new version will be posted at this address with a new date.
 
-**Contact / data controller:** [YOUR NAME OR COMPANY, ADDRESS OR COUNTRY, EMAIL]
+**Contact / data controller:** Gabriel Martin Lopez (Frogity developer) · gbrlmartinlopez40@gmail.com

@@ -79,7 +79,7 @@ function Globe({ lights, view, onToggle }: { lights: ReturnType<typeof lightsFor
 
 
 /** Hours of the day along the bottom, minutes read in each hour as thin bars. */
-function DayChart({ date, ms, hours }: { date: Date; ms: number; hours?: number[] }) {
+function DayChart({ date, ms, hours, ice }: { date: Date; ms: number; hours?: number[]; ice?: boolean }) {
   const max = Math.max(1, ...(hours ?? [0]));
   const peak = hours ? hours.indexOf(Math.max(...hours)) : -1;
   const W = 300;
@@ -90,7 +90,7 @@ function DayChart({ date, ms, hours }: { date: Date; ms: number; hours?: number[
     <div className="daychart" aria-live="polite">
       <div className="daychart-head">
         <b className="mono">{date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</b>
-        <span className="mono">{ms >= 1000 ? fmtMs(ms) : 'rest day'}</span>
+        <span className="mono">{ms >= 1000 ? fmtMs(ms) : ice ? '~ freeze day' : 'rest day'}</span>
       </div>
       {hours && ms >= 1000 ? (
         <>
@@ -109,7 +109,7 @@ function DayChart({ date, ms, hours }: { date: Date; ms: number; hours?: number[
           <p className="mono daychart-note">mostly around {hr(peak)} · {Math.round(hours[peak] / 60000)} min</p>
         </>
       ) : (
-        <p className="mono daychart-note">{ms >= 1000 ? 'no hour-by-hour detail was kept for this day.' : 'nothing read — the shelf waited.'}</p>
+        <p className="mono daychart-note">{ms >= 1000 ? 'no hour-by-hour detail was kept for this day.' : ice ? 'a freeze day kept your streak going.' : 'nothing read — the shelf waited.'}</p>
       )}
     </div>
   );
@@ -357,7 +357,7 @@ export function StatsBubble({ open, onClose, reward, onRewardDone }: { open: boo
                   <span>min</span>
                   <span data-ice>~&nbsp;freeze</span>
                 </div>
-                <DayChart date={sel.date} ms={sel.ms} hours={hours[sel.key]} />
+                <DayChart date={sel.date} ms={sel.ms} hours={hours[sel.key]} ice={sel.ms < COUNT_MS && frozen.used.includes(sel.key)} />
               </div>
               <div className="tiles">
                 <div className="tile">
@@ -367,18 +367,18 @@ export function StatsBubble({ open, onClose, reward, onRewardDone }: { open: boo
                     <small>days</small>
                   </div>
                 </div>
-                <div className="tile freeze" data-ready={fz.available > 0 || undefined}>
-                  <div className="k">freeze day</div>
-                  <div className="v mono">
-                    {fz.available > 0 ? 'ready' : 'used'}
-                    <small>{fz.bonus > 0 ? `+${fz.bonus} earned` : fz.weekly ? 'resets Monday' : 'back Monday'}</small>
-                  </div>
-                </div>
                 <div className="tile">
                   <div className="k">finished</div>
                   <div className="v">
                     {finished}
                     <small>of {docs.length}</small>
+                  </div>
+                </div>
+                <div className="tile freeze" data-ready={fz.available > 0 || undefined}>
+                  <div className="k">freeze day</div>
+                  <div className="v mono">
+                    {fz.available > 0 ? 'ready' : 'used'}
+                    <small>{fz.bonus > 0 ? `+${fz.bonus} earned` : fz.weekly ? 'resets Monday' : 'back Monday'}</small>
                   </div>
                 </div>
               </div>
@@ -393,7 +393,7 @@ export function StatsBubble({ open, onClose, reward, onRewardDone }: { open: boo
           )}
         </div>
       </div>
-      <Sheet open={goalOpen} onClose={() => setGoalOpen(false)} title="Daily goal">
+      <Sheet open={goalOpen} onClose={() => setGoalOpen(false)} title="Daily goal" className="over">
         <div className="sheet-body" style={{ paddingBottom: 16 }}>
           <p className="muted" style={{ marginTop: 0, fontSize: 14 }}>
             A day counts toward your streak after one minute of reading or listening. The goal fills the ring.

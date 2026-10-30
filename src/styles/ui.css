@@ -1978,3 +1978,11 @@
   color: var(--ink);
   font-weight: 600;
 }
+
+/* a sheet opened from inside the streak bubble must sit above it */
+.scrim.over {
+  z-index: 60;
+}
+.sheet.over {
+  z-index: 61;
+}

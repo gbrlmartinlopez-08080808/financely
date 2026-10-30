@@ -1,4 +1,4 @@
-# Store listing — Frogity (v2.2)
+# Store listing — Frogity (v2.3)
 
 **Title (≤30):** Frogity – Reader & PDF
 
@@ -47,7 +47,7 @@ Contains an optional AI feature that sends your question and short excerpts to a
 **Privacy policy URL:** host `docs/privacy.html` (`npm run privacy`), then set `PRIVACY_URL` in `src/lib/config.ts`.
 **Foreground service / Data safety / target API:** see `PUBLISHING.md` → "Play Console declarations for 2.2".
 
-**What’s new in 2.2 (≤500):**
+**What’s new in 2.3 (≤500):**
 Fill forms and sign them. Listening keeps playing with the screen off, with lock-screen controls. A jetpack frog rides your @ lights. Streak freeze days. Home-screen widget. Share books as acrylic cards. Streak symbols now scale to your daily goal.
 
 ---

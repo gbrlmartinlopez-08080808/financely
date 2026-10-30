@@ -112,7 +112,7 @@ export function Sheet({
   };
   return createPortal(
     <>
-      <div className={`scrim${closing ? ' out' : ''}`} onClick={onClose} />
+      <div className={`scrim${closing ? ' out' : ''}${className?.includes('over') ? ' over' : ''}`} onClick={onClose} />
       <div ref={ref} className={`sheet${closing ? ' out' : ''} ${className ?? ''}`} data-dark={dark ? '1' : undefined} onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd} role="dialog">
         {!noGrip && <div className="sheet-grip" />}
         {title !== undefined && (
