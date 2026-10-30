@@ -153,8 +153,17 @@ export function Segmented<T extends string>({
   const [thumb, setThumb] = useState<{ x: number; w: number } | null>(null);
   const idx = options.findIndex((o) => o.value === value);
   useLayoutEffect(() => {
-    const el = ref.current?.querySelectorAll('button')[idx] as HTMLElement | undefined;
-    if (el) setThumb({ x: el.offsetLeft - 4, w: el.offsetWidth });
+    const root = ref.current;
+    if (!root) return;
+    const measure = () => {
+      const el = root.querySelectorAll('button')[idx] as HTMLElement | undefined;
+      if (el) setThumb((t) => (t && t.x === el.offsetLeft - 4 && t.w === el.offsetWidth ? t : { x: el.offsetLeft - 4, w: el.offsetWidth }));
+    };
+    measure();
+    // a font that arrives late, or a label that changes, must not leave the thumb half a button off
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    root.querySelectorAll('button').forEach((b) => ro?.observe(b));
+    return () => ro?.disconnect();
   }, [idx, options.length]);
   return (
     <div ref={ref} className={`seg${light ? ' light' : ''} ${className ?? ''}`} role="tablist">
@@ -283,6 +292,24 @@ export function toast(text: string, kind?: 'award', onClick?: () => void) {
     }
   }, onClick ? 9000 : kind ? 4200 : 2400);
 }
+/**
+ * Where a message goes: just above whatever sits at the bottom right now (an open sheet, or the reader's controls at
+ * their resting place). Measured once when the message appears, so it never slides around while it is up.
+ */
+function toastBottom(): number | null {
+  const H = window.innerHeight;
+  const sheets = Array.from(document.querySelectorAll<HTMLElement>('.sheet:not(.out)'));
+  // offsetTop ignores the sheets' slide-in transform: this is where they come to rest
+  if (sheets.length) return Math.round(H - Math.min(...sheets.map((s) => s.offsetTop)) + 12);
+  const dock = document.querySelector<HTMLElement>('.r-dock');
+  const host = dock?.offsetParent as HTMLElement | null;
+  if (dock && host) {
+    // offsets, not the box on screen: the reader may still be sliding in, and the controls may be tucked away
+    return Math.round(H - (host.offsetTop + dock.offsetTop) + 12);
+  }
+  return null;
+}
+
 export function Toasts() {
   const msg = useSyncExternalStore(
     (l) => {
@@ -291,8 +318,14 @@ export function Toasts() {
     },
     () => toastMsg,
   );
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const b = msg && ref.current ? toastBottom() : null;
+    if (ref.current) ref.current.style.bottom = b === null ? '' : `max(${b}px, calc(var(--safe-b) + 24px))`;
+  }, [msg?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   return msg ? (
     <div
+      ref={ref}
       className={`toast${msg.kind ? ' ' + msg.kind : ''}${msg.onClick ? ' tappable' : ''}`}
       key={msg.id}
       role={msg.onClick ? 'button' : 'status'}

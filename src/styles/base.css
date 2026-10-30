@@ -199,6 +199,11 @@ textarea {
   background: var(--line);
   color: var(--ink);
 }
+/* a full-width switch of equal halves (Page | Liquid) */
+.seg.halves {
+  display: grid;
+  width: 100%;
+}
 .seg-thumb {
   position: absolute;
   top: 4px;
@@ -401,7 +406,7 @@ textarea {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: max(var(--toast-bottom, 96px), calc(var(--safe-b) + 24px));
+  bottom: max(96px, calc(var(--safe-b) + 24px));
   transform: translateX(-50%);
   z-index: 90;
   background: var(--pill);

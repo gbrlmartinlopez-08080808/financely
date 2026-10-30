@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { updateSettings, useStore } from '../lib/store';
 import * as db from '../lib/db';
 import { Icon } from '../ui/Icon';
@@ -11,13 +11,15 @@ import { FontsSheet } from '../reader/sheets';
 import { About } from './About';
 import { APP_VERSION } from '../lib/config';
 import { fontById } from '../lib/fonts';
-import { LANGS, detectLang, ensureNaturalVoice } from '../lib/voices';
+import { detectLang, ensureNaturalVoice } from '../lib/voices';
+import { LangChips } from '../ui/LangChips';
 
 export function Settings({ open, onClose }: { open: boolean; onClose: () => void }) {
   const s = useStore((x) => x.settings);
   const docs = useStore((x) => x.docs);
   const [usage, setUsage] = useState<string>('');
   const [name, setName] = useState(s.name);
+  const voiceT = useRef(0);
   const [fonts, setFonts] = useState(false);
   const [about, setAbout] = useState(false);
   const [adv, setAdv] = useState(false);
@@ -66,27 +68,23 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
         </div>
 
         <div className="section-label">reading</div>
-        <div className="row">
-          <Icon name="ear" />
-          <div className="grow">
-            <div className="row-label">Reading language</div>
-            <div className="row-sub">Decides your natural reading voice</div>
+        <div className="lang-row">
+          <div className="row-top">
+            <Icon name="ear" />
+            <div className="grow">
+              <div className="row-label">Reading language</div>
+              <div className="row-sub">Decides your natural reading voice</div>
+            </div>
           </div>
-          <select
-            className="lang-select"
+          <LangChips
             value={s.lang || detectLang()}
-            onChange={(e) => {
-              updateSettings({ lang: e.target.value });
-              void ensureNaturalVoice(e.target.value, { force: true });
+            onChange={(v) => {
+              updateSettings({ lang: v });
+              // the voice follows once the choice has settled, not for every language tapped on the way
+              clearTimeout(voiceT.current);
+              voiceT.current = window.setTimeout(() => void ensureNaturalVoice(v, { force: true }), 900);
             }}
-            aria-label="Reading language"
-          >
-            {LANGS.map((l) => (
-              <option key={l.code} value={l.code}>
-                {l.label}
-              </option>
-            ))}
-          </select>
+          />
         </div>
         <button className="row" style={{ width: '100%', textAlign: 'left' }} onClick={() => setFonts(true)}>
           <Icon name="text" />

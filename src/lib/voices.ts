@@ -31,12 +31,18 @@ export function naturalVoiceFor(lang: string): NeuralVoice | undefined {
 }
 
 let busy = false;
+/** a language asked for while another voice was downloading: it is fetched right after (never silently dropped) */
+let next: { lang: string; opts: { force?: boolean } } | null = null;
 /**
  * Downloads the natural voice for the language (if it isn't on the phone) and makes it the default, unless the reader
  * already chose a voice. Shows up as background work, with its progress. Safe to call again.
  */
 export async function ensureNaturalVoice(lang = getState().settings.lang || detectLang(), opts: { force?: boolean } = {}): Promise<void> {
-  if (busy || !neuralSupported()) return;
+  if (!neuralSupported()) return;
+  if (busy) {
+    next = { lang, opts };
+    return;
+  }
   const v = naturalVoiceFor(lang);
   if (!v) return;
   const conn = (navigator as unknown as { connection?: { saveData?: boolean } }).connection;
@@ -62,6 +68,9 @@ export async function ensureNaturalVoice(lang = getState().settings.lang || dete
   } finally {
     reportJob(jobId, '', 'voice', 1, 1, true);
     busy = false;
+    const n = next;
+    next = null;
+    if (n && n.lang !== lang) void ensureNaturalVoice(n.lang, n.opts);
   }
 }
 

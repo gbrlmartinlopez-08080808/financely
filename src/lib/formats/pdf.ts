@@ -9,43 +9,46 @@ export { pdfjs };
 
 const base = new URL('./pdfjs/', document.baseURI).href;
 
+const common = {
+  cMapUrl: base + 'cmaps/',
+  cMapPacked: true,
+  standardFontDataUrl: base + 'standard_fonts/',
+  wasmUrl: base + 'wasm/',
+  enableXfa: false,
+  fontExtraProperties: true,
+};
+
 export async function openPdf(data: ArrayBuffer | Uint8Array): Promise<PDFDocumentProxy> {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-  const task = pdfjs.getDocument({
-    // pdf.js transfers the buffer to its worker; pass a copy so the caller's bytes stay usable.
-    data: bytes.slice(),
-    cMapUrl: base + 'cmaps/',
-    cMapPacked: true,
-    standardFontDataUrl: base + 'standard_fonts/',
-    wasmUrl: base + 'wasm/',
-    enableXfa: false,
-    fontExtraProperties: true,
-  });
-  return task.promise;
+  // pdf.js transfers the buffer to its worker; pass a copy so the caller's bytes stay usable.
+  return pdfjs.getDocument({ ...common, data: bytes.slice() }).promise;
 }
 
+/** pdf.js asks for the parts of a big file it needs; they are cut straight from the blob (no network stack involved). */
+class BlobRange extends pdfjs.PDFDataRangeTransport {
+  constructor(private blob: Blob) {
+    super(blob.size, new Uint8Array(0));
+  }
+  override requestDataRange(begin: number, end: number) {
+    this.blob
+      .slice(begin, end)
+      .arrayBuffer()
+      .then((b) => this.onDataRange(begin, new Uint8Array(b)))
+      .catch(() => this.abort());
+  }
+}
+
+/** Above this a file is read in parts instead of all at once. */
+const WHOLE_MAX = 80 * 1024 * 1024;
+
 /**
- * Opens a stored file without copying all of it into memory: pdf.js reads it from the blob as it needs it.
- * (Big books were being read into memory twice just to be looked at.)
+ * Opens a stored file for the background work. Ordinary files are read the same way the reader opens them (which is
+ * known to work everywhere); very big ones are read in parts, so a long book is never held in memory twice.
  */
 export async function openPdfBlob(blob: Blob): Promise<PDFDocumentProxy> {
-  const url = URL.createObjectURL(blob);
-  const task = pdfjs.getDocument({
-    url,
-    cMapUrl: base + 'cmaps/',
-    cMapPacked: true,
-    standardFontDataUrl: base + 'standard_fonts/',
-    wasmUrl: base + 'wasm/',
-    enableXfa: false,
-    fontExtraProperties: true,
-  });
-  const doc = await task.promise;
-  const destroy = task.destroy.bind(task);
-  task.destroy = async () => {
-    URL.revokeObjectURL(url);
-    return destroy();
-  };
-  return doc;
+  // these bytes are ours alone, so they can go to the worker without a copy
+  if (blob.size <= WHOLE_MAX) return pdfjs.getDocument({ ...common, data: new Uint8Array(await blob.arrayBuffer()) }).promise;
+  return pdfjs.getDocument({ ...common, range: new BlobRange(blob) }).promise;
 }
 
 /** Render a page into a fresh canvas at the given CSS-pixel scale (already multiplied by DPR if wanted). */

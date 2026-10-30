@@ -78,8 +78,19 @@
   align-items: center;
   gap: 4px;
   padding: calc(var(--safe-t) + 6px) 10px 10px;
-  background: linear-gradient(var(--r-bg) 60%, transparent);
+  /* solid, so the page scrolling underneath never runs through the title; a short fade below softens the edge */
+  background: var(--r-bg);
   transition: transform 0.35s var(--ease), opacity 0.3s;
+}
+.r-top::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 12px;
+  background: linear-gradient(var(--r-bg), transparent);
+  pointer-events: none;
 }
 .r-top.hide {
   transform: translateY(-100%);
@@ -87,15 +98,35 @@
   pointer-events: none;
 }
 .r-top .title {
+  position: relative;
   flex: 1;
   min-width: 0;
-  text-align: center;
+  height: 42px;
+  display: grid;
+  place-items: center;
   font-family: var(--mono);
   font-size: 12px;
   color: var(--r-muted);
+}
+.r-top .title > span {
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* the quiet second line (Liquid progress): hangs under the title, so the title never moves when it comes or goes */
+.r-top .title .t2 {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(50% + 9px);
+  font-size: 10px;
+  letter-spacing: 0.01em;
+  color: color-mix(in srgb, var(--r-ink) 62%, transparent);
+  text-align: center;
+}
+.r-top .title .t2:empty {
+  display: none;
 }
 .r-ibtn {
   width: 42px;
@@ -991,12 +1022,11 @@
   font-size: 16px;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
 }
+/* the form offer is part of the controls at the bottom: it moves with them and never covers them (or a message) */
 .form-offer {
-  position: absolute;
-  z-index: 35;
-  left: 14px;
-  right: 14px;
-  bottom: var(--toast-bottom, 110px);
+  width: 100%;
+  max-width: 460px;
+  margin-bottom: 10px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1077,103 +1107,8 @@
   }
 }
 
-/* the Liquid-mode button: a drop that fills up while the view is prepared */
-.liq-wrap {
-  position: relative;
-  display: inline-flex;
-}
-.liqbtn {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: var(--r-ink, var(--ink));
-  transition: background 0.3s, transform 0.2s;
-}
-.liqbtn:active {
-  transform: scale(0.92);
-}
-.liqbtn .rim {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.7;
-  stroke-linejoin: round;
-  opacity: 0.85;
-}
-.liqbtn .water {
-  transition: transform 1.2s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.liqbtn .wave {
-  fill: #4a8dff;
-  animation: liq-slosh 2.4s linear infinite;
-}
-.liqbtn .wave.b {
-  fill: #8bb8ff;
-  opacity: 0.7;
-  animation-duration: 3.6s;
-  animation-direction: reverse;
-}
-@keyframes liq-slosh {
-  to {
-    transform: translateX(12px);
-  }
-}
-.liqbtn.ready .rim {
-  stroke: #4a8dff;
-  opacity: 1;
-}
-.liqbtn.ready::after {
-  content: '';
-  position: absolute;
-  inset: 3px;
-  border-radius: 50%;
-  box-shadow: 0 0 0 0 rgba(74, 141, 255, 0.5);
-  animation: liq-pop 2.6s ease-out 1;
-  pointer-events: none;
-}
-@keyframes liq-pop {
-  0% {
-    box-shadow: 0 0 0 0 rgba(74, 141, 255, 0.55);
-  }
-  100% {
-    box-shadow: 0 0 0 16px rgba(74, 141, 255, 0);
-  }
-}
-.liqbtn.on {
-  background: color-mix(in srgb, var(--r-ink, var(--ink)) 12%, transparent);
-}
-.liq-tip {
-  position: absolute;
-  z-index: 60;
-  top: calc(100% + 8px);
-  right: -4px;
-  width: max-content;
-  max-width: 230px;
-  padding: 10px 14px;
-  border-radius: 16px;
-  background: var(--pill);
-  color: var(--pill-ink);
-  font: 12.5px/1.35 var(--mono);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
-  animation: rise 0.3s var(--spring);
-}
-.liq-tip small {
-  display: block;
-  margin-top: 4px;
-  font-size: 11px;
-  opacity: 0.7;
-}
-@media (prefers-reduced-motion: reduce) {
-  .liqbtn .wave,
-  .liqbtn.ready::after {
-    animation: none;
-  }
-}
-
 /* a page that is still being read, inside a Liquid view that is still growing */
-.flow .lq-wait,
-.flow .lq-tail {
+.flow .lq-wait {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1185,8 +1120,7 @@
   font-family: var(--mono);
   font-size: 12px;
 }
-.flow .lq-wait i,
-.flow .lq-tail i {
+.flow .lq-wait i {
   width: 14px;
   height: 14px;
   flex: none;
@@ -1196,3 +1130,125 @@
   animation: spin 0.9s linear infinite;
 }
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* switching a PDF between its pages and Liquid: a plain glyph; a thin ring fills while the Liquid view is made */
+.viewbtn {
+  position: relative;
+}
+.viewbtn.on {
+  background: color-mix(in srgb, var(--r-ink) 12%, transparent);
+}
+.viewbtn-ring {
+  position: absolute;
+  inset: 1px;
+  width: calc(100% - 2px);
+  height: calc(100% - 2px);
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+.viewbtn-ring circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+.viewbtn-ring .track {
+  opacity: 0.16;
+}
+.viewbtn-ring .run {
+  transition: stroke-dashoffset 0.8s var(--ease);
+}
+.viewbtn-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 2px var(--r-bg);
+}
+
+/* how far a Liquid view is: at the end of the text while it grows (and in the reading sheet) */
+.flow.growing {
+  padding-bottom: 0;
+}
+.lq-status-wrap {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 6px var(--r-margin) calc(var(--safe-b) + 200px);
+}
+.lq-status {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--r-ink, var(--ink)) 6%, transparent);
+  color: var(--r-ink, var(--ink));
+  font-family: var(--sans);
+  text-align: left;
+}
+.lq-status-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lq-status b {
+  font-size: 15px;
+  font-weight: 600;
+}
+.lq-status-top .mono {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.lq-status small {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--r-ink, var(--ink)) 66%, transparent);
+}
+.lq-status p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--r-ink, var(--ink)) 72%, transparent);
+}
+.lq-status-act {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.sheet-status {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.sheet-status > p,
+.sheet-note {
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin: 0 4px;
+}
+.sheet-note {
+  margin-top: 10px;
+}
+.reader .lq-status .pill {
+  background: var(--r-ink);
+  color: var(--r-bg);
+}
+.reader .lq-status .pill.ghost {
+  background: transparent;
+  color: var(--r-ink);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--r-ink) 25%, transparent);
+}
+.type-block {
+  transition: opacity 0.25s;
+}
+.type-block.idle {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.type-note {
+  text-transform: none;
+  letter-spacing: 0;
+}

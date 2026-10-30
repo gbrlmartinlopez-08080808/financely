@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useStore, updateSettings } from '../lib/store';
-import { LANGS, detectLang } from '../lib/voices';
+import { detectLang } from '../lib/voices';
+import { LangChips } from '../ui/LangChips';
 import { displayName } from '../lib/cheer';
 import { lightsFor, renderGlobe } from '../lib/globe';
 import { plantStage } from '../lib/ascii';
@@ -314,6 +315,20 @@ export function Onboarding({ onDone }: { onDone: (f: Finish) => void }) {
   const step = STEPS[i];
   const name = displayName(draft || settings.name);
   const scroller = useRef<HTMLDivElement>(null);
+  // Each step is centred in the screen's height *without* the keyboard: when the keyboard opens or closes (tapping the
+  // name, then a language) the page stays where it is instead of re-centring under the finger.
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const measure = () => {
+      const a = document.activeElement;
+      if (a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement) return; // the keyboard is (probably) up
+      el.style.setProperty('--ob-h', `${el.clientHeight}px`);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
 
   const go = (d: number) => {
     const n = Math.max(0, Math.min(STEPS.length - 1, i + d));
@@ -387,24 +402,17 @@ export function Onboarding({ onDone }: { onDone: (f: Finish) => void }) {
             </form>
           )}
           {step.id === 'name' && (
-            <label className="ob-lang">
+            <div className="ob-lang">
               <span className="mono">reading language</span>
-              <select
+              <LangChips
                 value={lang}
-                onChange={(e) => {
-                  setLang(e.target.value);
-                  updateSettings({ lang: e.target.value });
+                onChange={(v) => {
+                  setLang(v);
+                  updateSettings({ lang: v });
                 }}
-                aria-label="Reading language"
-              >
-                {LANGS.map((l) => (
-                  <option key={l.code} value={l.code}>
-                    {l.label}
-                  </option>
-                ))}
-              </select>
+              />
               <small className="mono">picked from your phone · your natural reading voice downloads in this language</small>
-            </label>
+            </div>
           )}
           {step.id === 'goal' && (
             <div className="ob-ruler">

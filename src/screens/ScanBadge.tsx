@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
-import { useRunningJobs, type ScanJob } from '../lib/scan';
+import { useEffect, useState } from 'react';
+import { useLiquid, useRunningJobs, type ScanJob } from '../lib/scan';
 import { kindLabel, left } from '../lib/workNotice';
-import { PixelBar, PixelLoader, Sheet, toast } from '../ui/kit';
+import { PixelBar, Sheet, toast } from '../ui/kit';
 
 const short = (t: string, n: number) => (t.length > n ? t.slice(0, n) + '…' : t);
 
 /**
- * App-wide: says when a file needs reading or is ready, and holds the "Working in the background" list. The list opens
- * from a toast, or from the small badge inside the book it belongs to. Nothing here stays on screen by itself.
+ * App-wide: says when a file needs reading, and holds the "Working in the background" list (opened from that message).
+ * Inside a book, its own progress is shown in the book's top bar instead, so nothing here floats over a page.
  */
 export function JobsHost() {
   const all = useRunningJobs();
@@ -16,7 +16,8 @@ export function JobsHost() {
     const began = (e: Event) => {
       const d = (e as CustomEvent<{ title: string; pages: number }>).detail;
       if (d.pages <= 0) return; // a book of ordinary text is just prepared quietly: the Liquid button fills up by itself
-      toast(`Reading ${d.pages > 1 ? d.pages + ' pages of ' : ''}“${short(d.title, 24)}” in the background — tap to follow`, undefined, () => setList(true));
+      if (document.querySelector('.reader')) return; // the open book shows its own progress under its title
+      toast(`Reading “${short(d.title, 22)}”${d.pages > 1 ? ` · ${d.pages} pages` : ''} — tap to follow`, undefined, () => setList(true));
     };
     const open = () => setList(true);
     window.addEventListener('frogity:started', began);
@@ -53,70 +54,26 @@ export function useDocJob(id: string): ScanJob | undefined {
   return useRunningJobs().find((j) => j.id === id);
 }
 
-/** A tiny ring on a book in the library while it is being read: seen as you scroll past it, gone when it is done. */
+/**
+ * A tiny ring on a book in the library while it is being prepared: seen as you scroll past it, gone when it is done.
+ * For a PDF it is the same percentage its Liquid button shows inside the book.
+ */
 export function JobMark({ id, className = '' }: { id: string; className?: string }) {
   const job = useDocJob(id);
-  if (!job) return null;
+  const prep = useLiquid(id);
+  const preparing = prep.known && prep.busy && !prep.ready && !prep.error;
+  if (!job && !preparing) return null;
+  const progress = preparing ? prep.progress : job!.progress;
+  const label = preparing ? 'Preparing Liquid mode' : kindLabel(job!.kind);
   const R = 8;
   const C = 2 * Math.PI * R;
   return (
-    <span className={`jobmark ${className}`} role="img" aria-label={`${kindLabel(job.kind)}, ${Math.round(job.progress * 100)}%`}>
+    <span className={`jobmark ${className}`} role="img" aria-label={`${label}, ${Math.round(progress * 100)}%`}>
       <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden>
         <circle cx="11" cy="11" r={R} fill="none" stroke="currentColor" strokeOpacity=".2" strokeWidth="2.4" />
-        <circle cx="11" cy="11" r={R} fill="none" stroke="currentColor" strokeWidth="2.4" strokeDasharray={C} strokeDashoffset={C * (1 - job.progress)} transform="rotate(-90 11 11)" />
+        <circle cx="11" cy="11" r={R} fill="none" stroke="currentColor" strokeWidth="2.4" strokeDasharray={C} strokeDashoffset={C * (1 - progress)} transform="rotate(-90 11 11)" />
       </svg>
-      <b className="mono">{Math.round(job.progress * 100)}%</b>
+      <b className="mono">{Math.round(progress * 100)}%</b>
     </span>
-  );
-}
-
-/**
- * Shows that THIS book is being read or prepared. It announces itself for three seconds, then folds into a small
- * progress ring in the corner; it is only ever shown inside the book it belongs to. Tap it for the full list.
- */
-export function ScanBadge({ docId }: { docId: string }) {
-  const job = useDocJob(docId);
-  const [open, setOpen] = useState(false);
-  const t = useRef(0);
-  const key = job ? job.kind : '';
-  const pop = () => {
-    setOpen(true);
-    clearTimeout(t.current);
-    t.current = window.setTimeout(() => setOpen(false), 3000);
-  };
-  useEffect(() => {
-    if (key) pop();
-    else {
-      clearTimeout(t.current);
-      setOpen(false);
-    }
-    return () => clearTimeout(t.current);
-  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!job) return null;
-  const pct = Math.round(job.progress * 100);
-  const R = 17;
-  const C = 2 * Math.PI * R;
-  return (
-    <button
-      className={`scan-badge${open ? ' open' : ''}`}
-      onClick={() => (open ? window.dispatchEvent(new CustomEvent('frogity:jobs')) : pop())}
-      aria-label={`${kindLabel(job.kind)}: ${job.title}, ${pct}%`}
-    >
-      <span className="ring">
-        <svg width="44" height="44" viewBox="0 0 44 44" aria-hidden>
-          <circle cx="22" cy="22" r={R} fill="none" stroke="currentColor" strokeOpacity=".16" strokeWidth="3" />
-          <circle cx="22" cy="22" r={R} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="butt" strokeDasharray={C} strokeDashoffset={C * (1 - job.progress)} transform="rotate(-90 22 22)" />
-        </svg>
-        <i>
-          <PixelLoader size={3} gap={1.5} />
-        </i>
-      </span>
-      <span className="txt">
-        <b>{kindLabel(job.kind)}</b>
-        <small>
-          {short(job.title, 24)} · {pct}%
-        </small>
-      </span>
-    </button>
   );
 }

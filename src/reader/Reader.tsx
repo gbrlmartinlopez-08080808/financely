@@ -7,8 +7,7 @@ import { openPdf, pdfOutline, type PDFDocumentProxy } from '../lib/formats/pdf';
 import { blocksToHtml, pdfToLiquid, type LBlock } from '../lib/formats/liquidPdf';
 import { onBack, setStatusBar, shareFile, shareText, tap } from '../lib/native';
 import { ConfirmSheet } from '../ui/Confirm';
-import { ScanBadge } from '../screens/ScanBadge';
-import { LiquidButton } from './LiquidButton';
+import { LiquidStatus, ViewButton } from './LiquidStatus';
 import { Icon, TypeGlyph } from '../ui/Icon';
 import { PixelBar, PixelLoader, Segmented, Sheet, toast } from '../ui/kit';
 import { PdfView, type PdfViewHandle } from './PdfView';
@@ -20,12 +19,29 @@ import { anchorFromSelection, applyHighlights, clearMarks, findAll, wordAt, wrap
 import { AskSheet } from './Ask';
 import { FormSheet } from './FormSheet';
 import { detectForm, type FormModel } from '../lib/forms';
-import { LQ_VERSION, focusDoc, liquidPageStore, pageStore, prepareNow, queueScan, useLiquid } from '../lib/scan';
+import { LQ_VERSION, focusDoc, liquidPageStore, pageStore, prepareNow, queueScan, rebuildLiquid, useLiquid, type Prep } from '../lib/scan';
 import { KIND_LABEL } from '../lib/formats/detect';
 import { fontById } from '../lib/fonts';
+import { guessLang } from '../lib/tts';
 
 
 const AUTO_MARK_MS = 120_000; // read for two minutes in total and the app keeps your place
+
+/** Hyphenation follows the book's own language (not English by default), once there is enough text to tell. */
+function bookLang(root: HTMLElement) {
+  if (root.dataset.lang) return;
+  const sample = (root.textContent ?? '').slice(0, 2400);
+  if (sample.length > 300) root.lang = root.dataset.lang = guessLang(sample).slice(0, 2);
+}
+
+/** The quiet line under a PDF's title while its Liquid view is being made (empty once it is ready). */
+function prepLine(p: Prep): string {
+  if (p.ready || !p.known) return '';
+  if (p.error) return 'liquid · couldn’t finish';
+  if (p.none) return 'liquid · no text found';
+  const doing = p.info.startsWith('waiting') ? 'waiting' : p.info.startsWith('checking') ? 'checking' : p.info.startsWith('reading') ? 'reading' : 'converting';
+  return `liquid · ${Math.round(p.progress * 100)}% · ${doing}`;
+}
 
 export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () => void; onConvert: (doc: DocMeta, root?: HTMLElement | null) => void }) {
   const id = doc.id;
@@ -50,7 +66,6 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   const [now, setNow] = useState(() => new Date());
   const [progress, setProgress] = useState(doc.progress);
   const [page, setPage] = useState(doc.kind === 'pdf' && doc.position ? Math.max(1, Math.round(doc.position.value)) : 1);
-  const [liquifying, setLiquifying] = useState<{ page: number; pages: number } | null>(null);
   const [listenFrom, setListenFrom] = useState<number | null>(null);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
@@ -59,14 +74,12 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   const [form, setForm] = useState<FormModel | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [offerGone, setOfferGone] = useState(true);
-  // scanned (picture-only) PDFs are read in the background from the moment they are added; until that has worked,
-  // liquid and listen aren't offered
+  // a PDF's Liquid view is prepared in the background from the moment it is added (scanned pages are read too)
   const liq = useLiquid(doc.id);
   useEffect(() => {
     focusDoc(doc.id); // the open book's preparation goes first
     return () => focusDoc('');
   }, [doc.id]);
-  const [liqTip, setLiqTip] = useState(false);
   const [ocrText, setOcrText] = useState<{ text: string; busy: boolean; p: number } | null>(null);
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const flowRef = useRef<HTMLDivElement>(null);
@@ -77,9 +90,13 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   const [flowReady, setFlowReady] = useState(0);
 
   const isPdf = doc.kind === 'pdf';
-  // a PDF's Liquid view is prepared in the background from the moment it is added. It can be opened at any moment:
-  // what is ready is shown and the rest arrives as it is finished (no waiting at 0%).
-  const liquid = !isPdf || (mode === 'liquid' && liq.known && !liq.none);
+  // Liquid opens the moment it is chosen, whatever the background work is doing: what is ready is shown, the rest
+  // arrives as it is finished, and the end of the text says how far it is (or what went wrong).
+  const liquid = !isPdf || mode === 'liquid';
+  /** a PDF's Liquid view that is still being made (it grows while you read) */
+  const growing = isPdf && liquid && !liq.ready;
+  // (until the book's state is known — a few milliseconds — nothing is said, so a finished book never flashes a status)
+  const showGrowth = growing && liq.known;
   const theme = THEMES.find((t) => t.id === settings.readerTheme) ?? THEMES[0];
   const dark = settings.readerTheme === 'dusk' || settings.readerTheme === 'night';
 
@@ -133,21 +150,29 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     if (content.type === 'flow') {
       root.innerHTML = content.liquid.html;
       delete root.dataset.wrapped;
+      bookLang(root);
       setFlowReady((n) => n + 1);
       return;
     }
     if (content.type !== 'pdf') return;
     let alive = true;
-    root.innerHTML = '';
-    delete root.dataset.wrapped;
+    // the view that is on screen stays until the next one is there (no blank flash, no jump back to the top)
+    const keep = readingPlace();
     (async () => {
       const key = `${id}:${LQ_VERSION}`;
       const cached = liq.ready ? await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', key) : undefined;
       if (!alive) return;
       if (!cached) {
         // not complete yet: show what is ready now and let the view grow as pages arrive
-        if (liq.ready) prepareNow(doc); // "ready" but nothing saved: prepare it again
+        if (liq.ready) return void rebuildLiquid(doc); // "ready" but nothing saved: make it again (this view follows)
+        else if (!liq.busy && !liq.none && !liq.error) queueScan(doc); // nothing is under way: start it now
         return startLive(root, () => alive);
+      }
+      // the growing view already holds every page: it simply stays (nothing is redrawn, nothing moves)
+      if (!cached.scanned.length && liveComplete(root)) {
+        setScanned([]);
+        afterLiquid(root);
+        return;
       }
       let { blocks: cb, scanned: cs } = cached;
       if (cs.length) {
@@ -162,7 +187,9 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
       }
       if (!alive) return;
       root.innerHTML = blocksToHtml(cb, urls.current);
+      delete root.dataset.wrapped;
       setScanned(cs);
+      backTo(keep);
       afterLiquid(root);
     })();
     return () => {
@@ -170,6 +197,49 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
       liveStop.current();
     };
   }, [content, liquid, liq.ready]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** A growing view with every page in it and nothing still being read. */
+  const liveComplete = (root: HTMLElement) => !!doc.pages && !root.querySelector('[data-wait]') && !!root.querySelector(`.pg[data-page="${doc.pages}"]`);
+
+  /**
+   * Where the reader is in a Liquid view: the paragraph at the top of the screen (as "the k-th block after the marker
+   * of page p", which survives a redraw) and how far it sits from the top.
+   */
+  const readingPlace = (): { page: number; k: number; dy: number } | null => {
+    const root = flowRef.current;
+    if (!root || !scroller || !root.childElementCount || !scroller.scrollTop) return null;
+    const top = scroller.getBoundingClientRect().top;
+    const kids = Array.from(root.children) as HTMLElement[];
+    const i = kids.findIndex((el) => el.getBoundingClientRect().bottom > top + 1);
+    if (i < 0) return null;
+    let page = 0;
+    let k = 0;
+    for (let j = i; j >= 0; j--) {
+      if (kids[j].matches('.pg[data-page]')) {
+        page = Number(kids[j].dataset.page);
+        break;
+      }
+      k++;
+    }
+    return page ? { page, k, dy: kids[i].getBoundingClientRect().top - top } : null;
+  };
+  /**
+   * Puts that paragraph back where it was. Blocks off screen are only estimated until they are drawn, so it is pinned
+   * again for a few frames while the layout settles.
+   */
+  const backTo = (at: { page: number; k: number; dy: number } | null) => {
+    if (!at || !scroller) return;
+    restoredLiquid.current = true;
+    const pin = (n: number) => {
+      let el = flowRef.current?.querySelector<HTMLElement>(`.pg[data-page="${at.page}"]`) ?? null;
+      for (let j = 0; el && j < at.k; j++) el = el.nextElementSibling as HTMLElement | null;
+      if (!el) return;
+      const off = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top - at.dy;
+      if (Math.abs(off) > 1) scroller.scrollTop += off;
+      if (n > 0) requestAnimationFrame(() => pin(n - 1));
+    };
+    pin(8);
+  };
 
   /**
    * The Liquid view of a book that is still being prepared: the pages that are done are shown at once, pages that are
@@ -182,7 +252,6 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     const lst = liquidPageStore(id);
     const ost = pageStore(id);
     const waitHtml = (pn: number) => `<figure class="lq lq-wait" data-wait="${pn}"><i></i><span>Page ${pn} is being read…</span></figure>`;
-    const tailHtml = '<div class="lq-tail" data-tail><i></i><span>Preparing the next pages…</span></div>';
     let next = 1;
     root.innerHTML = '';
     delete root.dataset.wrapped;
@@ -209,7 +278,6 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
       if (busy || !alive()) return;
       busy = true;
       try {
-        root.querySelector('[data-tail]')?.remove();
         // new pages, in order
         while (next <= (total || 1e6)) {
           const h = await pageHtml(next);
@@ -228,7 +296,6 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
             el.replaceWith(tpl.content);
           }
         }
-        if (total && next <= total) root.insertAdjacentHTML('beforeend', tailHtml);
         afterLiquid(root);
       } finally {
         busy = false;
@@ -259,12 +326,12 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
       const root = flowRef.current;
       const cached = await db.get<{ blocks: LBlock[]; scanned: number[] }>('cache', `${id}:${LQ_VERSION}`);
       if (!root || !cached) return;
-      const top = scroller?.scrollTop ?? 0;
+      const keep = readingPlace();
       root.innerHTML = blocksToHtml(cached.blocks, urls.current);
       delete root.dataset.wrapped;
+      backTo(keep);
       afterLiquid(root);
-      if (scroller) scroller.scrollTop = top;
-      toast('Scanned pages and pictures with writing were turned into text');
+      toast('Pictures with writing in them are now text');
     };
     window.addEventListener('frogity:figures', on);
     return () => window.removeEventListener('frogity:figures', on);
@@ -321,11 +388,12 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
       if (el) {
         restoredLiquid.current = true;
         scroller.scrollTop = el.offsetTop - 70;
-      }
+      } else if (scroller.scrollTop > 40) restoredLiquid.current = true; // the page isn't made yet and they began reading: stay
     } else restoredLiquid.current = true;
   };
 
   const afterLiquid = (root: HTMLElement) => {
+    bookLang(root);
     if (isPdf) {
       restoreLiquidPage(root);
       // Use liquid headings when the PDF has no outline
@@ -352,25 +420,6 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     const root = flowRef.current;
     if (root && flowReady) applyHighlights(root, highlights);
   }, [flowReady, highlights]);
-
-  // messages sit above the whole control stack (listen bar, speed popover, dock) so they never cover it
-  useEffect(() => {
-    const root = document.documentElement;
-    const update = () => {
-      let top = window.innerHeight;
-      document.querySelectorAll('.r-dock:not(.hide), .r-dock .popover').forEach((el) => {
-        const r = el.getBoundingClientRect();
-        if (r.height > 0 && r.top < top) top = r.top;
-      });
-      root.style.setProperty('--toast-bottom', `${Math.round(window.innerHeight - top + 14)}px`);
-    };
-    update();
-    const t = setInterval(update, 200);
-    return () => {
-      clearInterval(t);
-      root.style.removeProperty('--toast-bottom');
-    };
-  }, []);
 
   // ---------------------------------------------------------------- status bar & theme
   useEffect(() => {
@@ -465,8 +514,8 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     clearTimeout(progT.current);
     progT.current = window.setTimeout(() => setProgress(p), 400);
   }, []);
-  const live = useRef({ page, liquifying: !!liquifying, finished: !!doc.finished, liquid, isPdf });
-  live.current = { page, liquifying: !!liquifying, finished: !!doc.finished, liquid, isPdf };
+  const live = useRef({ page, growing, finished: !!doc.finished, liquid, isPdf });
+  live.current = { page, growing, finished: !!doc.finished, liquid, isPdf };
 
   const onPdfPage = useCallback(
     (p: number) => {
@@ -520,7 +569,8 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
         patchDoc(id, {
           progress: s2.isPdf ? (doc.pages ? p / doc.pages : prog) : prog,
           position: s2.isPdf ? { mode: 'liquid', value: p } : { mode: 'liquid', value: prog },
-          ...(!s2.liquifying && prog > 0.985 && !s2.finished ? { finished: true } : {}),
+          // the end of a view that is still growing is not the end of the book
+          ...(!s2.growing && prog > 0.985 && !s2.finished ? { finished: true } : {}),
         });
       }, 800);
     };
@@ -664,7 +714,8 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   const toggleListen = (v: 'read' | 'listen') => {
     if (v === 'listen') {
       if (isPdf && !liq.ready) {
-        setLiqTip(true); // Listen reads the whole Liquid view: it is still being prepared
+        // Listen reads the whole Liquid view, which is still being made
+        toast(liq.error || liq.none ? 'Listen needs the Liquid view, which isn’t available for this PDF' : `Listen opens when Liquid is ready · ${Math.round(liq.progress * 100)}%`);
         return;
       }
       if (!liquid) switchMode('liquid');
@@ -920,7 +971,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     { id: 'ask', label: 'Ask this document', icon: 'ask', right: 'free ai' },
     { id: 'find', label: 'Search in document', icon: 'search' },
     { id: 'bookmark', label: hereMark ? 'Remove bookmark here' : 'Bookmark this spot', icon: 'bookmark' },
-    { id: 'mode', label: liquid ? 'Original pages' : 'Liquid view', icon: liquid ? 'page' : 'liquid', hidden: !isPdf || !liq.ready },
+    { id: 'mode', label: liquid ? 'Original pages' : 'Liquid view', icon: liquid ? 'page' : 'liquid', right: !liquid && liq.busy && !liq.ready ? `${Math.round(liq.progress * 100)}%` : undefined, hidden: !isPdf },
     { id: 'thumbs', label: thumbs ? 'Hide page thumbnails' : 'Page thumbnails', icon: 'sidebar', hidden: !isPdf || liquid },
     { id: 'ocr', label: 'Recognise text (OCR)', pixel: 'scan', hidden: content?.type !== 'image' },
     { id: 'convert', label: 'Convert / export…', pixel: 'convert' },
@@ -1006,12 +1057,16 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
             }}
           />
         ) : (
-          <div className="flow" data-font={settings.font} ref={flowRef} onClick={onContentTap} lang="en" />
+          <>
+            <div className={`flow${showGrowth ? ' growing' : ''}`} data-font={settings.font} ref={flowRef} onClick={onContentTap} lang={settings.lang && settings.lang !== 'other' ? settings.lang : 'en'} />
+            {showGrowth && (
+              <div className="lq-status-wrap">
+                <LiquidStatus prep={liq} pages={doc.pages} onRetry={() => prepareNow(doc)} onPages={() => switchMode('page')} />
+              </div>
+            )}
+          </>
         )}
       </div>
-
-
-      <ScanBadge docId={id} />
 
       {find !== null ? (
         <div className="findbar">
@@ -1044,10 +1099,13 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
           <button className="r-ibtn" onClick={close} aria-label="Back to library">
             <Icon name="back" size={24} />
           </button>
-          <div className="title">
-            {doc.name}
-            {isPdf ? ` · ${page}/${doc.pages ?? '?'}` : ''}
-          </div>
+          <button className="title" onClick={() => isPdf && setSheet('type')} tabIndex={isPdf ? 0 : -1} aria-label={isPdf ? `${doc.name}, view and reading settings` : doc.name}>
+            <span className="t1">
+              {doc.name}
+              {isPdf ? ` · ${page}/${doc.pages ?? '?'}` : ''}
+            </span>
+            {isPdf && <span className="t2">{prepLine(liq)}</span>}
+          </button>
           <button
             className="r-ibtn"
             onClick={() => {
@@ -1058,21 +1116,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
           >
             <Icon name="ask" />
           </button>
-          {isPdf && liq.known && !liq.none && (
-            <LiquidButton
-              ready={liq.ready}
-              progress={liq.progress}
-              active={liquid}
-              tip={liqTip}
-              onTip={setLiqTip}
-              info={liq.info}
-              eta={liq.eta}
-              onClick={() => {
-                if (!liq.ready && !liquid) setLiqTip(true);
-                switchMode(liquid ? 'page' : 'liquid');
-              }}
-            />
-          )}
+          {isPdf && <ViewButton active={liquid} prep={liq} onClick={() => switchMode(liquid ? 'page' : 'liquid')} />}
           <button className="r-ibtn" onClick={() => setFind('')} aria-label="Search">
             <Icon name="search" />
           </button>
@@ -1087,44 +1131,43 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
 
       {liquid && <div className="r-fade" style={{ opacity: chrome || listen ? 1 : 0.55 }} />}
 
-      {form && !offerGone && !formOpen && (
-        <div className="form-offer" role="status">
-          <div className="t">
-            <b>This looks like a form</b>
-            <small>{form.fields.length} fields found · fill, sign and export</small>
-          </div>
-          <button className="pill sm" onClick={() => (setFormOpen(true), setOfferGone(true))}>
-            Fill it in
-          </button>
-          <button
-            className="pill sm round ghost offer-x"
-            aria-label="Not now (this also closes by itself)"
-            onClick={() => {
-              setOfferGone(true);
-              db.put('kv', `formoffer:${id}`, true);
-            }}
-          >
-            {/* the ring runs down while the offer waits; it closes by itself when the ring is empty */}
-            <svg className="offer-ring" viewBox="0 0 40 40" aria-hidden>
-              <circle className="track" cx="20" cy="20" r="18" />
-              <circle
-                className="run"
-                cx="20"
-                cy="20"
-                r="18"
-                pathLength={100}
-                onAnimationEnd={() => {
-                  setOfferGone(true);
-                  db.put('kv', `formoffer:${id}`, true);
-                }}
-              />
-            </svg>
-            <Icon name="close" size={16} />
-          </button>
-        </div>
-      )}
-
       <div className={`r-dock${chrome || listen ? '' : ' hide'}`}>
+        {form && !offerGone && !formOpen && (
+          <div className="form-offer" role="status">
+            <div className="t">
+              <b>This looks like a form</b>
+              <small>{form.fields.length} fields found · fill, sign and export</small>
+            </div>
+            <button className="pill sm" onClick={() => (setFormOpen(true), setOfferGone(true))}>
+              Fill it in
+            </button>
+            <button
+              className="pill sm round ghost offer-x"
+              aria-label="Not now (this also closes by itself)"
+              onClick={() => {
+                setOfferGone(true);
+                db.put('kv', `formoffer:${id}`, true);
+              }}
+            >
+              {/* the ring runs down while the offer waits; it closes by itself when the ring is empty */}
+              <svg className="offer-ring" viewBox="0 0 40 40" aria-hidden>
+                <circle className="track" cx="20" cy="20" r="18" />
+                <circle
+                  className="run"
+                  cx="20"
+                  cy="20"
+                  r="18"
+                  pathLength={100}
+                  onAnimationEnd={() => {
+                    setOfferGone(true);
+                    db.put('kv', `formoffer:${id}`, true);
+                  }}
+                />
+              </svg>
+              <Icon name="close" size={16} />
+            </button>
+          </div>
+        )}
         {listen && (
           <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
             <ListenBar root={flowRef.current} scroller={scroller} startAt={listenFrom} onPlaying={setListening} docId={id} title={doc.name} coverId={doc.coverId} key={flowReady} />
@@ -1185,7 +1228,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
       <LookupCard word={lookup} onClose={() => setLookup(null)} />
       <ZoomViewer src={zoom?.src ?? null} mask={zoom?.mask} ratio={zoom?.ratio} onClose={() => setZoom(null)} />
 
-      <TypeSheet open={sheet === 'type'} onClose={() => setSheet(null)} isPdf={isPdf} mode={mode} onMode={switchMode} liquidReady={liq.ready} liquidProgress={liq.progress} />
+      <TypeSheet open={sheet === 'type'} onClose={() => setSheet(null)} isPdf={isPdf} mode={mode} onMode={switchMode} prep={liq} pages={doc.pages} onRetry={() => prepareNow(doc)} />
       <ContentsSheet
         open={sheet === 'contents'}
         onClose={() => setSheet(null)}

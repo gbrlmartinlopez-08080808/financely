@@ -5,6 +5,8 @@ import { Icon } from '../ui/Icon';
 import { Pixel, Ruler, Segmented, Sheet, Toggle } from '../ui/kit';
 import type { PixelName } from '../lib/pixels';
 import { FONTS, fontById } from '../lib/fonts';
+import type { Prep } from '../lib/scan';
+import { LiquidStatus } from './LiquidStatus';
 
 export const THEMES: { id: ReaderTheme; bg: string; ink: string; name: string }[] = [
   { id: 'paper', bg: '#eeedea', ink: '#141414', name: 'paper' },
@@ -13,7 +15,7 @@ export const THEMES: { id: ReaderTheme; bg: string; ink: string; name: string }[
   { id: 'night', bg: '#000000', ink: '#bdbbb5', name: 'night' },
 ];
 
-export function TypeSheet({ open, onClose, isPdf, mode, onMode, liquidReady = true, liquidProgress = 1 }: { open: boolean; onClose: () => void; isPdf: boolean; mode: 'page' | 'liquid'; onMode: (m: 'page' | 'liquid') => void; liquidReady?: boolean; liquidProgress?: number }) {
+export function TypeSheet({ open, onClose, isPdf, mode, onMode, prep, pages, onRetry }: { open: boolean; onClose: () => void; isPdf: boolean; mode: 'page' | 'liquid'; onMode: (m: 'page' | 'liquid') => void; prep?: Prep; pages?: number; onRetry?: () => void }) {
   const s = useStore((x) => x.settings);
   const [fonts, setFonts] = useState(false);
   return (
@@ -25,21 +27,30 @@ export function TypeSheet({ open, onClose, isPdf, mode, onMode, liquidReady = tr
             <div className="section-label" style={{ marginTop: 4 }}>view</div>
             <Segmented
               light
-              className="w100"
+              className="w100 halves"
               value={mode}
               onChange={onMode}
               options={[
                 { value: 'page', label: <><Icon name="page" size={16} /> Page</> },
-                { value: 'liquid', label: <><Icon name="liquid" size={16} /> {liquidReady ? 'Liquid' : `Liquid ${Math.round(liquidProgress * 100)}%`}</> },
+                { value: 'liquid', label: <><Icon name="liquid" size={16} /> Liquid</> },
               ]}
             />
-            {!liquidReady && <p className="muted" style={{ fontSize: 12.5, margin: '10px 4px 0' }}>Liquid mode is still being prepared in the background. It opens now with what is ready, and the rest arrives by itself. Listen needs the whole book.</p>}
-            {liquidReady && mode === 'page' && <p className="muted" style={{ fontSize: 12.5, margin: '10px 4px 0' }}>Liquid reflows the PDF to fit your screen — equations and figures are kept intact.</p>}
+            {prep && !prep.ready && prep.known ? (
+              <div className="sheet-status">
+                <LiquidStatus prep={prep} pages={pages} onRetry={() => onRetry?.()} compact />
+                {!prep.error && !prep.none && <p className="muted">You can switch now: the pages that are ready are shown and the rest appear as they’re converted. Listen opens once it’s complete.</p>}
+              </div>
+            ) : (
+              <p className="muted sheet-note">Liquid reflows the PDF to fit your screen — equations and figures are kept intact.</p>
+            )}
           </>
         )}
-        {(!isPdf || mode === 'liquid') && (
+        {/* always here, so the sheet keeps its shape when the view changes; in the pages view they wait for Liquid */}
+        <div className={`type-block${isPdf && mode === 'page' ? ' idle' : ''}`} aria-disabled={isPdf && mode === 'page'}>
           <>
-            <div className="section-label">typeface</div>
+            <div className="section-label">
+              typeface{isPdf && mode === 'page' && <span className="type-note"> · for the Liquid view</span>}
+            </div>
             <div className="fontpick four">
               {s.fontFaves.slice(0, 4).map((id) => {
                 const f = fontById(id);
@@ -68,7 +79,7 @@ export function TypeSheet({ open, onClose, isPdf, mode, onMode, liquidReady = tr
               <Toggle on={s.justify} onChange={(v) => updateSettings({ justify: v })} label="Justify" />
             </div>
           </>
-        )}
+        </div>
         <div className="section-label">theme</div>
         <div className="themes">
           {THEMES.map((t) => (

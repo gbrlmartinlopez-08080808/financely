@@ -1374,7 +1374,8 @@
   padding-right: 4px;
 }
 .row > svg:first-child,
-.row > .pixel:first-child {
+.row > .pixel:first-child,
+.lang-row .row-top > svg:first-child {
   flex: none;
   width: 24px;
 }

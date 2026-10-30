@@ -27,7 +27,8 @@ const P: Record<string, string> = {
   pen: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
   copy: 'M9 9h10v10H9zM5 15V5h10',
   ear: 'M3 14v-2a9 9 0 0 1 18 0v2M3 14a2 2 0 0 1 2-2h1v7H5a2 2 0 0 1-2-2zM21 14a2 2 0 0 0-2-2h-1v7h1a2 2 0 0 0 2-2z',
-  liquid: 'M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z',
+  // Liquid mode: lines of text that wrap to fit the screen
+  liquid: 'M4 5.5h16M4 11.5h12a3.5 3.5 0 0 1 0 7h-3.5M14.5 16l-2.5 2.5 2.5 2.5M4 18.5h4.5',
   page: 'M6 3h9l3 3v15H6zM14 3v4h4',
   grid: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
   trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13',
