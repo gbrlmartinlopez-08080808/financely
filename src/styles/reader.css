@@ -763,7 +763,7 @@
   user-select: none;
 }
 
-.r-ibtn.on svg path {
+.r-ibtn.on:not(.viewbtn) svg path {
   fill: currentColor;
 }
 
@@ -1131,9 +1131,10 @@
 }
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* switching a PDF between its pages and Liquid: a plain glyph; a thin ring fills while the Liquid view is made */
+/* switching a PDF between its pages and Liquid: a square key; its thin edge fills while the Liquid view is made */
 .viewbtn {
   position: relative;
+  border-radius: 12px;
 }
 .viewbtn.on {
   background: color-mix(in srgb, var(--r-ink) 12%, transparent);
@@ -1143,13 +1144,13 @@
   inset: 1px;
   width: calc(100% - 2px);
   height: calc(100% - 2px);
-  transform: rotate(-90deg);
   pointer-events: none;
 }
-.viewbtn-ring circle {
+.viewbtn-ring path {
   fill: none;
   stroke: currentColor;
   stroke-width: 1.6;
+  stroke-linecap: round;
 }
 .viewbtn-ring .track {
   opacity: 0.16;
@@ -1159,8 +1160,8 @@
 }
 .viewbtn-dot {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 6px;
+  right: 6px;
   width: 7px;
   height: 7px;
   border-radius: 50%;

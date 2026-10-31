@@ -13,7 +13,7 @@ import { mapLimit } from './ocrpage';
 import { slice } from './ocr';
 import type { DocMeta } from './types';
 
-export const LQ_VERSION = 'lq9';
+export const LQ_VERSION = 'lq10';
 /** bump to have every document looked at again (the page check changed) */
 const PLAN_V = 4;
 
@@ -45,9 +45,14 @@ const key = (kind: JobKind, id: string) => (kind === 'scan' ? id : `${kind}:${id
 const set = (id: string, patch: Partial<ScanJob>, kind: JobKind = 'scan') => {
   const j = jobs.get(key(kind, id));
   if (j) {
-    jobs.set(key(kind, id), { ...j, ...patch });
-    emit();
+    jobs = new Map(jobs).set(key(kind, id), { ...j, ...patch });
+    softEmit();
   }
+};
+/** Progress is shown a few times a second, not on every page: each showing redraws what is on screen. */
+let softTimer = 0;
+const softEmit = () => {
+  if (!softTimer && typeof window !== 'undefined') softTimer = window.setTimeout(() => ((softTimer = 0), emit()), 300);
 };
 const start = (id: string, title: string, kind: JobKind, status: ScanJob['status'], total = 0) => {
   jobs.set(key(kind, id), { id, title, kind, status, progress: status === 'running' ? 0.02 : 0, done: 0, total, startedAt: Date.now() });
@@ -108,7 +113,11 @@ const setPrep = (id: string, patch: Partial<Prep>) => {
   const was = preps.get(id) ?? IDLE;
   preps = new Map(preps).set(id, { ...was, ...patch });
   if (patch.progress !== undefined && patch.progress !== was.progress) moved.set(id, Date.now());
-  emit();
+  // a bar moving on is shown a few times a second, not on every page: each showing redraws the reader, and the
+  // reader must stay smooth while the work goes on (a change of state — ready, failed — is shown at once)
+  const soft = Object.keys(patch).every((k) => k === 'progress' || k === 'eta' || k === 'info');
+  if (!soft) return emit();
+  softEmit();
 };
 // a book whose preparation has not moved for a while is looked at again, so nothing can sit at 0% for ever
 const moved = new Map<string, number>();
@@ -351,7 +360,13 @@ interface Plan {
 
 /** Is this PDF's Liquid view already made (or known to be impossible)? Then nothing needs to be queued. */
 async function settled(doc: DocMeta): Promise<boolean> {
-  const ready = await db.get<string>('kv', `liquid:${doc.id}`);
+  let ready = await db.get<string>('kv', `liquid:${doc.id}`);
+  if (ready === 'ready' && (await db.get<string>('kv', `lqv:${doc.id}`)) !== LQ_VERSION) {
+    // made by an older version of the converter (pages left as pictures, words twice): made again, the better way
+    await Promise.all([db.del('kv', `liquid:${doc.id}`), db.del('kv', `scan:${doc.id}`), db.del('kv', `lqmeta:${doc.id}`), db.del('kv', `figs:${doc.id}`), db.delPrefix('cache', `lqpg:${doc.id}:`)]);
+    for (const v of ['lq8', 'lq9']) await db.del('cache', `${doc.id}:${v}`);
+    ready = undefined;
+  }
   if (ready === 'ready') {
     setPrep(doc.id, { known: true, ready: true, busy: false, progress: 1, error: '' });
     return true;
@@ -420,12 +435,18 @@ async function plan(doc: DocMeta, touch: Touch): Promise<Plan> {
 const CHECK_SHARE = 0.03;
 
 /** Builds the Liquid view page by page, saving each page as it is done (so a restart carries on, nothing is lost). */
-async function buildLiquid(doc: DocMeta, progress: (f: number) => void): Promise<number[]> {
+async function buildLiquid(doc: DocMeta, progress: (f: number) => void, onScanned?: (page: number) => void): Promise<number[]> {
   const blob = await getFile(doc.id);
   if (!blob) throw new Error('file missing');
   const st = store('lqpg', doc.id);
   // pages finished in an earlier run
-  const meta = (await db.get<{ done: number[]; scanned: number[] }>('kv', `lqmeta:${doc.id}`)) ?? { done: [], scanned: [] };
+  let meta = await db.get<{ done: number[]; scanned: number[]; v?: string }>('kv', `lqmeta:${doc.id}`);
+  if (meta && meta.v !== LQ_VERSION) {
+    // half made by an older converter: start the pages again
+    await db.delPrefix('cache', `lqpg:${doc.id}:`);
+    meta = undefined;
+  }
+  meta ??= { done: [], scanned: [], v: LQ_VERSION };
   const have = new Set(meta.done);
   let pages = 1;
   await pdfToLiquid(
@@ -441,7 +462,10 @@ async function buildLiquid(doc: DocMeta, progress: (f: number) => void): Promise
         await st.save(page, blocks);
         window.dispatchEvent(new CustomEvent('frogity:page', { detail: { id: doc.id, page } }));
         meta.done.push(page);
-        if (scanned) meta.scanned.push(page);
+        if (scanned) {
+          meta.scanned.push(page);
+          onScanned?.(page);
+        }
         if (meta.done.length % 6 === 0) await db.put('kv', `lqmeta:${doc.id}`, meta); // often enough to lose little, rarely enough to stay light
       },
     },
@@ -488,9 +512,14 @@ async function prepareDoc(doc: DocMeta, p: Plan) {
   await db.put('kv', `liquid:${doc.id}`, 'pending');
   setPrep(doc.id, { known: true, busy: true, error: '' });
   const ckey = `${doc.id}:${LQ_VERSION}`;
-  const wLiquid = p.kind === 'text' ? 1 : p.kind === 'mixed' ? 0.5 : 0;
+  // the work, counted in pages: reading a picture page takes several times longer than converting a typed one
+  const OCR_COST = 5;
+  const liqTotal = p.kind === 'scan' ? 0 : p.pages;
+  let ocrTotal = p.kind === 'scan' ? p.pages : p.scanned.length;
+  let ocrBefore = 0; // pages read by earlier reading runs of this preparation
   let pLiq = p.kind === 'scan' ? 1 : 0;
-  let pOcr = 0;
+  let ocrDone = 0;
+  let last = 0;
   let t0 = 0; // from the moment real work starts (time spent waiting for another book would spoil the estimate)
   const other = (l: Lane) => (l.busyWith && l.busyWith !== doc.id ? 'waiting for another book' : '');
   let liqInfo = p.kind === 'scan' ? '' : other(liquidLane) || `converting pages · 0 of ${p.pages}`;
@@ -498,8 +527,9 @@ async function prepareDoc(doc: DocMeta, p: Plan) {
   const f0 = preps.get(doc.id)?.progress ?? 0;
   const bump = () => {
     // never goes backwards: a run that carries on from saved pages starts where the bar already was
-    const f = Math.max(f0, CHECK_SHARE + (1 - CHECK_SHARE) * (wLiquid * pLiq + (1 - wLiquid) * pOcr));
-    if (!t0 && (pLiq || pOcr)) t0 = Date.now() - 1000;
+    const work = (pLiq * liqTotal + OCR_COST * ocrDone) / Math.max(1, liqTotal + OCR_COST * ocrTotal);
+    const f = (last = Math.max(last, f0, CHECK_SHARE + (1 - CHECK_SHARE) * Math.min(1, work)));
+    if (!t0 && (pLiq || ocrDone)) t0 = Date.now() - 1000;
     const el = t0 ? (Date.now() - t0) / 1000 : 0;
     const share = f - f0;
     setPrep(doc.id, { progress: f, eta: share > 0.04 && el > 4 ? Math.max(1, Math.round((el / share) * (1 - f))) : null, info: [liqInfo, ocrInfo].filter(Boolean).join(' · ') || (f >= 0.999 ? 'finishing' : 'starting') });
@@ -507,6 +537,58 @@ async function prepareDoc(doc: DocMeta, p: Plan) {
   bump();
   window.dispatchEvent(new CustomEvent('frogity:started', { detail: { id: doc.id, title: doc.name, pages: p.kind === 'scan' ? p.pages : p.scanned.length, kind: p.kind } }));
   const st = pageStore(doc.id);
+
+  // the picture pages → text, in the reading lane (starts at once when their numbers are known)
+  const all = Array.from({ length: p.pages }, (_, i) => i + 1);
+  const read = (pages: number[]) =>
+    ocrLane.add(doc.id, (touch) => {
+      ocrInfo = `reading pages · ${ocrDone} of ${ocrTotal}`;
+      bump();
+      return readPictures(
+        doc,
+        p,
+        pages,
+        (f) => {
+          ocrDone = ocrBefore + Math.round(f * pages.length);
+          ocrInfo = f >= 1 ? '' : `reading pages · ${ocrDone} of ${ocrTotal}`;
+          bump();
+        },
+        touch,
+      );
+    });
+  const ocrNow = p.kind === 'scan' ? read(all) : p.kind === 'mixed' ? read(p.scanned) : null;
+  ocrNow?.catch(() => {}); // still awaited below; this only keeps a failure of the other lane from going unheard
+
+  // Pages that only turn out to be pictures while the Liquid view is made (writing printed as a picture under typed
+  // headings, say) are read as soon as they are found, beside the conversion: no page may stay behind as a picture.
+  const asked = new Set<number>(p.kind === 'scan' ? [] : p.scanned);
+  const later: number[] = [];
+  const lostLater: number[] = [];
+  let reading: Promise<void> | null = null;
+  let readErr: unknown = null;
+  const pump = () => {
+    if (reading || !later.length || readErr) return;
+    const batch = later.splice(0).sort((a, b) => a - b);
+    reading = (async () => {
+      await ocrNow?.catch(() => {}); // one reading run at a time
+      ocrBefore = ocrDone;
+      const r = await read(batch);
+      lostLater.push(...r.lost);
+    })()
+      .catch((e) => void (readErr = e))
+      .finally(() => {
+        reading = null;
+        pump();
+      });
+  };
+  function found(n: number) {
+    if (p.kind === 'scan' || asked.has(n)) return;
+    asked.add(n);
+    later.push(n);
+    ocrTotal++;
+    bump();
+    pump();
+  }
 
   // the typed pages → Liquid view, in its own lane
   const liquidJob: Promise<number[]> =
@@ -530,34 +612,22 @@ async function prepareDoc(doc: DocMeta, p: Plan) {
               liqInfo = f >= 1 ? '' : `converting pages · ${Math.round(f * p.pages)} of ${p.pages}`;
               set(doc.id, { progress: f, done: Math.round(f * p.pages), total: p.pages }, 'liquid');
               bump();
-            });
+            }, found);
           } finally {
             end(doc.id, 'liquid');
           }
         });
-  // the picture pages → text, in the reading lane (starts at once when their numbers are known)
-  const all = Array.from({ length: p.pages }, (_, i) => i + 1);
-  const read = (pages: number[]) =>
-    ocrLane.add(doc.id, (touch) => {
-      ocrInfo = `reading scanned pages · 0 of ${pages.length}`;
-      bump();
-      return readPictures(
-        doc,
-        p,
-        pages,
-        (f) => {
-          pOcr = f;
-          ocrInfo = f >= 1 ? '' : `reading scanned pages · ${Math.round(f * pages.length)} of ${pages.length}`;
-          bump();
-        },
-        touch,
-      );
-    });
-  const ocrNow = p.kind === 'scan' ? read(all) : p.kind === 'mixed' ? read(p.scanned) : null;
-  ocrNow?.catch(() => {}); // still awaited below; this only keeps a failure of the other lane from going unheard
 
   const scanned = await liquidJob;
-  const ocr = ocrNow ? await ocrNow : scanned.length ? await read(scanned) : null;
+  let ocr = ocrNow ? await ocrNow : null;
+  // whatever was found while the Liquid view was being made, and anything still missing, is read now
+  for (const n of scanned) found(n);
+  while (reading || later.length) {
+    pump();
+    await reading;
+  }
+  if (readErr) throw readErr;
+  if (lostLater.length || (!ocr && asked.size)) ocr = { whole: ocr?.whole ?? null, lost: [...(ocr?.lost ?? []), ...lostLater] };
 
   // put it together
   if (ocr?.whole) {
@@ -581,6 +651,7 @@ async function prepareDoc(doc: DocMeta, p: Plan) {
   await db.delPrefix('cache', `ocrpg:${doc.id}:`);
   await db.put('kv', `scan:${doc.id}`, ocr ? 'done2' : 'text');
   if (ocr) settle(doc, 'done');
+  await db.put('kv', `lqv:${doc.id}`, LQ_VERSION);
   await db.put('kv', `liquid:${doc.id}`, 'ready');
   retried.delete(doc.id);
   setPrep(doc.id, { known: true, ready: true, busy: false, progress: 1, eta: null, info: '', error: '' });

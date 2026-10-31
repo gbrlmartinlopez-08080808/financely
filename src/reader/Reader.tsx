@@ -274,19 +274,26 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
       return blocksToHtml(keep, urls.current) + (waiting ? waitHtml(pn) : '');
     };
     let busy = false;
+    let first = true;
     const flush = async () => {
       if (busy || !alive()) return;
       busy = true;
+      let changed = false;
       try {
-        // new pages, in order
+        // new pages, in order (gathered first and put in at once: one layout instead of one per page)
+        let add = '';
         while (next <= (total || 1e6)) {
           const h = await pageHtml(next);
           if (h === null) break;
           if (!alive()) return;
-          root.insertAdjacentHTML('beforeend', h);
+          add += h;
           next++;
         }
-        // pictures that have been read since: swap them in
+        if (add) {
+          root.insertAdjacentHTML('beforeend', add);
+          changed = true;
+        }
+        // pictures that have been read since: swap them in (the browser keeps the paragraph being read where it is)
         for (const el of Array.from(root.querySelectorAll<HTMLElement>('[data-wait]'))) {
           const pn = Number(el.dataset.wait);
           const read = await ost.load(pn);
@@ -294,9 +301,12 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
             const tpl = document.createElement('template');
             tpl.innerHTML = blocksToHtml(read.filter((b) => b.t !== 'page'), urls.current);
             el.replaceWith(tpl.content);
+            changed = true;
           }
         }
-        afterLiquid(root);
+        // the rest of the reader (contents, highlights, word count) looks again only when something new came in
+        if (changed || first) afterLiquid(root);
+        first = false;
       } finally {
         busy = false;
       }
@@ -309,7 +319,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     const onEv = (e: Event) => (e as CustomEvent<{ id: string }>).detail.id === id && kick();
     window.addEventListener('frogity:page', onEv);
     window.addEventListener('frogity:ocrpage', onEv);
-    const iv = window.setInterval(flush, 2000);
+    const iv = window.setInterval(flush, 5000); // in case a message was missed
     liveStop.current = () => {
       window.removeEventListener('frogity:page', onEv);
       window.removeEventListener('frogity:ocrpage', onEv);
@@ -966,16 +976,16 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   const minutesLeft = liquid || !isPdf ? Math.max(1, Math.round((words * (1 - progress)) / settings.wpm)) : Math.max(1, Math.round((((doc.pages ?? 1) - page + 1) * settings.secPerPage) / 60));
 
   const moreActions: MoreAction[] = [
-    { id: 'contents', label: 'Contents & bookmarks', icon: 'list' },
+    { id: 'find', label: 'Search', icon: 'search', quick: true },
+    { id: 'contents', label: 'Contents', icon: 'list', quick: true },
+    { id: 'share', label: 'Share', icon: 'share', quick: true },
+    { id: 'convert', label: 'Convert', pixel: 'convert', quick: true },
     { id: 'form', label: 'Fill this form', icon: 'edit', right: form ? `${form.fields.length} fields` : undefined, hidden: !form },
     { id: 'ask', label: 'Ask this document', icon: 'ask', right: 'free ai' },
-    { id: 'find', label: 'Search in document', icon: 'search' },
     { id: 'bookmark', label: hereMark ? 'Remove bookmark here' : 'Bookmark this spot', icon: 'bookmark' },
     { id: 'mode', label: liquid ? 'Original pages' : 'Liquid view', icon: liquid ? 'page' : 'liquid', right: !liquid && liq.busy && !liq.ready ? `${Math.round(liq.progress * 100)}%` : undefined, hidden: !isPdf },
     { id: 'thumbs', label: thumbs ? 'Hide page thumbnails' : 'Page thumbnails', icon: 'sidebar', hidden: !isPdf || liquid },
     { id: 'ocr', label: 'Recognise text (OCR)', pixel: 'scan', hidden: content?.type !== 'image' },
-    { id: 'convert', label: 'Convert / export…', pixel: 'convert' },
-    { id: 'share', label: 'Share original', icon: 'share' },
     { id: 'card', label: 'Share as a book card', icon: 'share' },
     { id: 'info', label: 'About this file', icon: 'info' },
     { id: 'remove', label: doc.uri ? 'Remove from shelf' : 'Delete from Frogity', icon: 'trash' },
@@ -1117,9 +1127,6 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
             <Icon name="ask" />
           </button>
           {isPdf && <ViewButton active={liquid} prep={liq} onClick={() => switchMode(liquid ? 'page' : 'liquid')} />}
-          <button className="r-ibtn" onClick={() => setFind('')} aria-label="Search">
-            <Icon name="search" />
-          </button>
           <button className={`r-ibtn${hereMark ? ' on' : ''}`} onClick={addBookmark} aria-label={hereMark ? 'Remove bookmark' : 'Bookmark this spot'}>
             <Icon name="bookmark" />
           </button>

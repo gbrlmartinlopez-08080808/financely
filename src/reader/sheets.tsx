@@ -195,15 +195,34 @@ export interface MoreAction {
   pixel?: PixelName;
   right?: string;
   hidden?: boolean;
+  /** shown as a tile in the row of quick actions at the top */
+  quick?: boolean;
 }
 
 export function MoreSheet({ open, onClose, actions, onAction, title }: { open: boolean; onClose: () => void; actions: MoreAction[]; onAction: (id: string) => void; title: string }) {
   return (
     <Sheet open={open} onClose={onClose} title={<span className="mono" style={{ fontSize: 14 }}>{title.length > 28 ? title.slice(0, 28) + '…' : title}</span>}>
       <div className="sheet-body">
+        <div className="quick-row">
+          {actions
+            .filter((a) => !a.hidden && a.quick)
+            .map((a) => (
+              <button
+                key={a.id}
+                className="quick"
+                onClick={() => {
+                  onClose();
+                  setTimeout(() => onAction(a.id), 120);
+                }}
+              >
+                {a.pixel ? <Pixel name={a.pixel} size={18} /> : <Icon name={a.icon ?? 'more'} size={21} />}
+                <span>{a.label}</span>
+              </button>
+            ))}
+        </div>
         <div className="actions">
           {actions
-            .filter((a) => !a.hidden)
+            .filter((a) => !a.hidden && !a.quick)
             .map((a) => (
               <button
                 key={a.id}

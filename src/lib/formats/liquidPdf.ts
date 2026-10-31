@@ -147,6 +147,7 @@ async function processPage(page: PDFPageProxy, pageNo: number, ctx: DocCtx): Pro
   const { canvas, viewport } = await renderPage(page, S);
   const W = canvas.width;
   const H = canvas.height;
+  await slice();
   const tc = await page.getTextContent();
   const body = ctx.bodyFh * S; // body font height in canvas px
 
@@ -194,6 +195,9 @@ async function processPage(page: PDFPageProxy, pageNo: number, ctx: DocCtx): Pro
     });
   }
 
+  // Some PDFs draw every word twice (a shadow, a fake bold, an invisible copy left by a converter): keep one of each.
+  dedupeItems(items);
+
   const totalChars = items.reduce((a, i) => a + i.str.length, 0);
   for (const it of items) {
     const name = it.font.split(' ')[0];
@@ -240,6 +244,7 @@ async function processPage(page: PDFPageProxy, pageNo: number, ctx: DocCtx): Pro
     }
   }
 
+  await slice(); // the page was a long stretch of work: a turn for the screen
   // Scanned page: lots of ink but (almost) no text.
   if (totalChars < 25 && inkCells > gw * gh * 0.02) {
     const blob = await cropBlob(canvas, 0, 0, W, H, false);
@@ -268,6 +273,7 @@ async function processPage(page: PDFPageProxy, pageNo: number, ctx: DocCtx): Pro
     cells: c.n,
   }));
 
+  await slice();
   // Classify components.
   const figures: Box[] = [];
   const rules: Box[] = [];
@@ -307,6 +313,26 @@ async function processPage(page: PDFPageProxy, pageNo: number, ctx: DocCtx): Pro
         tables.push(box);
       }
     }
+  }
+
+  // Writing that is a picture (a scanned body under typed headings, text turned into outlines): the page is read as a
+  // whole, so every line comes out as text, in the order it is printed, with nothing left behind as a picture.
+  const pageArea = W * H;
+  // (lines of such writing may come apart into separate marks, so wide marks are put back together first)
+  const lead = Math.max(body, H / 80) * 1.2;
+  const patches = mergeOverlapping(
+    comps.filter((c) => c.x1 - c.x0 > W * 0.18 && c.bot - c.top > C * 2.2).map((c) => ({ x0: c.x0, x1: c.x1, top: c.top - lead, bot: c.bot + lead })),
+  ).map((c) => ({ ...c, top: Math.max(0, c.top + lead), bot: Math.min(H, c.bot - lead) }));
+  const writing = patches.filter((f) => looksLikeWriting(img, W, f)).reduce((a, f) => a + (f.x1 - f.x0) * (f.bot - f.top), 0);
+  // (a typed page with one screenshot in it keeps its typed text: the screenshot is looked at later on its own)
+  const typed = items.reduce((a, i) => a + (i.x1 - i.x0) * (i.bot - i.top), 0);
+  if (writing > pageArea * 0.08 && writing > typed * 0.6) {
+    console.debug(`[lq] page ${pageNo}: writing printed as a picture (${Math.round((writing / pageArea) * 100)}% of the page): read as a whole`);
+    const blob = await cropBlob(canvas, 0, 0, W, H, false);
+    return {
+      blocks: [{ t: 'img', blob, w: W, h: H, em: 0, mask: false, kind: 'scan', page: pageNo, alt: `Page ${pageNo}` }],
+      scanned: true,
+    };
   }
 
   // Figures absorb text whose centre lies inside them (axis labels, legends); tables absorb their cells.
@@ -359,7 +385,9 @@ async function processPage(page: PDFPageProxy, pageNo: number, ctx: DocCtx): Pro
     const key = text.replace(/\d+/g, '#').toLowerCase().slice(0, 80);
     const seen = ctx.seenMargins.get(key) ?? 0;
     ctx.seenMargins.set(key, seen + 1);
-    return seen === 0 && text.length > 0 && pageNo <= 2;
+    // a running header comes back page after page, in small type; a heading or the first line of a page is kept
+    if (seen > 0) return false;
+    return text.length > 0 && (pageNo <= 2 || s.fh >= body * 0.97);
   });
 
   // ---------- 4. columns & reading order ----------
@@ -701,6 +729,137 @@ async function processPage(page: PDFPageProxy, pageNo: number, ctx: DocCtx): Pro
 }
 
 // ---------- helpers ----------
+
+/**
+ * Drops text drawn twice in (almost) the same place. The copies are not always cut into the same pieces ("Wh" + "y T…"
+ * beside "Why T…"), so it works letter by letter: a letter that sits on top of the same letter already kept is a copy.
+ * A piece made only of copies goes; copied letters at either end of a piece are cut off.
+ */
+function dedupeItems(items: Item[]) {
+  type Ch = { c: string; x: number; base: number; fh: number };
+  const grid = new Map<number, Ch[]>(); // by baseline band
+  const band = (y: number) => Math.round(y / 4);
+  const near = (ch: Ch, cw: number) => {
+    for (let b = band(ch.base) - 2; b <= band(ch.base) + 2; b++) {
+      for (const o of grid.get(b) ?? []) {
+        if (o.c !== ch.c) continue;
+        if (Math.abs(o.base - ch.base) > ch.fh * 0.35 || Math.abs(o.fh - ch.fh) > ch.fh * 0.25) continue;
+        if (Math.abs(o.x - ch.x) < Math.max(cw * 0.5, ch.fh * 0.12)) return true;
+      }
+    }
+    return false;
+  };
+  const out: Item[] = [];
+  for (const it of items) {
+    const n = it.str.length;
+    const cw = (it.x1 - it.x0) / Math.max(1, n);
+    const chars: Ch[] = Array.from(it.str, (c, k) => ({ c, x: it.x0 + cw * (k + 0.5), base: it.base, fh: it.fh }));
+    const dup = chars.map((ch) => (/\s/.test(ch.c) ? null : near(ch, cw)));
+    const solid = dup.filter((d) => d !== null).length;
+    const copies = dup.filter((d) => d === true).length;
+    if (solid && copies >= solid * 0.7) continue; // a copy
+    let a = 0;
+    let b = n;
+    if (copies) {
+      while (a < b && dup[a] !== false) a++;
+      while (b > a && dup[b - 1] !== false) b--;
+      if (a > 0 || b < n) {
+        it.str = it.str.slice(a, b);
+        it.x0 += cw * a;
+        it.x1 -= cw * (n - b);
+      }
+    }
+    if (!it.str.trim()) continue;
+    for (const ch of chars.slice(a, b)) {
+      const k = band(ch.base);
+      const list = grid.get(k);
+      if (list) list.push(ch);
+      else grid.set(k, [ch]);
+    }
+    out.push(it);
+  }
+  items.length = 0;
+  items.push(...out);
+}
+
+/**
+ * Is this patch of ink lines of writing (a picture of text) rather than a drawing or a photo? Writing has rows of
+ * ink of about the same height, with thin white gaps between them at a steady rhythm, and neither solid nor sparse ink.
+ */
+function looksLikeWriting(px: Uint8ClampedArray, W: number, b: Box): boolean {
+  const x0 = Math.max(0, Math.floor(b.x0));
+  const x1 = Math.min(W, Math.ceil(b.x1));
+  const y0 = Math.max(0, Math.floor(b.top));
+  const y1 = Math.ceil(b.bot);
+  const w = x1 - x0;
+  const h = y1 - y0;
+  if (w < 120 || h < 60) return false;
+  const step = Math.max(1, Math.floor(w / 400)); // a few hundred samples per row are plenty
+  const prof: number[] = [];
+  let dark = 0;
+  let mid = 0;
+  let samples = 0;
+  for (let y = y0; y < y1; y++) {
+    let n = 0;
+    let p = (y * W + x0) * 4;
+    for (let x = x0; x < x1; x += step, p += 4 * step) {
+      const v = (px[p] * 3 + px[p + 1] * 6 + px[p + 2]) / 10;
+      samples++;
+      if (v < 140) n++, dark++;
+      else if (v < 215) mid++;
+    }
+    prof.push(n / Math.ceil(w / step));
+  }
+  // photos are full of grey; writing is dark ink on white
+  if (mid > samples * 0.25 || dark > samples * 0.4 || dark < samples * 0.02) return false;
+  const runs: { a: number; b: number }[] = [];
+  let s = -1;
+  for (let y = 0; y <= prof.length; y++) {
+    const on = y < prof.length && prof[y] > 0.004;
+    if (on && s < 0) s = y;
+    else if (!on && s >= 0) {
+      if (y - s >= 3) runs.push({ a: s, b: y });
+      s = -1;
+    }
+  }
+  if (runs.length < 3) return false;
+  const hs = runs.map((r) => r.b - r.a).sort((p, q) => p - q);
+  const mh = hs[hs.length >> 1];
+  if (mh < 6 || mh > h * 0.4) return false;
+  // most rows are about one line high
+  const lineish = hs.filter((x) => x > mh * 0.45 && x < mh * 2.2).length;
+  if (lineish < runs.length * 0.7) return false;
+  // the rows cover a good part of the patch, at a steady pitch
+  const pitches = runs.slice(1).map((r, i) => r.a - runs[i].a).sort((p, q) => p - q);
+  const mp = pitches[pitches.length >> 1];
+  const steady = pitches.filter((p) => Math.abs(p - mp) < mp * 0.45).length;
+  if (steady < pitches.length * 0.55 || mp > mh * 3.5) return false;
+  // and each row is made of letters: many small marks side by side, not one long stroke (the grid lines of a
+  // chart and the rules of a table also come at a steady pitch, but they are lines)
+  const lettered = (r: { a: number; b: number }) => {
+    let best = 0;
+    for (const f of [0.35, 0.55, 0.75]) {
+      const y = y0 + r.a + Math.floor((r.b - r.a) * f);
+      let marks = 0;
+      let run = 0;
+      let longest = 0;
+      let was = false;
+      for (let x = x0, p = (y * W + x0) * 4; x < x1; x++, p += 4) {
+        const ink = (px[p] * 3 + px[p + 1] * 6 + px[p + 2]) / 10 < 160;
+        if (ink) {
+          if (!was) marks++;
+          run++;
+          if (run > longest) longest = run;
+        } else run = 0;
+        was = ink;
+      }
+      const used = marks >= Math.max(5, w / 60) && longest < Math.max(mh * 2.5, w * 0.06);
+      if (used) best++;
+    }
+    return best >= 2;
+  };
+  return runs.filter(lettered).length >= runs.length * 0.7;
+}
 
 interface Box {
   x0: number;

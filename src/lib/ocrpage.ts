@@ -194,7 +194,7 @@ export async function ocrPage(page: HTMLCanvasElement, pageNo: number): Promise<
       const gap = prev ? ln.y0 - prev.y1 : 0;
       const indent = ln.x0 - left > mh * 0.9;
       const prevShort = prev ? prev.x1 < left + (right - left) * 0.72 && /[.!?:”"’)]$/.test(prev.text.trim()) : false;
-      const bigger = prev ? Math.abs(ln.h - prev.h) > Math.max(ln.h, prev.h) * 0.22 : false; // a heading beside body text
+      const bigger = prev ? Math.abs(ln.h - prev.h) > Math.max(ln.h, prev.h) * 0.3 : false; // a heading beside body text
       if (!prev || gap > mh * 0.75 || indent || prevShort || bigger) paras.push({ text: [t], hs: [ln.h] });
       else {
         paras[paras.length - 1].text.push(t);
@@ -253,13 +253,13 @@ interface PageRead {
 }
 
 /** Renders one PDF page for reading and runs the page reader on it. A page with nothing readable comes back as its picture. */
-async function readPdfPage(pdf: import('./formats/pdf').PDFDocumentProxy, pageNo: number, renderPage: typeof import('./formats/pdf').renderPage): Promise<PageRead> {
+async function readPdfPage(pdf: import('./formats/pdf').PDFDocumentProxy, pageNo: number, renderPage: typeof import('./formats/pdf').renderPage, size = 1800): Promise<PageRead> {
   let canvas: HTMLCanvasElement | null = null;
   try {
     const page = await pdf.getPage(pageNo);
     const vp = page.getViewport({ scale: 1 });
     // about 220 dpi on a normal page: plenty to read, and half the pixels of the bigger render this used to make
-    const S = Math.max(1.2, Math.min(3.2, 1800 / vp.width));
+    const S = Math.max(1, Math.min(3.2, size / vp.width));
     ({ canvas } = await renderPage(page, S));
     page.cleanup();
     const out = await ocrPage(canvas, pageNo);
@@ -309,11 +309,13 @@ async function readPages(
     } else todo.push(pn);
   }
   onProgress?.(n, total);
-  const pass = async (list: number[], isRetry: boolean) => {
-    await mapLimit(list, OCR_POOL, async (pn) => {
-      const r = await readPdfPage(pdf, pn, renderPage);
+  // three tries for every page: as usual; again, once the others are done; then one page at a time from a smaller
+  // drawing (a phone short of memory) — a page is only given up after all three
+  const pass = async (list: number[], round: 0 | 1 | 2) => {
+    await mapLimit(list, round === 2 ? 1 : OCR_POOL, async (pn) => {
+      const r = await readPdfPage(pdf, pn, renderPage, round === 2 ? 1300 : 1800);
       if (r.failed) {
-        if (!isRetry) failed.push(pn);
+        if (round < 2) failed.push(pn);
         else lost.push(pn); // gave up: reported, and the page keeps whatever it had
         return;
       }
@@ -323,8 +325,9 @@ async function readPages(
       await breathe(40); // a breath, so the rest of the app stays quick
     });
   };
-  await pass(todo, false);
-  if (failed.length) await pass(failed.splice(0), true);
+  await pass(todo, 0);
+  if (failed.length) await pass(failed.splice(0), 1);
+  if (failed.length) await pass(failed.splice(0), 2);
   return { per, lost };
 }
 

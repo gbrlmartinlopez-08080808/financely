@@ -3,14 +3,14 @@ import { tap } from '../lib/native';
 import { Icon } from '../ui/Icon';
 import { PixelBar } from '../ui/kit';
 
-const R = 18;
-const C = 2 * Math.PI * R;
+/** a rounded square, drawn from the middle of the top edge, clockwise (so the fill starts where a clock starts) */
+const EDGE = 'M20 1.5H27.5A11 11 0 0 1 38.5 12.5V27.5A11 11 0 0 1 27.5 38.5H12.5A11 11 0 0 1 1.5 27.5V12.5A11 11 0 0 1 12.5 1.5Z';
 const pctOf = (p: Prep) => Math.round(p.progress * 100);
 const eta = (s: number | null) => (s ? ` · about ${s < 90 ? s + ' s' : Math.round(s / 60) + ' min'} left` : '');
 
 /**
  * Switches a PDF between its pages and Liquid mode. It always switches at once; while the Liquid view is still being
- * made, a thin ring around it fills up (and a dot says when it stopped).
+ * made, a thin edge around it fills up (and a dot says when it stopped).
  */
 export function ViewButton({ active, prep, onClick }: { active: boolean; prep: Prep; onClick: () => void }) {
   const busy = prep.known && prep.busy && !prep.ready && !prep.error;
@@ -27,8 +27,8 @@ export function ViewButton({ active, prep, onClick }: { active: boolean; prep: P
     >
       {busy && (
         <svg className="viewbtn-ring" viewBox="0 0 40 40" aria-hidden>
-          <circle className="track" cx="20" cy="20" r={R} />
-          <circle className="run" cx="20" cy="20" r={R} strokeDasharray={C} strokeDashoffset={C * (1 - Math.max(0.03, prep.progress))} />
+          <path className="track" d={EDGE} />
+          <path className="run" d={EDGE} pathLength={100} strokeDasharray={100} strokeDashoffset={100 * (1 - Math.max(0.03, prep.progress))} />
         </svg>
       )}
       <Icon name="liquid" size={21} />

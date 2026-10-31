@@ -185,8 +185,13 @@ export async function prepareCanvas(blob: Blob, maxSide = 2400): Promise<HTMLCan
   return out;
 }
 
-/** The same preparation for anything already drawn (a rendered PDF page, a canvas). */
 let sliceAt = 0;
+/** when the reader last touched or scrolled */
+let lastInput = 0;
+if (typeof window !== 'undefined') {
+  const mark = () => (lastInput = performance.now());
+  for (const ev of ['touchstart', 'touchmove', 'pointerdown', 'wheel', 'scroll'] as const) window.addEventListener(ev, mark, { capture: true, passive: true });
+}
 const chan = typeof MessageChannel !== 'undefined' ? new MessageChannel() : null;
 const turns: (() => void)[] = [];
 if (chan) chan.port1.onmessage = () => turns.shift()?.();
@@ -200,6 +205,14 @@ const turn = () =>
 /** Gives the screen a turn if the current stretch of work has been running a while (keeps the app smooth while it reads). */
 export async function slice(ms = 9) {
   if (document.hidden) return; // nobody is looking: just get on with it
+  // a finger on the screen (scrolling, turning a page): the work waits until it lifts, so the page follows the finger
+  // without a hitch — but never more than a few seconds, so a long read still gets done
+  if (performance.now() - lastInput < 320) {
+    const t0 = performance.now();
+    while (performance.now() - lastInput < 320 && performance.now() - t0 < 2500 && !document.hidden) await new Promise((r) => setTimeout(r, 90));
+    sliceAt = performance.now();
+    return;
+  }
   const now = performance.now();
   if (!sliceAt) sliceAt = now;
   if (now - sliceAt > ms) {
@@ -210,6 +223,7 @@ export async function slice(ms = 9) {
 /** A short pause between pages while the app is on screen (none when it is in the background). */
 export const breathe = (ms = 40) => (document.hidden ? Promise.resolve() : new Promise<void>((r) => setTimeout(r, ms)));
 
+/** The same preparation for anything already drawn (a rendered PDF page, a canvas). */
 export async function flattenSource(bmp: { width: number; height: number } & CanvasImageSource, maxSide = 2400): Promise<HTMLCanvasElement> {
   const longest = Math.max(bmp.width, bmp.height);
   const scale = longest > maxSide ? maxSide / longest : longest < 1400 ? Math.min(1.6, 1800 / longest) : 1;
