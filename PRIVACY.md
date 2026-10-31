@@ -18,6 +18,9 @@ Your documents' copies, covers, reading position, bookmarks, highlights, notes, 
 | Send feedback (optional, after your first streak milestone) | The rating and note you write, plus the app version and streak length, in an email you review before sending | Our support mailbox, via your email app |
 | Rate on Google Play (optional) | Nothing from the app; the Play Store page opens | Google Play |
 | Report an AI answer | The question and answer text you choose to email | Our support mailbox, via your email app |
+| Use Frogity on a computer (optional, off until you connect a computer) | Your documents, covers, reading progress, highlights and bookmarks — **end-to-end encrypted on your phone first** (AES-256); only your own connected devices hold the key. A device name (e.g. "Chrome on Windows") and when each device was last seen. | Our sync server (Vercel) and file storage (Supabase), which only ever see encrypted bytes |
+
+Stopping sync on the phone (Settings → Use Frogity on a computer → Stop syncing) deletes everything kept on the sync server for your library; disconnecting a computer wipes that computer's copy.
 
 These services have their own privacy policies and may log requests (for example IP addresses). We do not control that. Do not use *Ask* with documents containing confidential or personal information.
 
