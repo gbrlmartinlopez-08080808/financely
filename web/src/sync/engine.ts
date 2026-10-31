@@ -62,9 +62,44 @@ function start() {
     t = window.setTimeout(() => void pull(), 250);
   }, (live) => setState((s) => ({ sync: { ...s.sync, live } })));
   void pull().then(pushDirty);
+  if (!cfg.rt) void watch();
 }
-// a quiet safety net: missed pings, a sleeping laptop
-setInterval(() => getState().phase === 'ready' && void pull(), 30_000);
+/** Without live pings: one request waits at the server until something changes (news within about a second). */
+let watching = false;
+async function watch() {
+  if (watching) return;
+  watching = true;
+  try {
+    while (creds && getState().phase === 'ready') {
+      if (document.hidden) {
+        await new Promise((r) => setTimeout(r, 2000));
+        continue;
+      }
+      try {
+        const since = (await db.get<number>('kv', 'rev')) ?? 0;
+        const r = await call<{ changed: boolean }>(cfg, creds, 'wait', { since });
+        if (r.changed) await pull();
+      } catch (e) {
+        if (e instanceof SyncError && e.status === 401) return void failed(e);
+        await new Promise((r) => setTimeout(r, 5000));
+      }
+    }
+  } finally {
+    watching = false;
+  }
+}
+// news from the phone: every few seconds while this tab is in front (without live pings), and every half minute
+// as a safety net (missed pings, a laptop waking up)
+let lastPull = 0;
+setInterval(() => {
+  const s = getState();
+  if (s.phase !== 'ready') return;
+  const gap = 30_000;
+  if (Date.now() - lastPull >= gap) {
+    lastPull = Date.now();
+    void pull();
+  }
+}, 1000);
 window.addEventListener('focus', () => getState().phase === 'ready' && void pull());
 window.addEventListener('online', () => getState().phase === 'ready' && void pull().then(pushDirty));
 
@@ -141,9 +176,10 @@ export function pull(): Promise<void> {
         for (;;) {
           if (!creds || !key) return;
           const since = (await db.get<number>('kv', 'rev')) ?? 0;
-          const r = await call<{ items: RemoteItem[]; more: boolean; me: string }>(cfg, creds, 'changes', { since });
+          const r = await call<{ items: RemoteItem[]; more: boolean; me: string; head?: number }>(cfg, creds, 'changes', { since });
           for (const it of r.items) await apply(it);
-          if (r.items.length) await db.put('kv', 'rev', r.items[r.items.length - 1].rev);
+          const top = Math.max(since, r.head ?? 0, r.items.length ? r.items[r.items.length - 1].rev : 0);
+          if (top !== since) await db.put('kv', 'rev', top);
           if (!r.more) break;
         }
       } while (again);

@@ -1,0 +1,4 @@
+{
+  "rewrites": [{ "source": "/functions/v1/frogity-sync", "destination": "/api/frogity-sync" }],
+  "headers": [{ "source": "/assets/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] }]
+}

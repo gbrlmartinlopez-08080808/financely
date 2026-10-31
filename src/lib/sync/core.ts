@@ -9,6 +9,8 @@ export interface SyncConfig {
   url: string;
   /** its public (anon / publishable) key: lets requests reach the edge function, nothing more */
   key: string;
+  /** where "something changed" pings come from (Supabase Realtime); without it, devices look for news every few seconds */
+  rt?: { url: string; key: string };
 }
 export interface Creds {
   library: string;
@@ -240,6 +242,11 @@ export async function downloadCover(cfg: SyncConfig, creds: Creds, key: CryptoKe
  * itself. Returns a function that stops it.
  */
 export function listen(cfg: SyncConfig, library: string, onPing: (p: { rev: number; by: string }) => void, onState?: (live: boolean) => void): () => void {
+  const rt = cfg.rt;
+  if (!rt) {
+    onState?.(false);
+    return () => {};
+  }
   let ws: WebSocket | null = null;
   let stopped = false;
   let beat = 0;
@@ -247,7 +254,7 @@ export function listen(cfg: SyncConfig, library: string, onPing: (p: { rev: numb
   let ref = 0;
   const open = () => {
     if (stopped) return;
-    const u = cfg.url.replace(/^http/, 'ws') + `/realtime/v1/websocket?apikey=${encodeURIComponent(cfg.key)}&vsn=1.0.0`;
+    const u = rt.url.replace(/^http/, 'ws') + `/realtime/v1/websocket?apikey=${encodeURIComponent(rt.key)}&vsn=1.0.0`;
     ws = new WebSocket(u);
     const send = (topic: string, event: string, payload: unknown) => ws?.readyState === 1 && ws.send(JSON.stringify({ topic, event, payload, ref: String(++ref) }));
     ws.onopen = () => {

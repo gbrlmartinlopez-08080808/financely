@@ -91,12 +91,31 @@ function run() {
   });
   // highlights and bookmarks are written straight to the database: a quiet look every half minute, and on leaving
   const iv = window.setInterval(() => void push(), 30_000);
+  // without live pings: one request waits at the server until something changes (news within about a second)
+  let watching = true;
+  if (!SYNC.rt)
+    void (async () => {
+      while (watching && creds) {
+        if (document.hidden) {
+          await new Promise((r) => setTimeout(r, 3000));
+          continue;
+        }
+        try {
+          const since = (await db.get<number>('kv', 'sync:rev')) ?? 0;
+          const r = await call<{ changed: boolean }>(SYNC, creds, 'wait', { since });
+          if (r.changed) await pull();
+        } catch {
+          await new Promise((r) => setTimeout(r, 5000));
+        }
+      }
+    })();
   const vis = () => (document.hidden ? void push() : void pull().then(push));
   document.addEventListener('visibilitychange', vis);
   stop = () => {
     offListen();
     offStore();
     clearInterval(iv);
+    watching = false;
     document.removeEventListener('visibilitychange', vis);
   };
   void pull().then(push);
@@ -221,9 +240,10 @@ export function pull(): Promise<void> {
     try {
       for (;;) {
         const since = (await db.get<number>('kv', 'sync:rev')) ?? 0;
-        const r = await call<{ items: RemoteItem[]; more: boolean; me: string }>(SYNC, creds!, 'changes', { since });
+        const r = await call<{ items: RemoteItem[]; more: boolean; me: string; head?: number }>(SYNC, creds!, 'changes', { since });
         for (const it of r.items) if (it.updated_by !== r.me) await apply(it);
-        if (r.items.length) await db.put('kv', 'sync:rev', r.items[r.items.length - 1].rev);
+        const top = Math.max(since, r.head ?? 0, r.items.length ? r.items[r.items.length - 1].rev : 0);
+        if (top !== since) await db.put('kv', 'sync:rev', top);
         if (!r.more) break;
       }
       setStatus({ error: '', last: Date.now() });
