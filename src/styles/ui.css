@@ -2304,3 +2304,74 @@
   width: max-content;
   line-height: 1.4;
 }
+
+/* Use Frogity on a computer: the four-digit code */
+.pc-code {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 18px 0 10px;
+  min-height: 88px;
+  align-items: center;
+}
+.pc-code span {
+  width: 62px;
+  height: 84px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  font: 500 44px var(--mono);
+}
+.pc-code .pc-emoji {
+  width: auto;
+  font-size: 46px;
+  background: none;
+  box-shadow: none;
+}
+.pc-wait {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2.5px solid var(--line-2);
+  border-top-color: var(--ink);
+  animation: spin 0.9s linear infinite;
+}
+.pc-status {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--surface-2);
+  margin-bottom: 18px;
+}
+.pc-status > i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #7cbf3c;
+  margin-top: 6px;
+  flex: none;
+}
+.pc-status > i.busy {
+  background: var(--ink);
+  animation: pulse 1s infinite;
+}
+.pc-status > i.err {
+  background: #e0573d;
+}
+.pc-status b {
+  display: block;
+  font-size: 15px;
+}
+.pc-status small {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
+}

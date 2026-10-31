@@ -14,6 +14,8 @@ import { fontById } from '../lib/fonts';
 import { detectLang, ensureNaturalVoice } from '../lib/voices';
 import { LangChips } from '../ui/LangChips';
 import { askWorkFree, workFree } from '../lib/workNotice';
+import { syncAvailable } from '../lib/sync/config';
+import { ComputerSheet } from './ComputerSheet';
 
 export function Settings({ open, onClose }: { open: boolean; onClose: () => void }) {
   const s = useStore((x) => x.settings);
@@ -25,6 +27,7 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
   const [about, setAbout] = useState(false);
   const [adv, setAdv] = useState(false);
   const [folders, setFolders] = useState<LinkedFolder[]>([]);
+  const [computer, setComputer] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [free, setFree] = useState(true);
   useEffect(() => {
@@ -182,6 +185,16 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
         </div>
 
         <div className="section-label">files</div>
+        {syncAvailable() && (
+          <button className="row" style={{ width: '100%', textAlign: 'left' }} onClick={() => setComputer(true)}>
+            <Icon name="grid" />
+            <div className="grow">
+              <div className="row-label">Use Frogity on a computer</div>
+              <div className="row-sub">Every document on a big screen — edit, annotate, rearrange pages. Connect with a four-digit code, end-to-end encrypted.</div>
+            </div>
+            <Icon name="right" size={18} />
+          </button>
+        )}
         {isNative && (
           <>
             {folders.map((f) => (
@@ -335,6 +348,7 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
         </div>
       </div>
       <FontsSheet open={fonts} onClose={() => setFonts(false)} />
+      {syncAvailable() && <ComputerSheet open={computer} onClose={() => setComputer(false)} />}
       <About open={about} onClose={() => setAbout(false)} />
     </Sheet>
   );

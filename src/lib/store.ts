@@ -38,6 +38,8 @@ export function useStore<T>(sel: (s: State) => T): T {
 }
 
 export const getState = () => state;
+/** Calls `f` after every change (used by sync to notice edits). */
+export const subscribe = (f: () => void) => (listeners.add(f), () => void listeners.delete(f));
 
 export async function init() {
   const [docs, settings, dayEntries, hours, freeze] = await Promise.all([
