@@ -9,8 +9,15 @@ interface WorkPlugin {
   show(o: { title: string; text: string; progress: number; max: number }): Promise<void>;
   done(o: { title: string; text: string }): Promise<void>;
   clear(): Promise<void>;
+  battery(): Promise<{ free: boolean }>;
+  askBattery(): Promise<void>;
 }
 const Work = registerPlugin<WorkPlugin>('Work');
+
+/** Is Frogity left out of the phone's battery saving (so it can keep reading with the app closed)? */
+export const workFree = async () => (isNative ? (await Work.battery().catch(() => ({ free: true }))).free : true);
+/** Opens the phone's own question: may Frogity keep working in the background? */
+export const askWorkFree = () => (isNative ? Work.askBattery().catch(() => {}) : Promise.resolve());
 
 export const kindLabel = (k: ScanJob['kind']) => (k === 'scan' ? 'Reading the scan' : k === 'liquid' ? 'Preparing Liquid mode' : k === 'voice' ? 'Downloading your voice' : 'Reading the pictures');
 export const left = (j: ScanJob) => (j.total ? `${Math.max(0, j.total - j.done)} left` : '…');
@@ -33,7 +40,9 @@ export function initWorkNotice() {
     if (r.length) {
       if (!asked) {
         asked = true;
-        if (!(await notifyPermission(true))) return;
+        // the notification is asked for once; the work goes on in the background either way (the service runs
+        // even when its notification may not be shown)
+        await notifyPermission(true);
       }
       had = true;
       const j = r[0];

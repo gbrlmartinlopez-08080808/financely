@@ -107,7 +107,7 @@ export function mergeParas(paras: string[]): string[] {
 
 /** Recognise one image. Returns plain text and paragraph HTML. */
 /** `psm`: 3 = find the layout itself (default), 6 = one block of text, 7 = one line. */
-export async function recognize(img: Blob | HTMLCanvasElement, onProgress?: (p: number, status: string) => void, psm = 3): Promise<OcrResult> {
+export async function recognize(img: Blob | HTMLCanvasElement, onProgress?: (p: number, status: string) => void, psm = 3, limit = 60_000): Promise<OcrResult> {
   const slot = await acquire();
   let data: Awaited<ReturnType<Worker['recognize']>>['data'];
   try {
@@ -118,7 +118,8 @@ export async function recognize(img: Blob | HTMLCanvasElement, onProgress?: (p: 
       await within(w.setParameters({ tessedit_pageseg_mode: String(psm) as never }), 30_000, 'the text reader did not answer');
       slot.psm = psm;
     }
-    ({ data } = await within(w.recognize(img as Blob, {}, { text: true, blocks: true }), 150_000, 'a page took too long to read'));
+    // one block of a page rarely needs more than a few seconds: one that takes a minute is stuck, and its reader is replaced
+    ({ data } = await within(w.recognize(img as Blob, {}, { text: true, blocks: true }), limit, 'a page took too long to read'));
   } catch (e) {
     // a worker that failed to start (or got stuck) must not stay in the pool
     const i = slots.indexOf(slot);

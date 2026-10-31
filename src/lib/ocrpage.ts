@@ -251,32 +251,130 @@ interface PageRead {
   blocks: LBlock[];
   failed: boolean;
 }
+type Pdf = import('./formats/pdf').PDFDocumentProxy;
+type Render = typeof import('./formats/pdf').renderPage;
+
+/** A small picture of a page (for a page that is shown as it is). */
+async function pagePicture(canvas: HTMLCanvasElement, pageNo: number, extra: Partial<Extract<LBlock, { t: 'img' }>> = {}): Promise<LBlock> {
+  const k = Math.min(1, 1400 / canvas.width);
+  const c = document.createElement('canvas');
+  c.width = Math.round(canvas.width * k);
+  c.height = Math.round(canvas.height * k);
+  c.getContext('2d')!.drawImage(canvas, 0, 0, c.width, c.height);
+  const blob = await new Promise<Blob>((res) => c.toBlob((b) => res(b!), 'image/jpeg', 0.82));
+  return { t: 'img', blob, w: c.width, h: c.height, em: 0, mask: false, kind: 'scan', page: pageNo, alt: `Scanned page ${pageNo}`, ...extra };
+}
+
+async function drawPage(pdf: Pdf, pageNo: number, renderPage: Render, size: number) {
+  const page = await pdf.getPage(pageNo);
+  const vp = page.getViewport({ scale: 1 });
+  const { canvas } = await renderPage(page, Math.max(0.6, Math.min(3.2, size / vp.width)));
+  page.cleanup();
+  return canvas;
+}
 
 /** Renders one PDF page for reading and runs the page reader on it. A page with nothing readable comes back as its picture. */
-async function readPdfPage(pdf: import('./formats/pdf').PDFDocumentProxy, pageNo: number, renderPage: typeof import('./formats/pdf').renderPage, size = 1800): Promise<PageRead> {
+async function readPdfPage(pdf: Pdf, pageNo: number, renderPage: Render, size = 1800): Promise<PageRead> {
   let canvas: HTMLCanvasElement | null = null;
   try {
-    const page = await pdf.getPage(pageNo);
-    const vp = page.getViewport({ scale: 1 });
     // about 220 dpi on a normal page: plenty to read, and half the pixels of the bigger render this used to make
-    const S = Math.max(1, Math.min(3.2, size / vp.width));
-    ({ canvas } = await renderPage(page, S));
-    page.cleanup();
+    canvas = await drawPage(pdf, pageNo, renderPage, size);
+    await hang(pageNo);
     const out = await ocrPage(canvas, pageNo);
     if (out.blocks.length) return { blocks: out.blocks, failed: false };
     // nothing readable (a blank sheet, a photo page): keep the page as a picture
-    const k = Math.min(1, 1400 / canvas.width);
-    const c = document.createElement('canvas');
-    c.width = Math.round(canvas.width * k);
-    c.height = Math.round(canvas.height * k);
-    c.getContext('2d')!.drawImage(canvas, 0, 0, c.width, c.height);
-    const blob = await new Promise<Blob>((res) => c.toBlob((b) => res(b!), 'image/jpeg', 0.82));
-    return { blocks: [{ t: 'img', blob, w: c.width, h: c.height, em: 0, mask: false, kind: 'scan', page: pageNo, alt: `Scanned page ${pageNo}` }], failed: false };
+    return { blocks: [await pagePicture(canvas, pageNo)], failed: false };
   } catch (e) {
     console.warn('page not read', pageNo, e);
     return { blocks: [], failed: true };
   } finally {
     if (canvas) canvas.width = canvas.height = 0;
+  }
+}
+
+/**
+ * The other way to read a page that fought the usual one: no cutting into blocks, the recogniser looks at the whole
+ * page at once and finds the lines itself. Plainer paragraphs, but it gets through pages the block reader can't.
+ */
+async function readPdfPagePlain(pdf: Pdf, pageNo: number, renderPage: Render): Promise<PageRead> {
+  let canvas: HTMLCanvasElement | null = null;
+  try {
+    canvas = await drawPage(pdf, pageNo, renderPage, 1500);
+    await hang(pageNo);
+    const flat = await flattenSource(canvas, 2000);
+    const r = await recognize(flat, undefined, 3, 100_000);
+    const paras = r.text
+      .split(/\n\s*\n/)
+      .map((t) => tidy(t.replace(/\s*\n\s*/g, ' ')))
+      .filter((t) => t.length > 1 && sane(t, 50));
+    if (paras.join('').length < 25) return { blocks: [await pagePicture(canvas, pageNo)], failed: false };
+    return { blocks: paras.map((t) => ({ t: 'p', html: escapeHtml(t), page: pageNo }) as LBlock), failed: false };
+  } catch (e) {
+    console.warn('page not read the plain way either', pageNo, e);
+    return { blocks: [], failed: true };
+  } finally {
+    if (canvas) canvas.width = canvas.height = 0;
+  }
+}
+
+// ---------------------------------------------------------------- sources: bibliographies, notes and indexes
+const SOURCES_HEAD = /^(references|reference list|bibliography|works cited|sources|literature( cited)?|notes|endnotes|index|referencias|bibliograf[ií]a|bibliographie|literatur(verzeichnis)?|riferimenti|r[ée]f[ée]rences)\b/i;
+/** A line (or entry) that looks like a reference: a year, a publisher or journal, an author written "Name, A." … */
+function citeLike(t: string) {
+  let n = 0;
+  if (/\b(1[6-9]|20)\d{2}[a-z]?\b/.test(t)) n++;
+  if (/\bet al\b|\bdoi\b|https?:|www\.|\bpp?\.\s*\d|\bvol\.|\beds?\.|journal|press|universit|review|proceedings|isbn|retrieved/i.test(t)) n++;
+  if (/^([A-Z][\p{L}'’-]+,\s+[A-Z]\.|\[\d+\]|\d{1,3}\.?\s+[A-Z])/u.test(t)) n++;
+  return n >= 2;
+}
+/** an index entry: words, then page numbers */
+const indexLike = (t: string) => t.length < 90 && /[\p{L})],?\s+\d{1,4}(\s*[,–-]\s*\d{1,4})*\.?$/u.test(t);
+function sourcesShare(lines: string[]) {
+  // an entry runs over several lines: a line that does not start like a new entry belongs to the one before
+  const ls: string[] = [];
+  for (const raw of lines) {
+    const l = raw.trim();
+    if (l.length <= 3) continue;
+    const fresh = /^([A-Z][\p{L}'’-]+,|\[\d+\]|\d{1,3}\.?\s|[\p{Lu}][\p{L}]+\s[\p{Lu}]\.)/u.test(l) || indexLike(l);
+    if (ls.length && !fresh) ls[ls.length - 1] += ' ' + l;
+    else ls.push(l);
+  }
+  if (ls.length < 4) return 0;
+  return Math.max(ls.filter(citeLike).length, ls.filter(indexLike).length) / ls.length;
+}
+const plainOf = (b: LBlock) => (b.t === 'p' || b.t === 'h' || b.t === 'li' ? b.html.replace(/<[^>]+>/g, '') : '');
+/** Is this read page part of the sources at the back (or the end of a chapter)? */
+function isSourcesPage(blocks: LBlock[]) {
+  const texts = blocks.map(plainOf).filter(Boolean);
+  if (texts.length < 3) return false;
+  const head = texts.slice(0, 2).some((t) => t.length < 40 && SOURCES_HEAD.test(t.trim()));
+  const share = sourcesShare(texts);
+  return share >= 0.55 || (head && share >= 0.3);
+}
+/**
+ * A quick look at the top of a page that follows the sources: still references (or the index)? Only a strip is read,
+ * small — a few seconds instead of the whole page.
+ */
+async function stillSources(pdf: Pdf, pageNo: number, renderPage: Render): Promise<{ yes: boolean; canvas: HTMLCanvasElement | null }> {
+  let canvas: HTMLCanvasElement | null = null;
+  try {
+    canvas = await drawPage(pdf, pageNo, renderPage, 1100);
+    const c = document.createElement('canvas');
+    c.width = canvas.width;
+    c.height = Math.round(canvas.height * 0.4);
+    const cx = c.getContext('2d')!;
+    cx.fillStyle = '#fff';
+    cx.fillRect(0, 0, c.width, c.height);
+    cx.drawImage(canvas, 0, Math.round(canvas.height * 0.06), c.width, c.height, 0, 0, c.width, c.height);
+    const r = await recognize(await flattenSource(c, 1400), undefined, 6, 30_000);
+    const lines = r.lines.map((l) => l.text);
+    // a new part begins (an appendix, a chapter): read it properly
+    if (lines.slice(0, 3).some((t) => /^(appendix|chapter|part|section|annex)\b/i.test(t.trim()))) return { yes: false, canvas };
+    const share = sourcesShare(lines);
+    console.debug(`[ocr] page ${pageNo}: still sources? ${Math.round(share * 100)}% of the lines look like references`);
+    return { yes: share >= 0.5, canvas };
+  } catch {
+    return { yes: false, canvas };
   }
 }
 
@@ -286,17 +384,29 @@ export interface PageStore {
   save(page: number, blocks: LBlock[]): Promise<void>;
 }
 
-/** Reads the given pages (finished ones come from the store), saving each as it is done, and retrying failures once. */
-async function readPages(
-  pdf: import('./formats/pdf').PDFDocumentProxy,
-  pages: number[],
-  store: PageStore | undefined,
-  onProgress?: (done: number, total: number) => void,
-): Promise<{ per: Map<number, LBlock[]>; lost: number[] }> {
+/** for tests: pages that never finish reading (`__hang`) and a quicker clock (`__ocrT`, a factor on the time limits) */
+const testing = globalThis as { __hang?: number[]; __ocrT?: number };
+const hang = async (pn: number) => {
+  if (testing.__hang?.includes(pn)) await new Promise(() => {});
+};
+
+/** `p`, or a failed read once `ms` have gone by (the read itself carries on, and its result is used if it comes later). */
+const inTime = (p: Promise<PageRead>, ms: number) => Promise.race([p, new Promise<PageRead>((r) => setTimeout(() => r({ blocks: [], failed: true }), ms * (testing.__ocrT ?? 1)))]);
+
+/**
+ * Reads the given pages (finished ones come from the store), saving each as it is done. Every page is finished, one
+ * way or another, so the whole always comes to an end:
+ *  1. each page is read the usual way, with a time limit; a page that fights it waits until the end, so the others go on;
+ *  2. at the end, those pages get a second chance (the late first attempt is used if it has come in meanwhile);
+ *  3. then the other way of reading (the whole page at once, from a smaller drawing), one page at a time;
+ *  4. a page that beats all three is kept as its picture, marked as not read.
+ * Pages of sources (a bibliography, endnotes, an index) are recognised and not read in full: they would take many
+ * minutes and nobody reads them through. They are kept as pictures, folded away in the Liquid view.
+ */
+async function readPages(pdf: Pdf, pages: number[], store: PageStore | undefined, onProgress?: (done: number, total: number) => void): Promise<{ per: Map<number, LBlock[]>; lost: number[] }> {
   const { renderPage } = await import('./formats/pdf');
   const { OCR_POOL } = await import('./ocr');
   const per = new Map<number, LBlock[]>();
-  const failed: number[] = [];
   const lost: number[] = [];
   const total = pages.length;
   let n = 0;
@@ -309,25 +419,65 @@ async function readPages(
     } else todo.push(pn);
   }
   onProgress?.(n, total);
-  // three tries for every page: as usual; again, once the others are done; then one page at a time from a smaller
-  // drawing (a phone short of memory) — a page is only given up after all three
-  const pass = async (list: number[], round: 0 | 1 | 2) => {
-    await mapLimit(list, round === 2 ? 1 : OCR_POOL, async (pn) => {
-      const r = await readPdfPage(pdf, pn, renderPage, round === 2 ? 1300 : 1800);
-      if (r.failed) {
-        if (round < 2) failed.push(pn);
-        else lost.push(pn); // gave up: reported, and the page keeps whatever it had
-        return;
-      }
-      per.set(pn, r.blocks);
-      await store?.save(pn, r.blocks);
-      onProgress?.(++n, total);
-      await breathe(40); // a breath, so the rest of the app stays quick
-    });
+  const done = async (pn: number, blocks: LBlock[]) => {
+    per.set(pn, blocks);
+    await store?.save(pn, blocks);
+    onProgress?.(++n, total);
   };
-  await pass(todo, 0);
-  if (failed.length) await pass(failed.splice(0), 1);
-  if (failed.length) await pass(failed.splice(0), 2);
+  const running = new Map<number, Promise<PageRead>>();
+  let sourcesAfter = Infinity; // the page where sources began (and every page since was sources too)
+  const deferred: number[] = [];
+
+  await mapLimit(todo, OCR_POOL, async (pn) => {
+    if (pn > sourcesAfter && total >= 12) {
+      const look = await stillSources(pdf, pn, renderPage);
+      if (look.yes && look.canvas) {
+        const pic = await pagePicture(look.canvas, pn, { ref: true, alt: `Sources, page ${pn}` });
+        look.canvas.width = look.canvas.height = 0;
+        return done(pn, [pic]);
+      }
+      if (look.canvas) look.canvas.width = look.canvas.height = 0;
+      sourcesAfter = Infinity;
+    }
+    const job = readPdfPage(pdf, pn, renderPage);
+    running.set(pn, job);
+    const r = await inTime(job, 75_000);
+    if (r.failed) return void deferred.push(pn);
+    running.delete(pn);
+    if (isSourcesPage(r.blocks)) {
+      console.debug(`[ocr] page ${pn}: sources begin`);
+      sourcesAfter = Math.min(sourcesAfter, pn);
+    }
+    else if (pn > sourcesAfter) sourcesAfter = Infinity;
+    await done(pn, r.blocks);
+    await breathe(40); // a breath, so the rest of the app stays quick
+  });
+
+  // 2. the pages that fought: their late first attempt, or a second one
+  const again: number[] = [];
+  await mapLimit(deferred.sort((a, b) => a - b), OCR_POOL, async (pn) => {
+    const late = running.get(pn);
+    let r = late ? await inTime(late, 20_000) : { blocks: [], failed: true };
+    if (r.failed) r = await inTime(readPdfPage(pdf, pn, renderPage, 1500), 90_000);
+    if (r.failed) return void again.push(pn);
+    await done(pn, r.blocks);
+  });
+  // 3. the other way, one page at a time; 4. or its picture
+  for (const pn of again.sort((a, b) => a - b)) {
+    const r = await inTime(readPdfPagePlain(pdf, pn, renderPage), 120_000);
+    if (!r.failed) {
+      await done(pn, r.blocks);
+      continue;
+    }
+    lost.push(pn);
+    try {
+      const canvas = await drawPage(pdf, pn, renderPage, 1100);
+      await done(pn, [await pagePicture(canvas, pn, { unread: true, alt: `Page ${pn} (could not be read)` })]);
+      canvas.width = canvas.height = 0;
+    } catch {
+      onProgress?.(++n, total); // not even a picture: the page is counted, so the whole still comes to an end
+    }
+  }
   return { per, lost };
 }
 

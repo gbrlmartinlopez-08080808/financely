@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useLiquid, useRunningJobs, type ScanJob } from '../lib/scan';
-import { kindLabel, left } from '../lib/workNotice';
+import { askWorkFree, kindLabel, left, workFree } from '../lib/workNotice';
+import * as db from '../lib/db';
+import { isNative } from '../lib/native';
 import { PixelBar, Sheet, toast } from '../ui/kit';
 
 const short = (t: string, n: number) => (t.length > n ? t.slice(0, n) + '…' : t);
@@ -12,10 +14,16 @@ const short = (t: string, n: number) => (t.length > n ? t.slice(0, n) + '…' : 
 export function JobsHost() {
   const all = useRunningJobs();
   const [list, setList] = useState(false);
+  const [bg, setBg] = useState(false);
   useEffect(() => {
-    const began = (e: Event) => {
+    const began = async (e: Event) => {
       const d = (e as CustomEvent<{ title: string; pages: number }>).detail;
       if (d.pages <= 0) return; // a book of ordinary text is just prepared quietly: the Liquid button fills up by itself
+      // a long read: once, offer to let it go on with the app closed (the phone would otherwise pause it to save battery)
+      if (isNative && d.pages >= 8 && !(await db.get('kv', 'bgask')) && !(await workFree())) {
+        await db.put('kv', 'bgask', Date.now());
+        return setBg(true);
+      }
       if (document.querySelector('.reader')) return; // the open book shows its own progress under its title
       toast(`Reading “${short(d.title, 22)}”${d.pages > 1 ? ` · ${d.pages} pages` : ''} — tap to follow`, undefined, () => setList(true));
     };
@@ -28,6 +36,28 @@ export function JobsHost() {
     };
   }, []);
   return (
+    <>
+    <Sheet open={bg} onClose={() => setBg(false)} title="Keep reading with Frogity closed?">
+      <div className="sheet-body" style={{ paddingBottom: 18 }}>
+        <p style={{ marginTop: 0 }}>
+          Reading a scanned book takes a while. To save battery, your phone pauses apps you are not using — so the reading would only move on while
+          Frogity is open.
+        </p>
+        <p className="muted" style={{ fontSize: 13.5 }}>
+          Allow Frogity to keep working in the background and it carries on with the screen off or the app closed. It only works while there is
+          something to read, shows a notification while it does, and stops by itself when it is done.
+        </p>
+        <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+          <button className="pill" style={{ flex: 1 }} onClick={() => (setBg(false), askWorkFree())}>
+            Allow
+          </button>
+          <button className="pill ghost" style={{ flex: 1 }} onClick={() => setBg(false)}>
+            Not now
+          </button>
+        </div>
+        <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>You can change this later in Settings.</p>
+      </div>
+    </Sheet>
     <Sheet open={list} onClose={() => setList(false)} title="Working in the background">
       <div className="sheet-body" style={{ paddingBottom: 18 }}>
         {all.length === 0 && <p className="muted">All done. Nothing is waiting.</p>}
@@ -46,6 +76,7 @@ export function JobsHost() {
         </p>
       </div>
     </Sheet>
+    </>
   );
 }
 

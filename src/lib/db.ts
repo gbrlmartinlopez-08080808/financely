@@ -55,6 +55,12 @@ export async function entries<T>(name: StoreName): Promise<[string, T][]> {
   return keys.map((k, i) => [String(k), values[i] as T]);
 }
 
+/** The keys that start with `prefix` (keys only: nothing big is read). */
+export async function keys(name: StoreName, prefix: string): Promise<string[]> {
+  const s = await store(name, 'readonly');
+  return ((await wrap(s.getAllKeys(IDBKeyRange.bound(prefix, prefix + '\uffff')))) as IDBValidKey[]).map(String);
+}
+
 export async function delPrefix(name: StoreName, prefix: string): Promise<void> {
   const s = await store(name, 'readwrite');
   const range = IDBKeyRange.bound(prefix, prefix + '￿');

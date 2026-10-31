@@ -494,11 +494,15 @@ async function readPictures(doc: DocMeta, p: Plan, pages: number[], progress: (f
   };
   const { ocrPages, ocrSome } = await import('./ocrpage');
   const st = pageStore(doc.id);
+  // every step of a page read has its own time limit (and a page that fights is moved to the end), so a long page is
+  // not a stuck job: keep telling the lane so, or it would give the whole book up and start it again and again
+  const beat = window.setInterval(touch, 15_000);
   try {
     if (p.kind === 'scan') return { whole: await ocrPages(blob, cb, st), lost: [] as number[] };
     const r = await ocrSome(blob, pages, cb, st);
     return { whole: null, lost: r.lost };
   } finally {
+    clearInterval(beat);
     end(doc.id);
   }
 }

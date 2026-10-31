@@ -13,6 +13,7 @@ import { APP_VERSION } from '../lib/config';
 import { fontById } from '../lib/fonts';
 import { detectLang, ensureNaturalVoice } from '../lib/voices';
 import { LangChips } from '../ui/LangChips';
+import { askWorkFree, workFree } from '../lib/workNotice';
 
 export function Settings({ open, onClose }: { open: boolean; onClose: () => void }) {
   const s = useStore((x) => x.settings);
@@ -25,6 +26,15 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
   const [adv, setAdv] = useState(false);
   const [folders, setFolders] = useState<LinkedFolder[]>([]);
   const [scanning, setScanning] = useState(false);
+  const [free, setFree] = useState(true);
+  useEffect(() => {
+    if (!isNative) return;
+    const look = () => void workFree().then(setFree);
+    look();
+    // coming back from the phone's own dialog: show what was chosen
+    document.addEventListener('visibilitychange', look);
+    return () => document.removeEventListener('visibilitychange', look);
+  }, []);
   useEffect(() => {
     if (!open) return;
     setName(s.name);
@@ -245,6 +255,24 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
             </div>
           </div>
         </div>
+        {isNative && (
+          <div className="row">
+            <Icon name="clock" />
+            <div className="grow">
+              <div className="row-label">Keep reading in the background</div>
+              <div className="row-sub">
+                {free
+                  ? 'On: scans and Liquid views carry on with the app closed or the screen off, and stop by themselves when done.'
+                  : 'Off: your phone pauses Frogity to save battery, so long scans only move on while the app is open.'}
+              </div>
+            </div>
+            {!free && (
+              <button className="pill sm" onClick={() => askWorkFree()}>
+                Allow
+              </button>
+            )}
+          </div>
+        )}
         <div className="row">
           <Icon name="grid" />
           <div className="grow">

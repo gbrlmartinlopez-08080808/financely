@@ -1,7 +1,7 @@
 import type { Prep } from '../lib/scan';
 import { tap } from '../lib/native';
 import { Icon } from '../ui/Icon';
-import { PixelBar } from '../ui/kit';
+import { PixelBar, Sheet } from '../ui/kit';
 
 /** a rounded square, drawn from the middle of the top edge, clockwise (so the fill starts where a clock starts) */
 const EDGE = 'M20 1.5H27.5A11 11 0 0 1 38.5 12.5V27.5A11 11 0 0 1 27.5 38.5H12.5A11 11 0 0 1 1.5 27.5V12.5A11 11 0 0 1 12.5 1.5Z';
@@ -87,5 +87,49 @@ export function LiquidStatus({ prep, pages, onRetry, onPages, compact }: { prep:
       </small>
       {!compact && <p>New pages appear here by themselves as they’re ready — keep reading. Listen opens once the whole book is done.</p>}
     </div>
+  );
+}
+
+/**
+ * Shown the first time a PDF is opened: what Liquid mode is, why it is instant for some files and takes a while for
+ * others, and that nothing has to be waited for.
+ */
+export function LiquidIntro({ open, prep, onClose, onTry }: { open: boolean; prep: Prep; onClose: () => void; onTry: () => void }) {
+  const now = prep.ready ? 'This one is ready already.' : prep.known && prep.busy ? `This one is on its way: ${pctOf(prep)}% so far.` : '';
+  return (
+    <Sheet open={open} onClose={onClose} title="Liquid mode">
+      <div className="sheet-body lq-intro" style={{ paddingBottom: 18 }}>
+        <div className="lq-intro-key" aria-hidden>
+          <Icon name="liquid" size={22} />
+        </div>
+        <p style={{ marginTop: 0 }}>
+          The square key at the top turns a PDF’s fixed pages into text that flows to fit your screen: your font and size, night colours, tap a word
+          to look it up, and Listen.
+        </p>
+        <div className="lq-intro-two">
+          <div>
+            <b>Snappy</b>
+            <span>When the PDF has real text inside, it is ready in seconds.</span>
+          </div>
+          <div>
+            <b>Takes a while</b>
+            <span>When the pages are photos or scans, Frogity reads each page letter by letter — on your phone, nothing is uploaded. That is a few seconds a page, so a long book takes minutes.</span>
+          </div>
+        </div>
+        <p className="muted" style={{ fontSize: 13.5 }}>
+          You never have to wait: open it any time and read what is ready, while the rest arrives by itself. The key’s edge fills up as it goes, the
+          work carries on in the background, and the sources at the back are folded away so they don’t slow it down.
+        </p>
+        {now && <p className="mono" style={{ fontSize: 12.5 }}>{now}</p>}
+        <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+          <button className="pill" style={{ flex: 1 }} onClick={onTry}>
+            Try Liquid
+          </button>
+          <button className="pill ghost" style={{ flex: 1 }} onClick={onClose}>
+            Got it
+          </button>
+        </div>
+      </div>
+    </Sheet>
   );
 }

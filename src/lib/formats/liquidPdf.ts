@@ -19,7 +19,7 @@ export type LBlock =
   | { t: 'h'; level: number; html: string; page: number }
   | { t: 'p'; html: string; page: number; cont?: boolean }
   | { t: 'li'; html: string; page: number }
-  | { t: 'img'; blob: Blob; w: number; h: number; em: number; mask: boolean; kind: 'math' | 'figure' | 'table' | 'line' | 'scan'; page: number; alt?: string; num?: string }
+  | { t: 'img'; blob: Blob; w: number; h: number; em: number; mask: boolean; kind: 'math' | 'figure' | 'table' | 'line' | 'scan'; page: number; alt?: string; num?: string; ref?: boolean; unread?: boolean }
   | { t: 'page'; page: number }
   | { t: 'inl'; id: string; blob: Blob; em: number; hem: number; dem: number };
 
@@ -91,9 +91,20 @@ export async function pdfToLiquid(
         onBlocks([], { page: i, pages: pdf.numPages });
         continue;
       }
-      const page = await pdf.getPage(i);
-      const res = await processPage(page, i, ctx);
-      page.cleanup();
+      // one strange page (a broken font, a drawing that never ends) must not stop the book: after a while, or on an
+      // error, the page is handed to the reader that works from its picture instead
+      let res: { blocks: LBlock[]; scanned: boolean };
+      try {
+        const page = await pdf.getPage(i);
+        res = await Promise.race([
+          processPage(page, i, ctx).finally(() => page.cleanup()),
+          new Promise<never>((_, rej) => setTimeout(() => rej(new Error('page took too long')), 45_000)),
+        ]);
+      } catch (e) {
+        if ((e as Error)?.name === 'AbortError') throw e;
+        console.warn('page handed to the reader', i, e);
+        res = { blocks: [await placeholder(i)], scanned: true };
+      }
       if (res.scanned) scanned.push(i);
       const blocks: LBlock[] = [{ t: 'page', page: i }, ...res.blocks];
       if (opts.onPage) await opts.onPage(i, blocks, res.scanned);
@@ -105,6 +116,17 @@ export async function pdfToLiquid(
     pdf.loadingTask.destroy();
   }
   return { blocks: all, scannedPages: scanned };
+}
+
+/** Stands in for a page the converter gave up on, until its reading takes its place. */
+async function placeholder(page: number): Promise<LBlock> {
+  const c = document.createElement('canvas');
+  c.width = c.height = 2;
+  const cx = c.getContext('2d')!;
+  cx.fillStyle = '#fff';
+  cx.fillRect(0, 0, 2, 2);
+  const blob = await new Promise<Blob>((r) => c.toBlob((b) => r(b!), 'image/png'));
+  return { t: 'img', blob, w: 2, h: 2, em: 0, mask: false, kind: 'scan', page, alt: `Page ${page}` };
 }
 
 interface DocCtx {
@@ -1286,7 +1308,7 @@ export function blocksToHtml(blocks: LBlock[], urls: string[]): string {
         if (b.mask) {
           html += `<figure class="lq lq-${b.kind}${b.num ? ' numbered' : ''}" data-page="${b.page}" data-src="${url}" data-w="${b.w}" data-h="${b.h}"><span class="mask" role="img" aria-label="${escapeHtml(b.alt ?? b.kind)}" style="width:${b.em.toFixed(2)}em;aspect-ratio:${ratio};--m:url(${url})"></span>${b.num ? `<span class="eqno">${escapeHtml(b.num)}</span>` : ''}</figure>`;
         } else {
-          html += `<figure class="lq lq-${b.kind}" data-page="${b.page}" data-src="${url}" data-w="${b.w}" data-h="${b.h}"><img src="${url}" alt="${escapeHtml(b.alt ?? b.kind)}" style="aspect-ratio:${ratio}${b.em ? `;width:${b.em.toFixed(2)}em` : ''}" loading="lazy"/></figure>`;
+          html += `<figure class="lq lq-${b.kind}${b.ref ? ' lq-ref' : ''}${b.unread ? ' lq-unread' : ''}" data-page="${b.page}" data-src="${url}" data-w="${b.w}" data-h="${b.h}"><img src="${url}" alt="${escapeHtml(b.alt ?? b.kind)}" style="aspect-ratio:${ratio}${b.em ? `;width:${b.em.toFixed(2)}em` : ''}" loading="lazy"/></figure>`;
         }
         break;
       }

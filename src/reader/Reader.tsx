@@ -7,7 +7,8 @@ import { openPdf, pdfOutline, type PDFDocumentProxy } from '../lib/formats/pdf';
 import { blocksToHtml, pdfToLiquid, type LBlock } from '../lib/formats/liquidPdf';
 import { onBack, setStatusBar, shareFile, shareText, tap } from '../lib/native';
 import { ConfirmSheet } from '../ui/Confirm';
-import { LiquidStatus, ViewButton } from './LiquidStatus';
+import { LiquidIntro, LiquidStatus, ViewButton } from './LiquidStatus';
+import { foldSources } from './sources';
 import { Icon, TypeGlyph } from '../ui/Icon';
 import { PixelBar, PixelLoader, Segmented, Sheet, toast } from '../ui/kit';
 import { PdfView, type PdfViewHandle } from './PdfView';
@@ -97,6 +98,17 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   const growing = isPdf && liquid && !liq.ready;
   // (until the book's state is known — a few milliseconds — nothing is said, so a finished book never flashes a status)
   const showGrowth = growing && liq.known;
+  // the first PDF ever opened: a few words on what Liquid mode is, and why it is sometimes instant and sometimes slow
+  const [intro, setIntro] = useState(false);
+  useEffect(() => {
+    if (!isPdf) return;
+    const t = setTimeout(async () => {
+      if (await db.get('kv', 'tip:liquid')) return;
+      await db.put('kv', 'tip:liquid', Date.now());
+      setIntro(true);
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [isPdf]);
   const theme = THEMES.find((t) => t.id === settings.readerTheme) ?? THEMES[0];
   const dark = settings.readerTheme === 'dusk' || settings.readerTheme === 'night';
 
@@ -199,7 +211,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   }, [content, liquid, liq.ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** A growing view with every page in it and nothing still being read. */
-  const liveComplete = (root: HTMLElement) => !!doc.pages && !root.querySelector('[data-wait]') && !!root.querySelector(`.pg[data-page="${doc.pages}"]`);
+  const liveComplete = (root: HTMLElement) => !!doc.pages && !root.querySelector('[data-wait],[data-gap]') && !!root.querySelector(`.pg[data-page="${doc.pages}"]`);
 
   /**
    * Where the reader is in a Liquid view: the paragraph at the top of the screen (as "the k-th block after the marker
@@ -252,6 +264,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     const lst = liquidPageStore(id);
     const ost = pageStore(id);
     const waitHtml = (pn: number) => `<figure class="lq lq-wait" data-wait="${pn}"><i></i><span>Page ${pn} is being read…</span></figure>`;
+    const gapHtml = (pn: number) => `<span class="pg" data-page="${pn}"></span><figure class="lq lq-wait" data-gap="${pn}"><i></i><span>Page ${pn} is a hard one — it is read at the end</span></figure>`;
     let next = 1;
     root.innerHTML = '';
     delete root.dataset.wrapped;
@@ -280,18 +293,38 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
       busy = true;
       let changed = false;
       try {
-        // new pages, in order (gathered first and put in at once: one layout instead of one per page)
+        // which pages are done so far (keys only, nothing big is read)
+        const done = new Set<number>();
+        for (const pre of ['lqpg', 'ocrpg']) for (const k of await db.keys('cache', `${pre}:${id}:`)) done.add(Number(k.slice(k.lastIndexOf(':') + 1)));
+        const lastDone = done.size ? Math.max(...done) : 0;
+        // new pages, in order (gathered first and put in at once: one layout instead of one per page). A page that
+        // takes long (it is read at the end) holds a place, and the pages after it are shown meanwhile.
         let add = '';
         while (next <= (total || 1e6)) {
           const h = await pageHtml(next);
-          if (h === null) break;
           if (!alive()) return;
-          add += h;
+          if (h === null) {
+            if (next >= lastDone) break;
+            add += gapHtml(next);
+          } else add += h;
           next++;
         }
         if (add) {
           root.insertAdjacentHTML('beforeend', add);
           changed = true;
+        }
+        // pages that held a place and are done now
+        for (const el of Array.from(root.querySelectorAll<HTMLElement>('[data-gap]'))) {
+          const pn = Number(el.dataset.gap);
+          const h = await pageHtml(pn);
+          if (h !== null) {
+            const mark = el.previousElementSibling;
+            if (mark?.matches(`.pg[data-page="${pn}"]`)) mark.remove(); // the page brings its own marker
+            const tpl = document.createElement('template');
+            tpl.innerHTML = h;
+            el.replaceWith(tpl.content);
+            changed = true;
+          }
         }
         // pictures that have been read since: swap them in (the browser keeps the paragraph being read where it is)
         for (const el of Array.from(root.querySelectorAll<HTMLElement>('[data-wait]'))) {
@@ -403,6 +436,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   };
 
   const afterLiquid = (root: HTMLElement) => {
+    foldSources(root);
     bookLang(root);
     if (isPdf) {
       restoreLiquidPage(root);
@@ -1281,6 +1315,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
           }}
         />
       )}
+      <LiquidIntro open={intro} prep={liq} onClose={() => setIntro(false)} onTry={() => (setIntro(false), switchMode('liquid'))} />
       <MoreSheet open={sheet === 'more'} onClose={() => setSheet(null)} actions={moreActions} onAction={onMore} title={doc.name} />
       <ConfirmSheet
         open={sheet === 'remove'}

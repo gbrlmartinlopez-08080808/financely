@@ -26,6 +26,7 @@ public class WorkPlugin extends Plugin {
         WorkService.progress = call.getInt("progress", 0);
         WorkService.max = call.getInt("max", 100);
         NotificationManagerCompat.from(ctx).cancel(READY);
+        FrogityWebView.keepWorking = true;
         try {
             ContextCompat.startForegroundService(ctx, new Intent(ctx, WorkService.class));
         } catch (Exception e) {
@@ -35,6 +36,7 @@ public class WorkPlugin extends Plugin {
     }
 
     private void stop(Context ctx) {
+        FrogityWebView.letRest();
         ctx.stopService(new Intent(ctx, WorkService.class));
         ((NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE)).cancel(WorkService.ID);
     }
@@ -58,6 +60,35 @@ public class WorkPlugin extends Plugin {
                 .build());
         } catch (SecurityException ignored) {
             /* notifications not allowed */
+        }
+        call.resolve();
+    }
+
+    /** Is Frogity allowed to keep working in the background (left out of the phone's battery saving)? */
+    @PluginMethod
+    public void battery(PluginCall call) {
+        com.getcapacitor.JSObject r = new com.getcapacitor.JSObject();
+        android.os.PowerManager pm = (android.os.PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+        r.put("free", pm == null || pm.isIgnoringBatteryOptimizations(getContext().getPackageName()));
+        call.resolve(r);
+    }
+
+    /** Asks the phone (with its own dialog) to leave Frogity out of battery saving, so reading goes on with the app closed. */
+    @PluginMethod
+    public void askBattery(PluginCall call) {
+        Context ctx = getContext();
+        try {
+            Intent i = new Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, android.net.Uri.parse("package:" + ctx.getPackageName()));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            ctx.startActivity(i);
+        } catch (Exception e) {
+            try {
+                Intent i = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + ctx.getPackageName()));
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                ctx.startActivity(i);
+            } catch (Exception ignored) {
+                /* nothing to open */
+            }
         }
         call.resolve();
     }

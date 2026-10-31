@@ -101,4 +101,42 @@ public class FrogityWebView extends CapacitorWebView {
     public ActionMode startActionMode(ActionMode.Callback callback, int type) {
         return super.startActionMode(quiet(callback), type);
     }
+
+    /**
+     * While Frogity has reading to finish (a scan, a Liquid view), the page is told it is still on screen when the app
+     * goes to the background or the screen turns off. Otherwise the browser inside the app slows the page's work to a
+     * crawl and the reading only moves on while the app is open. The foreground service (with its notification) keeps
+     * the app itself alive; this keeps its work going at full speed. Turned off again as soon as the work is done.
+     */
+    static volatile boolean keepWorking = false;
+    static volatile FrogityWebView current;
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        current = this;
+    }
+
+    @Override
+    protected void onWindowVisibilityChanged(int visibility) {
+        if (keepWorking && visibility != View.VISIBLE) return;
+        super.onWindowVisibilityChanged(visibility);
+    }
+
+    @Override
+    protected void onVisibilityChanged(View changedView, int visibility) {
+        if (keepWorking && visibility != View.VISIBLE) return;
+        super.onVisibilityChanged(changedView, visibility);
+    }
+
+    /** Work is over: if the app is not on screen any more, the page may now rest like any page in the background. */
+    static void letRest() {
+        keepWorking = false;
+        final FrogityWebView w = current;
+        if (w == null) return;
+        w.post(() -> {
+            int v = w.getWindowVisibility();
+            if (v != View.VISIBLE) w.dispatchWindowVisibilityChanged(v);
+        });
+    }
 }

@@ -10,6 +10,7 @@ export function wrapSentences(root: HTMLElement, lang = 'en'): number {
   const blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCKS)).filter((b) => !b.querySelector(BLOCKS) || b.tagName === 'LI');
   for (const b of blocks) {
     if (b.closest('.katex, math, pre') && b.tagName !== 'PRE') continue;
+    if (b.closest('.lq-sources')) continue; // the folded sources at the back are not read aloud
     const walker = document.createTreeWalker(b, NodeFilter.SHOW_TEXT, {
       acceptNode: (t) => (t.parentElement?.closest('.katex, math, .s, .eqno') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
     });
