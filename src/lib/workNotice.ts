@@ -19,16 +19,8 @@ export const workFree = async () => (isNative ? (await Work.battery().catch(() =
 /** Opens the phone's own question: may Frogity keep working in the background? */
 export const askWorkFree = () => (isNative ? Work.askBattery().catch(() => {}) : Promise.resolve());
 
-export const kindLabel = (k: ScanJob['kind']) => (k === 'scan' ? 'Reading the scan' : k === 'liquid' ? 'Preparing Liquid mode' : k === 'voice' ? 'Downloading your voice' : k === 'sync' ? 'Sending to your computer' : 'Reading the pictures');
+export const kindLabel = (k: ScanJob['kind']) => (k === 'scan' ? 'Reading the scan' : k === 'liquid' ? 'Preparing Liquid mode' : k === 'voice' ? 'Downloading your voice' : 'Reading the pictures');
 export const left = (j: ScanJob) => (j.total ? `${Math.max(0, j.total - j.done)} left` : '…');
-
-/** A computer is connected: the phone stays reachable in the background (a quiet notification) so it can hand files over. */
-let connected = false;
-let nudge: () => void = () => {};
-export function setConnected(on: boolean) {
-  connected = on;
-  nudge();
-}
 
 let started = false;
 /** Starts watching the background work. Call once. */
@@ -67,22 +59,7 @@ export function initWorkNotice() {
       const names = finished.splice(0);
       if (names.length) Work.done({ title: names.length === 1 ? `“${names[0]}” is ready to read` : `${names.length} books are ready to read`, text: 'Liquid mode, Listen and search are ready.' }).catch(() => {});
       else Work.clear().catch(() => {});
-      if (connected) setTimeout(idleOn, 1500);
-    } else if (connected) idleOn();
-    else if (idleShown) {
-      idleShown = false;
-      Work.clear().catch(() => {});
     }
-  };
-  let idleShown = false;
-  const idleOn = () => {
-    if (!connected || runningJobs().length) return;
-    idleShown = true;
-    Work.show({ title: 'Frogity is connected to your computer', text: 'Staying reachable so your documents open there at once', progress: 0, max: 0, idle: true }).catch(() => {});
-  };
-  nudge = () => {
-    clearTimeout(t);
-    t = window.setTimeout(sync, 300);
   };
   subscribeJobs(() => {
     clearTimeout(t);

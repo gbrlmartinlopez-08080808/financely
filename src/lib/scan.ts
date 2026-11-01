@@ -17,7 +17,7 @@ export const LQ_VERSION = 'lq10';
 /** bump to have every document looked at again (the page check changed) */
 const PLAN_V = 4;
 
-export type JobKind = 'scan' | 'liquid' | 'images' | 'voice' | 'sync';
+export type JobKind = 'scan' | 'liquid' | 'images' | 'voice';
 
 export interface ScanJob {
   id: string;

@@ -334,8 +334,6 @@ export default function App() {
   useEffect(() => {
     if (!ready) return;
     const t = setTimeout(() => resumeScans(getState().docs), 2500);
-    // the computer app: only once a computer has been connected (Settings → Use Frogity on a computer)
-    setTimeout(() => import('./lib/sync/engine').then((m) => m.startSync()), 1500);
     return () => clearTimeout(t);
   }, [ready]);
 
