@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { init, useStore, updateSettings, getState, dayKey, applyFreeze, streakInfo } from './lib/store';
 import * as db from './lib/db';
 import { importFile, importText, upgradeCovers } from './lib/library';
-import { initBackButton, isNative, listenIncoming, manageSelectionMenu, readIncoming, setStatusBar, tap, widgetUpdate, onWidgetAction } from './lib/native';
+import { appIconGet, appIconSet, initBackButton, isNative, listenIncoming, manageSelectionMenu, readIncoming, setStatusBar, tap, widgetUpdate, onWidgetAction } from './lib/native';
 import { glyphFor } from './lib/glyphs';
 import { linkFolder, linkPickedFiles, rescanAll } from './lib/linked';
 import type { DocMeta } from './lib/types';
@@ -226,6 +226,25 @@ export default function App() {
       document.removeEventListener('visibilitychange', checkAward);
     };
   }, [ready]);
+
+  // the first full week of reading turns the app's icon from the classic one into the gradient one (once; after that it is the reader's choice)
+  const daysMap = useStore((st) => st.days);
+  const longest = streakInfo(daysMap).longest;
+  useEffect(() => {
+    if (!ready || !onboarded) return;
+    const s = getState().settings;
+    if (!s.iconUnlocked && longest >= 7) {
+      updateSettings({ iconUnlocked: true, appIcon: 'gradient' });
+      void appIconSet('gradient');
+      toast('A full week in a row — your app icon has a new look', 'award', () => setStats(true));
+    } else if (isNative) {
+      // keep the launcher in step with the choice (a reinstall, a restored phone)
+      appIconGet().then((cur) => {
+        const want = s.appIcon ?? 'classic';
+        if (cur && cur !== want) void appIconSet(want);
+      });
+    }
+  }, [ready, onboarded, longest]);
 
   // a missed day is covered by a freeze (once a week, plus any you've earned)
   useEffect(() => {

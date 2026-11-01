@@ -1657,7 +1657,7 @@
   display: none;
 }
 .curl-flapwrap {
-  filter: drop-shadow(-6px 2px 9px rgba(0, 0, 0, 0.3));
+  filter: drop-shadow(-3px 1px 5px rgba(0, 0, 0, 0.22));
 }
 .curl-flap {
   transform-origin: 0 0;

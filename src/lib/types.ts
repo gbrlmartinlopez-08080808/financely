@@ -98,6 +98,10 @@ export interface Settings {
   autoVoice?: boolean;
   /** show a Liquid view as flipping pages instead of one long scroll */
   pageFlip?: boolean;
+  /** the first full week of reading has been reached: the gradient app icon is unlocked */
+  iconUnlocked?: boolean;
+  /** which app icon is in use */
+  appIcon?: 'classic' | 'gradient';
   aiOk: boolean; // user agreed to send questions + short excerpts to the free AI service
 }
 

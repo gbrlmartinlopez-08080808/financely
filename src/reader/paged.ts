@@ -69,14 +69,8 @@ interface Pt {
   x: number;
   y: number;
 }
-/** the part of a rectangle on one side of a line (n·p ≤ c keeps the "behind" side, or the other with `ahead`) */
-function clipRect(W: number, H: number, n: Pt, c: number, ahead: boolean): Pt[] {
-  let poly: Pt[] = [
-    { x: 0, y: 0 },
-    { x: W, y: 0 },
-    { x: W, y: H },
-    { x: 0, y: H },
-  ];
+/** the part of a polygon on one side of a line (n·p ≤ c is "behind" the line, n·p ≥ c is "ahead") */
+function clipPoly(poly: Pt[], n: Pt, c: number, ahead: boolean): Pt[] {
   const side = (p: Pt) => (ahead ? 1 : -1) * (n.x * p.x + n.y * p.y - c);
   const out: Pt[] = [];
   for (let i = 0; i < poly.length; i++) {
@@ -90,8 +84,7 @@ function clipRect(W: number, H: number, n: Pt, c: number, ahead: boolean): Pt[] 
       out.push({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k });
     }
   }
-  poly = out;
-  return poly;
+  return out;
 }
 const css = (p: Pt[]) => (p.length < 3 ? 'polygon(0 0, 0 0, 0 0)' : `polygon(${p.map((q) => `${q.x.toFixed(1)}px ${q.y.toFixed(1)}px`).join(',')})`);
 
@@ -176,7 +169,11 @@ const curlFor = (sc: HTMLElement) => {
 };
 const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-/** Draws the page curl at `t` (0 = the page lies flat, 1 = turned away). `y0` is where on the page it is held. */
+/**
+ * Draws the page curl at `t` (0 = the page lies flat, 1 = turned away). `y0` is where on the page it is held.
+ * A small, calm curl: the fold sweeps across the page and only a narrow strip of the page's back is ever seen
+ * (a few percent of its width), so the page being turned never covers the one beneath.
+ */
 function drawCurl(sc: HTMLElement, c: Curl, t: number, y0: number) {
   const W = sc.clientWidth;
   const H = sc.clientHeight;
@@ -187,34 +184,40 @@ function drawCurl(sc: HTMLElement, c: Curl, t: number, y0: number) {
     c.flapWrap.style.display = 'none';
     return;
   }
-  // the corner being held, and where the finger has brought it
-  const hold = y0 > H * 0.62 ? Math.min(H, y0) : y0 * 0.5 + H * 0.5;
-  const C: Pt = { x: W, y: hold };
-  const d = 2.04 * W * (t * t * (3 - 2 * t) * 0.35 + t * 0.65); // a little slower at the start, so a small pull shows a small curl
-  const P: Pt = { x: W - d, y: hold - d * 0.2 * (1 - t * 0.6) };
-  const M: Pt = { x: (C.x + P.x) / 2, y: (C.y + P.y) / 2 };
-  const len = Math.hypot(C.x - P.x, C.y - P.y) || 1;
-  const n: Pt = { x: (C.x - P.x) / len, y: (C.y - P.y) / len }; // from the finger toward the held corner
-  const k = M.x * n.x + M.y * n.y;
-  const stay = clipRect(W, H, n, k, false);
-  const lifted = clipRect(W, H, n, k, true);
+  const rect: Pt[] = [
+    { x: 0, y: 0 },
+    { x: W, y: 0 },
+    { x: W, y: H },
+    { x: 0, y: H },
+  ];
+  // the fold is almost upright, tilted a little toward where the page is held
+  const tilt = ((Math.max(0, Math.min(H, y0)) / H) - 0.5) * 0.22;
+  const len = Math.hypot(1, tilt);
+  const n: Pt = { x: 1 / len, y: tilt / len }; // points toward the edge being lifted
+  const edge = n.x * W + Math.max(0, n.y * H); // the fold when the page lies flat: beyond the right edge
+  const far = Math.min(0, n.y * H); // the fold when the page is gone: before the left edge
+  const strip = Math.min(46, W * 0.12) * Math.min(1, t * 6, (1 - t) * 6 + 0.25); // the visible back of the page: small
+  const k = edge + (far - strip - edge) * (t * t * (3 - 2 * t) * 0.3 + t * 0.7);
+  const stay = clipPoly(rect, n, k, false);
+  const lifted = clipPoly(rect, n, k, true);
+  const band = clipPoly(lifted, n, k + strip, false); // the part that curls over (and shows its back)
   c.front.style.clipPath = css(stay);
-  // the page beneath is shaded where the leaf has just left it
   const ang = (Math.atan2(n.x, -n.y) * 180) / Math.PI;
   const L = Math.abs(W * Math.sin((ang * Math.PI) / 180)) + Math.abs(H * Math.cos((ang * Math.PI) / 180));
-  const s = k - ((W / 2) * n.x + (H / 2) * n.y); // distance of the fold from the middle of the page, along n
+  const s = k - ((W / 2) * n.x + (H / 2) * n.y);
   const at = (px: number) => `${(((s + px) / L) * 100 + 50).toFixed(2)}%`;
+  // a soft shadow on the page beneath, just beyond the fold
   c.under.style.display = 'block';
   c.under.style.clipPath = css(lifted);
-  c.under.style.background = `linear-gradient(${ang.toFixed(1)}deg, rgba(0,0,0,${(0.34 * (1 - t * 0.5)).toFixed(3)}) ${at(0)}, rgba(0,0,0,0) ${at(70)})`;
-  // the back of the leaf: the lifted corner folded over along the line
+  c.under.style.background = `linear-gradient(${ang.toFixed(1)}deg, rgba(0,0,0,${(0.2 * (1 - t * 0.6)).toFixed(3)}) ${at(0)}, rgba(0,0,0,0) ${at(46)})`;
+  // the narrow strip of the page's back
   c.flapWrap.style.display = 'block';
   const a = 1 - 2 * n.x * n.x;
   const b = -2 * n.x * n.y;
   const dd = 1 - 2 * n.y * n.y;
-  c.flap.style.clipPath = css(lifted);
+  c.flap.style.clipPath = css(band);
   c.flap.style.transform = `matrix(${a.toFixed(5)},${b.toFixed(5)},${b.toFixed(5)},${dd.toFixed(5)},${(2 * k * n.x).toFixed(2)},${(2 * k * n.y).toFixed(2)})`;
-  c.flap.style.background = `linear-gradient(${ang.toFixed(1)}deg, rgba(0,0,0,.18) ${at(0)}, rgba(0,0,0,.04) ${at(22)}, rgba(255,255,255,.22) ${at(60)}, rgba(0,0,0,.025) ${at(240)}), var(--curl-back)`;
+  c.flap.style.background = `linear-gradient(${ang.toFixed(1)}deg, rgba(0,0,0,.14) ${at(0)}, rgba(255,255,255,.18) ${at(strip * 0.45)}, rgba(0,0,0,.05) ${at(strip)}), var(--curl-back)`;
 }
 
 interface Run {
@@ -271,7 +274,7 @@ function settleCurl(r: Run, complete: boolean, speed = 0) {
   const target = (r.forward ? complete : !complete) ? 1 : 0;
   const from = r.t;
   const dist = Math.abs(target - from);
-  const dur = Math.max(160, Math.min(520, 150 + dist * 420 - Math.min(160, Math.abs(speed) * 90)));
+  const dur = Math.max(150, Math.min(360, 140 + dist * 260 - Math.min(120, Math.abs(speed) * 80)));
   const t0 = performance.now();
   const fin = () => endCurl(r, complete);
   const step = (now: number) => {
@@ -363,7 +366,7 @@ export function usePager(sc: HTMLElement | null, on: boolean) {
       last = { x: e.touches[0].clientX, t: now };
       if (r) {
         const W = width(sc);
-        const p = Math.max(0, Math.min(1, Math.abs(dx) / (W * 0.8)));
+        const p = Math.max(0, Math.min(1, Math.abs(dx) / (W * 0.7)));
         r.t = r.forward ? (dx < 0 ? p : 0) : dx > 0 ? 1 - p : 1;
         drawCurl(sc, r.c, r.t, r.y0);
         return;

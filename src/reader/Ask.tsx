@@ -47,6 +47,7 @@ export function AskSheet({
   lang,
   getText,
   selection,
+  chips: given,
   aiOk,
   onConsent,
 }: {
@@ -57,6 +58,8 @@ export function AskSheet({
   lang?: string;
   getText: () => Promise<string>;
   selection?: string;
+  /** what to offer as one-tap questions (the default is for a book) */
+  chips?: { label: string; q: string }[];
   aiOk: boolean;
   onConsent: () => void;
 }) {
@@ -129,7 +132,7 @@ export function AskSheet({
     }
   };
 
-  const chips = useMemo(() => (sel.current ? SELECTION_CHIPS : BOOK_CHIPS), [open, selection]); // eslint-disable-line react-hooks/exhaustive-deps
+  const chips = useMemo(() => (sel.current ? SELECTION_CHIPS : given ?? BOOK_CHIPS), [open, selection, given]); // eslint-disable-line react-hooks/exhaustive-deps
   const face: Mood = busy ? 'dizzy' : mood === 'neutral' && !msgs.length ? 'wink' : mood;
 
   return (

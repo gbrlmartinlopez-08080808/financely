@@ -207,6 +207,15 @@ export async function onMediaAction(cb: (action: string) => void) {
   }
 }
 
+// ------------------------------------------------------------------ the app's own icon (classic, or the gradient one earned with a first full week)
+interface AppIconPlugin {
+  get(): Promise<{ icon: 'classic' | 'gradient' }>;
+  set(o: { icon: 'classic' | 'gradient' }): Promise<{ icon: 'classic' | 'gradient' }>;
+}
+const AppIcon = registerPlugin<AppIconPlugin>('AppIcon');
+export const appIconSet = (icon: 'classic' | 'gradient') => (isNative ? AppIcon.set({ icon }).then(() => true, () => false) : Promise.resolve(false));
+export const appIconGet = () => (isNative ? AppIcon.get().then((r) => r.icon, () => undefined) : Promise.resolve(undefined));
+
 // ------------------------------------------------------------------ home-screen widgets
 export type WidgetAction = 'stats' | 'add' | 'scan' | 'continue';
 interface WidgetPlugin {

@@ -4,12 +4,12 @@ import { fmtMs, glyphFor, legendFor } from '../lib/glyphs';
 import { plantStage } from '../lib/ascii';
 import { lightsFor, renderGlobe } from '../lib/globe';
 import { Icon } from '../ui/Icon';
-import { Pixel, Ruler, Sheet } from '../ui/kit';
+import { Pixel, Ruler, Sheet, toast } from '../ui/kit';
 import { Ring } from './Library';
 import { cheer, displayName } from '../lib/cheer';
 import { harvestRecent, type Harvest } from '../lib/harvest';
 import { pickQuote, quoteArt } from '../lib/quotes';
-import { onBack, tap } from '../lib/native';
+import { appIconSet, onBack, tap } from '../lib/native';
 import { FrogScene } from './FrogScene';
 
 const MESSAGES: [number, string][] = [
@@ -383,6 +383,7 @@ export function StatsBubble({ open, onClose, reward, onRewardDone }: { open: boo
                   </div>
                 </div>
               </div>
+              <IconCards longest={info.longest} />
               <div className="ascii-card quote" style={{ marginTop: 10 }}>
                 <pre aria-label={`${quote.text} — ${quote.from}`}>{art}</pre>
                 <div className="msg" style={{ textAlign: 'center' }}>
@@ -404,5 +405,53 @@ export function StatsBubble({ open, onClose, reward, onRewardDone }: { open: boo
         </div>
       </Sheet>
     </>
+  );
+}
+
+
+/**
+ * The app's two icons as two cards that overlap: tap to bring one to the front. The gradient one is earned with the first full
+ * week (seven days in a row); after that either can be chosen at any time.
+ */
+function IconCards({ longest }: { longest: number }) {
+  const settings = useStore((st) => st.settings);
+  const unlocked = !!settings.iconUnlocked || longest >= 7;
+  const using = settings.appIcon ?? 'classic';
+  const [front, setFront] = useState<'classic' | 'gradient'>(using);
+  useEffect(() => setFront(using), [using]);
+  const pick = async (icon: 'classic' | 'gradient') => {
+    tap('select');
+    if (front !== icon) return setFront(icon);
+    if (icon === using) return;
+    if (icon === 'gradient' && !unlocked) return toast(`${7 - Math.min(7, longest)} more day${7 - longest === 1 ? '' : 's'} in a row to unlock it`);
+    await updateSettings({ appIcon: icon });
+    const ok = await appIconSet(icon);
+    toast(ok ? 'App icon changed — the launcher may take a moment to show it' : 'Saved — the icon changes on the phone itself');
+  };
+  const card = (icon: 'classic' | 'gradient') => {
+    const locked = icon === 'gradient' && !unlocked;
+    return (
+      <button key={icon} className={`icard ${icon}${front === icon ? ' front' : ''}${using === icon ? ' using' : ''}`} onClick={() => pick(icon)} aria-label={`${icon} icon${locked ? ', locked' : using === icon ? ', in use' : ''}`}>
+        <img src={icon === 'classic' ? './icon-classic-512.png' : './icon-squircle-512.png'} alt="" draggable={false} />
+        <b>{icon}</b>
+        <small className="mono">{locked ? `locked · ${Math.min(7, longest)}/7 days` : using === icon ? 'in use' : front === icon ? 'tap to use' : icon === 'gradient' ? 'unlocked' : 'original'}</small>
+        {locked && (
+          <span className="lock" aria-hidden>
+            <Icon name="timer" size={14} />
+          </span>
+        )}
+      </button>
+    );
+  };
+  return (
+    <div className="icon-cards">
+      <div className="section-label">app icon</div>
+      <div className="icard-stack">{[card('classic'), card('gradient')]}</div>
+      <p className="muted">
+        {unlocked
+          ? 'You reached a full week in a row, so the new gradient icon is yours. Tap a card to bring it forward, tap it again to use it.'
+          : 'Read seven days in a row — your first full week — and the app icon turns from the classic one into the new gradient one. Tap the cards to see them side by side.'}
+      </p>
+    </div>
   );
 }

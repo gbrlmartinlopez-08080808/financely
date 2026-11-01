@@ -870,3 +870,476 @@ button.tcard:active {
 .story-src button.on {
   background: var(--ink-2);
 }
+
+/* ------------------------------------------------------------------ round two */
+/* the biography: a small portrait beside the name, then plenty to read */
+.tcard.bio {
+  padding: 16px 18px 16px;
+  display: grid;
+  gap: 10px;
+}
+.bio-top {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+.bio-photo {
+  border-radius: 14px;
+  max-height: 130px;
+}
+.bio-head {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.bio-head h3 {
+  font-size: 21px;
+}
+.tcard .ext.long {
+  -webkit-line-clamp: 7;
+}
+.more {
+  font-size: 11px;
+  color: var(--muted);
+}
+.tcard.featured .more,
+.tcard.figure .more {
+  margin-top: 4px;
+}
+.wlink,
+.article a.wl,
+.article a[href^='#wiki:'] {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--ink) 30%, transparent);
+  text-underline-offset: 3px;
+  font: inherit;
+  padding: 0;
+  display: inline;
+}
+.wlink:active,
+.article a.wl:active {
+  background: var(--line-2);
+}
+
+/* history: every line opens */
+.tcard.history li button {
+  display: grid;
+  grid-template-columns: 52px 1fr 16px;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  font-size: 15px;
+  line-height: 1.35;
+  align-items: start;
+  color: var(--ink);
+}
+.tcard.history li button svg {
+  color: var(--faint);
+  margin-top: 3px;
+}
+.ev-text {
+  font: 500 21px/1.3 var(--serif) !important;
+}
+.evpage {
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  padding: 12px;
+  border-radius: 20px;
+  background: var(--surface-2);
+}
+.evpage .evphoto {
+  border-radius: 14px;
+  max-height: 200px;
+}
+.evpage b {
+  display: block;
+  font-size: 17px;
+}
+.evpage small {
+  display: block;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.evpage em {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font: normal 400 15.5px/1.4 var(--serif);
+  color: var(--ink-2);
+  margin: 4px 0;
+}
+
+/* lists of things to read */
+.tcard.readlist,
+.tcard.readcard {
+  padding: 14px 16px;
+}
+.tcard.readlist ul {
+  gap: 14px;
+}
+.rrow {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  align-items: start;
+}
+.rrow .rphoto {
+  border-radius: 12px;
+  max-height: 100px;
+}
+.rtext {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.rtext b {
+  font-size: 15.5px;
+  line-height: 1.22;
+}
+.rtext small {
+  color: var(--ink-2);
+  font: 400 14px/1.35 var(--serif);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rmeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.rmeta.big {
+  font-size: 11px;
+}
+.logo {
+  border-radius: 6px;
+  object-fit: contain;
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--line-2);
+  flex: none;
+}
+.logo.ph {
+  display: inline-grid;
+  place-items: center;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  text-transform: uppercase;
+}
+.logos {
+  display: inline-flex;
+}
+.logos .logo + .logo {
+  margin-left: -6px;
+}
+.reel-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.reel-meta b {
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+/* topic chips */
+.news {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.topics {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px 14px 10px;
+  flex: none;
+}
+.topics.inline {
+  padding: 0 0 4px;
+}
+.topics::-webkit-scrollbar {
+  display: none;
+}
+.topics button {
+  flex: none;
+  font-size: 12.5px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  color: var(--ink-2);
+  transition: background 0.2s, color 0.2s;
+}
+.topics button.on {
+  background: var(--ink-2);
+  color: var(--surface);
+  box-shadow: none;
+}
+
+/* who covers this */
+.spectrum {
+  display: grid;
+  gap: 8px;
+  padding: 14px 14px 12px;
+  border-radius: 20px;
+  background: var(--surface-2);
+}
+.sp-bar {
+  position: relative;
+  margin: 2px 12px 0;
+}
+.sp-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 15px;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, rgba(46, 76, 255, 0.22), rgba(140, 140, 140, 0.16) 50%, rgba(232, 150, 100, 0.3));
+}
+.sp-dot {
+  position: absolute;
+  transform: translateX(-50%);
+  border-radius: 8px;
+  transition: transform 0.2s var(--spring);
+}
+.sp-dot.on {
+  transform: translateX(-50%) scale(1.25);
+  z-index: 2;
+}
+.sp-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--muted);
+  padding: 0 6px;
+}
+.sp-note {
+  margin: 0;
+  font: 400 14px/1.4 var(--sans) !important;
+  color: var(--ink-2);
+}
+.sp-info {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.sp-info span {
+  display: grid;
+  gap: 2px;
+}
+.sp-info small {
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.sp-info em {
+  font-style: normal;
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.35;
+}
+.sp-fine {
+  margin: 0;
+  font-size: 10px !important;
+  color: var(--faint);
+  font-family: var(--mono) !important;
+}
+.src-list button span {
+  align-items: center;
+}
+.src-list.plain button {
+  grid-template-columns: 1fr auto;
+}
+.src-list.plain button svg {
+  grid-row: 1;
+}
+.chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip-link {
+  font-size: 12.5px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink);
+}
+.story-src button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.wk .wk-lead {
+  max-width: 260px;
+  border-radius: 16px;
+  margin: 2px 0 2px;
+}
+.wk-body h2,
+.wk-body h3 {
+  scroll-margin-top: 60px;
+}
+.wk-body section > h2 {
+  font: 650 20px/1.2 var(--sans);
+  margin: 1.4em 0 0.4em;
+}
+.wk-body table.wk-table {
+  display: block;
+  overflow-x: auto;
+  font: 400 13px/1.35 var(--sans);
+  border-collapse: collapse;
+  margin: 0.8em 0;
+}
+.wk-body table.wk-table td,
+.wk-body table.wk-table th {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.wk-body figure {
+  margin: 0.8em 0;
+}
+.wk-body figure img {
+  border-radius: 12px;
+}
+.wk-body ul,
+.wk-body ol {
+  padding-left: 1.2em;
+}
+.tcard.history li {
+  display: block;
+}
+.int-detail p.sub {
+  font: 400 13.5px/1.35 var(--sans);
+  color: var(--muted);
+}
+
+/* the two app icons, as two cards that overlap */
+.icon-cards {
+  margin-top: 10px;
+}
+.icard-stack {
+  position: relative;
+  height: 196px;
+  margin: 6px 0 4px;
+}
+.icard {
+  position: absolute;
+  top: 8px;
+  width: 148px;
+  padding: 12px 12px 10px;
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow), inset 0 0 0 1px var(--line);
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  text-align: left;
+  transition: transform 0.45s var(--spring), box-shadow 0.3s, opacity 0.3s;
+  transform-origin: 50% 90%;
+}
+.icard.classic {
+  left: calc(50% - 138px);
+  transform: rotate(-7deg) scale(0.93);
+  z-index: 1;
+}
+.icard.gradient {
+  left: calc(50% - 12px);
+  transform: rotate(5deg) scale(0.93);
+  z-index: 1;
+}
+.icard.front {
+  z-index: 3;
+  transform: rotate(-1deg) scale(1.02) translateY(-4px);
+  box-shadow: var(--shadow-lg), inset 0 0 0 1px var(--line);
+}
+.icard.gradient.front {
+  transform: rotate(1deg) scale(1.02) translateY(-4px);
+}
+.icard:not(.front) {
+  opacity: 0.92;
+}
+.icard img {
+  width: 76px;
+  height: 76px;
+  border-radius: 18px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px var(--line-2);
+  margin-bottom: 4px;
+}
+.icard b {
+  font-size: 15px;
+  text-transform: capitalize;
+}
+.icard small {
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.icard.using small {
+  color: var(--ink);
+}
+.icard .lock {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+.icon-cards p.muted {
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 4px 2px 0;
+}
+
+/* the ASCII cards (globe, plant, quotes) sit on the page's own colours, not on a block of black */
+.ascii-card:not(.frog) {
+  background-color: color-mix(in srgb, var(--ink) 4%, var(--surface));
+  background-image: radial-gradient(color-mix(in srgb, var(--ink) 15%, transparent) 1px, transparent 1.2px);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.ascii-card.globe pre {
+  color: color-mix(in srgb, var(--ink) 40%, transparent);
+}
+.ascii-card.globe pre b {
+  color: var(--ink);
+  text-shadow: 0 0 8px rgba(255, 190, 60, 0.5);
+}
+.ascii-card.globe pre b.td {
+  color: #b87800;
+  text-shadow: 0 0 10px rgba(255, 180, 0, 0.55);
+}
+.ascii-card.quote pre,
+.ascii-card pre.plant,
+.ascii-card.globe pre.plant {
+  color: var(--ink-2);
+}
+.ascii-card pre b.y {
+  color: #b87800;
+}
+.icard.gradient {
+  left: calc(50% + 4px);
+}
+.icard.classic {
+  left: calc(50% - 122px);
+}

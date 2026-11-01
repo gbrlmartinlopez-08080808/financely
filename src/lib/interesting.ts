@@ -10,12 +10,24 @@ import { FEED_URLS } from './config';
 import { FACTS, type Fact } from '../data/facts';
 import type { DocMeta } from './types';
 
-export interface NewsSource {
+/** an outlet: who it is, who pays for it, roughly where it stands (−2 left … 0 centre … +2 right; null = not a political outlet) */
+export interface Outlet {
   name: string;
   region: string;
+  domain: string;
+  kind: string;
+  lean: number | null;
+  about: string;
+  logo?: string;
+}
+export interface NewsSource {
+  id?: string; // key into Daily.sources (older files carry the name instead)
+  name?: string;
+  region?: string;
   title: string;
   url: string;
 }
+export type Topic = 'world' | 'science' | 'tech' | 'health' | 'culture' | 'environment' | 'sport' | 'business' | 'good';
 export interface Story {
   id: string;
   title: string;
@@ -25,7 +37,23 @@ export interface Story {
   iw?: number;
   ih?: number;
   time: number;
+  topic?: Topic;
+  tone?: 'heavy' | 'neutral' | 'light';
+  /** names in the story that have a Wikipedia article */
+  terms?: { t: string; w: string }[];
   sources: NewsSource[];
+}
+export interface Read {
+  id: string;
+  kind: 'article' | 'curious' | 'long';
+  source: string;
+  title: string;
+  summary: string;
+  image: string;
+  iw?: number;
+  ih?: number;
+  time?: number;
+  url: string;
 }
 export interface Card {
   title: string;
@@ -38,15 +66,23 @@ export interface Card {
   year?: number;
   credit?: string;
 }
+export interface HistoryEvent {
+  year: number;
+  text: string;
+  pages?: Card[];
+}
 export interface Daily {
   v: number;
+  sources?: Record<string, Outlet>;
+  reads?: Read[];
+  mostread?: Card[];
   date: string;
   generated: string;
   news: Story[];
   figure?: Card & { year: number };
   picture?: Card;
   featured?: Card;
-  history?: { year: number; text: string; image?: string; url?: string }[];
+  history?: HistoryEvent[];
 }
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -59,7 +95,7 @@ const timed = async (url: string, ms = 9000) => {
     clearTimeout(t);
   }
 };
-const valid = (d: unknown): d is Daily => !!d && typeof d === 'object' && Array.isArray((d as Daily).news) && (d as Daily).v === 1;
+const valid = (d: unknown): d is Daily => !!d && typeof d === 'object' && Array.isArray((d as Daily).news) && ((d as Daily).v === 1 || (d as Daily).v === 2);
 
 export type Loaded = { data: Daily; fresh: boolean; offline: boolean };
 
@@ -241,4 +277,22 @@ export function agoShort(t: number) {
   if (m < 60) return `${m} min ago`;
   if (m < 60 * 24) return `${Math.round(m / 60)} h ago`;
   return `${Math.round(m / 1440)} d ago`;
+}
+
+/** who a news source is, whether the feed is new (a registry with logos) or an older one (just a name) */
+export function outletOf(d: Daily, x: NewsSource): Outlet & { id: string } {
+  const o = x.id ? d.sources?.[x.id] : undefined;
+  if (o) return { ...o, id: x.id! };
+  return { id: x.id ?? x.name ?? '?', name: x.name ?? x.id ?? 'Source', region: x.region ?? '', domain: '', kind: '', lean: null, about: '' };
+}
+const LEAN_WORDS: [number, string][] = [[-1.75, 'left'], [-0.75, 'centre-left'], [-0.3, 'centre, leaning left'], [0.3, 'centre'], [0.75, 'centre, leaning right'], [1.75, 'centre-right'], [3, 'right']];
+export const leanWord = (l: number | null) => (l === null ? 'not a political outlet' : LEAN_WORDS.find(([m]) => l < m)?.[1] ?? 'right');
+export const KIND_WORD: Record<string, string> = { public: 'public broadcaster', 'state-funded': 'state-funded', independent: 'independent', commercial: 'commercial', agency: 'agency', journal: 'journal', cooperative: 'reader-owned', curious: 'curiosities', long: 'long reads', article: 'articles' };
+
+/** the share of the outlets on each side, for the "who covers this" bar */
+export function coverage(d: Daily, s: Story) {
+  const o = s.sources.map((x) => outletOf(d, x)).filter((x) => x.lean !== null);
+  const left = o.filter((x) => x.lean! < -0.4).length;
+  const right = o.filter((x) => x.lean! > 0.4).length;
+  return { left, right, centre: o.length - left - right, total: o.length };
 }

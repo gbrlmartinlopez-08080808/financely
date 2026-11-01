@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         IncomingPlugin.setLaunchIntent(getIntent());
+        registerPlugin(IconPlugin.class);
         registerPlugin(IncomingPlugin.class);
         registerPlugin(ListenPlugin.class);
         registerPlugin(WidgetPlugin.class);
