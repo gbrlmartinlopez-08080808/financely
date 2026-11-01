@@ -10,7 +10,7 @@ import { ConfirmSheet } from '../ui/Confirm';
 import { LiquidIntro, LiquidStatus, ViewButton } from './LiquidStatus';
 import { foldSources } from './sources';
 import { openCached } from '../lib/pdfCache';
-import { Scrub } from './Scrub';
+import { EdgeScrub, Scrub } from './Scrub';
 import { FrEditor } from './FrEditor';
 import { goPage, pageCount, pageIndex, usePager } from './paged';
 import { Icon, TypeGlyph } from '../ui/Icon';
@@ -30,12 +30,25 @@ import { fontById } from '../lib/fonts';
 import { guessLang } from '../lib/tts';
 
 
+/** The first piece of text on screen (what the eye is on), in either way of reading. */
+function firstSeen(flow: HTMLElement | null, sc: HTMLElement | null, wasPaged: boolean): HTMLElement | null {
+  if (!flow || !sc) return null;
+  const sr = sc.getBoundingClientRect();
+  const W = sr.width;
+  for (const el of Array.from(flow.querySelectorAll<HTMLElement>('p, li, h1, h2, h3, h4, blockquote, figure'))) {
+    const r = el.getBoundingClientRect();
+    if (!r.width && !r.height) continue;
+    if (wasPaged ? r.right > sr.left + 8 && r.left < sr.left + W * 0.85 && r.bottom > sr.top + 70 : r.bottom > sr.top + 60) return el;
+  }
+  return null;
+}
+
 const AUTO_MARK_MS = 120_000; // read for two minutes in total and the app keeps your place
 
 /** Hyphenation follows the book's own language (not English by default), once there is enough text to tell. */
 function bookLang(root: HTMLElement) {
   if (root.dataset.lang) return;
-  const sample = (root.textContent ?? '').slice(0, 2400);
+  const sample = root.textContent ?? '';
   if (sample.length > 300) root.lang = root.dataset.lang = guessLang(sample).slice(0, 2);
 }
 
@@ -560,7 +573,10 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
   const progT = useRef(0);
   const setProg = useCallback((p: number) => {
     progRef.current = p;
-    if (barRef.current) barRef.current.style.width = `${(p * 100).toFixed(1)}%`;
+    if (barRef.current) {
+      barRef.current.style.width = `${(p * 100).toFixed(1)}%`;
+      barRef.current.parentElement?.style.setProperty('--p', p.toFixed(4));
+    }
     clearTimeout(progT.current);
     progT.current = window.setTimeout(() => setProgress(p), 400);
   }, []);
@@ -1022,6 +1038,38 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
   };
 
   usePager(scroller, paged);
+
+  // ---- switching between scrolling and turning pages keeps the reader on the same words, and fades instead of jumping
+  const wasPaged = useRef(paged);
+  const swapAnchor = useRef<HTMLElement | null>(null);
+  if (wasPaged.current !== paged) {
+    // (the page is still drawn the old way while this renders: remember what the eye is on)
+    swapAnchor.current = firstSeen(flowRef.current, scroller, wasPaged.current);
+    wasPaged.current = paged;
+  }
+  useLayoutEffect(() => {
+    const el = swapAnchor.current;
+    swapAnchor.current = null;
+    if (!el || !scroller || !el.isConnected) return;
+    const place = () => {
+      const r = el.getBoundingClientRect();
+      const sr = scroller.getBoundingClientRect();
+      if (paged) goPage(scroller, Math.max(0, Math.floor((r.left - sr.left + scroller.scrollLeft + 6) / Math.max(1, scroller.clientWidth))), false);
+      else scroller.scrollTop += r.top - sr.top - 80;
+    };
+    place();
+    requestAnimationFrame(place);
+    if (!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) scroller.animate([{ opacity: 0, transform: 'scale(0.985)' }, { opacity: 1, transform: 'none' }], { duration: 280, easing: 'cubic-bezier(.2,.8,.2,1)' });
+  }, [paged]); // eslint-disable-line react-hooks/exhaustive-deps
+  const toggleLayout = () => {
+    tap('select');
+    const next = !settings.pageFlip;
+    updateSettings({ pageFlip: next });
+    toast(next ? 'Turning pages' : 'Scrolling');
+  };
+  useLayoutEffect(() => {
+    barRef.current?.parentElement?.style.setProperty('--p', String(doc.progress));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // a Frogity note: written here (and on the computer)
   const [writing, setWriting] = useState(false);
   useEffect(() => {
@@ -1069,6 +1117,47 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
       document.querySelector('.reader')?.classList.remove('scrubbing');
     };
   }, []);
+
+  // ---------------------------------------------------------------- the position bar (in the dock, and on the edge when the dock is tucked away)
+  const barValue = isPdf && !liquid ? (page - 1) / Math.max(1, (doc.pages ?? 1) - 1) : progress;
+  const barLabel = (v: number) => {
+    if (isPdf && !liquid) return `Page ${Math.round(v * Math.max(1, (doc.pages ?? 1) - 1)) + 1} of ${doc.pages ?? '?'}`;
+    const left = Math.max(1, Math.round((words * (1 - v)) / settings.wpm));
+    // a Liquid view of a PDF: which page that spot belongs to
+    const pg = (() => {
+      if (!scroller || !isPdf) return '';
+      let n = '';
+      if (paged) {
+        const target = Math.round(v * (pageCount(scroller) - 1)) * scroller.clientWidth;
+        for (const el of Array.from(flowRef.current?.querySelectorAll<HTMLElement>('.pg[data-page]') ?? [])) {
+          if (el.offsetLeft - scroller.clientWidth * 0.2 > target + scroller.clientWidth) break;
+          n = el.dataset.page ?? n;
+        }
+      } else {
+        const y = v * (scroller.scrollHeight - scroller.clientHeight);
+        for (const el of Array.from(flowRef.current?.querySelectorAll<HTMLElement>('.pg[data-page]') ?? [])) {
+          if (el.offsetTop > y + 40) break;
+          n = el.dataset.page ?? n;
+        }
+      }
+      return n ? `page ${n} · ` : '';
+    })();
+    const here = paged && scroller ? ` · ${Math.round(v * (pageCount(scroller) - 1)) + 1}/${pageCount(scroller)}` : '';
+    return `${pg}${Math.round(v * 100)}% · ${left} min left${here}`;
+  };
+  const barChange = (v: number, final: boolean) => {
+    if (isPdf && !liquid) {
+      const n = Math.round(v * Math.max(1, (doc.pages ?? 1) - 1)) + 1;
+      if (final || n !== page) pdfRef.current?.goTo(n);
+    } else if (scroller && paged) {
+      goPage(scroller, Math.round(v * (pageCount(scroller) - 1)), false);
+      if (final) setProgress(v);
+    } else if (scroller) {
+      scroller.scrollTop = v * (scroller.scrollHeight - scroller.clientHeight);
+      if (final) setProgress(v);
+    }
+  };
+  const barOk = (liquid || isPdf) && content?.type !== 'sheet' && content?.type !== 'image';
 
   // ---------------------------------------------------------------- derived
   const words = useMemo(() => {
@@ -1245,6 +1334,8 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
 
       {liquid && <div className="r-fade" style={{ opacity: chrome || listen ? 1 : 0.55 }} />}
 
+      {!listen && !chrome && barOk && find === null && <EdgeScrub vertical={!paged} ariaLabel="Position in the book" label={barLabel} onChange={barChange} />}
+
       <div className={`r-dock${chrome || listen ? '' : ' hide'}`}>
         {form && !offerGone && !formOpen && (
           <div className="form-offer" role="status">
@@ -1287,40 +1378,7 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
             <ListenBar root={flowRef.current} scroller={scroller} startAt={listenFrom} onPlaying={setListening} docId={id} title={doc.name} coverId={doc.coverId} key={flowReady} />
           </div>
         )}
-        {!listen && (liquid || isPdf) && content?.type !== 'sheet' && content?.type !== 'image' && (
-          <Scrub
-            ariaLabel="Position in the book"
-            value={isPdf && !liquid ? ((page - 1) / Math.max(1, (doc.pages ?? 1) - 1)) : progress}
-            label={(v) => {
-              if (isPdf && !liquid) return `Page ${Math.round(v * Math.max(1, (doc.pages ?? 1) - 1)) + 1} of ${doc.pages ?? '?'}`;
-              const left = Math.max(1, Math.round((words * (1 - v)) / settings.wpm));
-              // a Liquid view of a PDF: which page that spot belongs to
-              const pg = (() => {
-                if (!scroller || !isPdf) return '';
-                const y = v * (scroller.scrollHeight - scroller.clientHeight);
-                let n = '';
-                for (const el of Array.from(flowRef.current?.querySelectorAll<HTMLElement>('.pg[data-page]') ?? [])) {
-                  if (el.offsetTop > y + 40) break;
-                  n = el.dataset.page ?? n;
-                }
-                return n ? `page ${n} · ` : '';
-              })();
-              return `${pg}${Math.round(v * 100)}% · ${left} min left`;
-            }}
-            onChange={(v, final) => {
-              if (isPdf && !liquid) {
-                const n = Math.round(v * Math.max(1, (doc.pages ?? 1) - 1)) + 1;
-                if (final || n !== page) pdfRef.current?.goTo(n);
-              } else if (scroller && paged) {
-                goPage(scroller, Math.round(v * (pageCount(scroller) - 1)), final);
-                if (final) setProgress(v);
-              } else if (scroller) {
-                scroller.scrollTop = v * (scroller.scrollHeight - scroller.clientHeight);
-                if (final) setProgress(v);
-              }
-            }}
-          />
-        )}
+        {!listen && barOk && <Scrub ariaLabel="Position in the book" value={barValue} label={barLabel} onChange={barChange} />}
         <div className="r-dock-row compact">
           <button className="timechip" onClick={() => setClockMode((m) => (m === 'time' ? 'left' : 'time'))} aria-label="Clock / time left">
             <Icon name="clock" size={15} />
@@ -1337,6 +1395,11 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
               ]}
             />
           ) : null}
+          {(liquid || !isPdf) && barOk && (
+            <button className="pill round sm" onClick={toggleLayout} aria-label={paged ? 'Turning pages — switch to scrolling' : 'Scrolling — switch to turning pages'}>
+              <Icon name={paged ? 'book' : 'scrollv'} size={20} />
+            </button>
+          )}
           <button className="pill round sm" onClick={cycleTheme} onContextMenu={(e) => (e.preventDefault(), setSheet('type'))} aria-label="Theme">
             <Icon name={dark ? 'moon' : 'sun'} size={20} />
           </button>

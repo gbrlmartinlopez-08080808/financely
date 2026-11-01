@@ -1479,3 +1479,222 @@
 .ask-quota.low {
   color: #c4351f;
 }
+
+/* ------------------------------------------------------------------ the player (Listen), redrawn
+   One calm card: what is happening, a bar you can see and grab, the controls on one even row, four small switches. */
+.listen {
+  --scrub-ring: #111;
+  --scrub-ink: #f3f2ef;
+  padding: 14px 16px 12px;
+  border-radius: 28px;
+}
+.reader[data-dark='1'] .listen {
+  --scrub-ring: #e9e8e4;
+  --scrub-ink: #111;
+}
+.listen-top {
+  gap: 8px;
+  padding: 0 4px;
+  opacity: 0.85;
+}
+.listen-top .grow {
+  font-size: 12px;
+}
+.listen .scrub {
+  color: var(--scrub-ink);
+  padding: 14px 4px 6px;
+  margin: 0;
+}
+.listen .scrub-track {
+  height: 4px;
+  background: color-mix(in srgb, var(--scrub-ink) 24%, transparent);
+}
+.listen .scrub-fill {
+  background: var(--scrub-ink);
+}
+.listen .scrub-thumb {
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  background: var(--scrub-ink);
+  box-shadow: 0 0 0 4px var(--scrub-ring);
+}
+.listen .scrub-tip {
+  background: var(--scrub-ink);
+  color: var(--scrub-ring);
+  bottom: 22px;
+}
+.listen-times {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 4px;
+  font-size: 10.5px;
+  opacity: 0.5;
+  font-variant-numeric: tabular-nums;
+}
+.listen-ctrl {
+  justify-content: space-between;
+  gap: 4px;
+  margin: 6px 6px 2px;
+}
+.listen-ctrl .big {
+  width: 60px;
+  height: 60px;
+  flex: none;
+}
+.listen-ctrl .sm {
+  width: 46px;
+  height: 46px;
+  flex: none;
+  opacity: 0.9;
+}
+.listen-chips {
+  gap: 2px;
+  margin-top: 8px;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+}
+.listen-chips button {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
+  height: 36px;
+  padding: 0 6px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.listen-chips button small {
+  font-size: 9.5px;
+  opacity: 0.55;
+  margin-left: -2px;
+  letter-spacing: 0.02em;
+}
+
+/* the scrub bar of the book itself, in the dock */
+.r-dock > .scrub {
+  padding-top: 12px;
+}
+.scrub-thumb {
+  box-shadow: 0 0 0 3px var(--scrub-ring, var(--r-bg));
+}
+
+/* ------------------------------------------------------------------ the bar that is always there
+   When the controls are tucked away: a thin rail on the right edge (scrolling) or along the bottom (pages). */
+.edge {
+  position: absolute;
+  z-index: 11;
+  pointer-events: none;
+  color: var(--r-ink);
+}
+.edge.v {
+  right: 0;
+  top: calc(var(--safe-t) + 64px);
+  bottom: calc(var(--safe-b) + 28px);
+  width: 30px;
+}
+.edge.h {
+  left: 0;
+  right: 0;
+  bottom: calc(var(--safe-b) + 4px);
+  height: 30px;
+}
+.edge-line {
+  position: absolute;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 2px;
+  transition: opacity 0.25s;
+}
+.edge.v .edge-line {
+  right: 6px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+}
+.edge.h .edge-line {
+  left: 22px;
+  right: 22px;
+  bottom: 12px;
+  height: 3px;
+}
+.edge-thumb {
+  position: absolute;
+  border-radius: 3px;
+  background: currentColor;
+  opacity: 0.38;
+  transition: opacity 0.25s, transform 0.15s var(--ease);
+}
+.edge.v .edge-thumb {
+  right: 5px;
+  width: 5px;
+  height: 52px;
+  top: calc(var(--p, 0) * (100% - 52px));
+}
+.edge.h .edge-thumb {
+  bottom: 10px;
+  height: 7px;
+  width: 52px;
+  left: calc(22px + var(--p, 0) * (100% - 44px - 52px));
+}
+.edge-hit {
+  position: absolute;
+  pointer-events: auto;
+  touch-action: none;
+}
+.edge.v .edge-hit {
+  right: 0;
+  width: 34px;
+  height: 84px;
+  top: calc(var(--p, 0) * (100% - 52px) - 16px);
+}
+.edge.h .edge-hit {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 30px;
+}
+.edge.held .edge-hit {
+  top: 0;
+  height: 100%;
+  width: 90px;
+}
+.edge.held .edge-thumb {
+  opacity: 0.95;
+  transform: scale(1.18);
+}
+.edge.held .edge-line {
+  opacity: 1;
+}
+.edge .scrub-tip {
+  position: absolute;
+  pointer-events: none;
+}
+.edge.v .scrub-tip {
+  right: 24px;
+  bottom: auto;
+  transform: translateY(-50%);
+  top: calc(26px + var(--p, 0) * (100% - 52px));
+}
+.edge.h .scrub-tip {
+  bottom: 30px;
+  transform: translateX(-50%);
+  left: calc(22px + var(--p, 0) * (100% - 44px));
+}
+.reader.scrubbing .edge {
+  opacity: 1 !important;
+}
+
+/* a quick switch between scrolling and turning pages: a small icon button in the dock */
+.r-dock .pill.round.sm {
+  width: 40px;
+  height: 40px;
+}
+.r-dock-row.compact {
+  gap: 6px;
+}
+.timechip {
+  padding: 0 11px;
+  gap: 5px;
+}
+.listen-chips button:last-child {
+  flex: 0 0 56px;
+}

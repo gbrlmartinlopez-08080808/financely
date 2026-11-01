@@ -1613,3 +1613,62 @@
 .fr-bar button:active {
   background: var(--line, rgba(128, 128, 128, 0.2));
 }
+
+/* ------------------------------------------------------------------ the page curl (see reader/paged.ts) */
+.reader {
+  --curl-back: color-mix(in srgb, var(--r-bg) 96%, var(--r-ink) 4%);
+}
+.pg-pad {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+  visibility: hidden;
+}
+.curl {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  overflow: hidden;
+  pointer-events: none;
+  visibility: hidden;
+}
+.curl[data-on] {
+  visibility: visible;
+}
+.curl-front,
+.curl-under,
+.curl-flapwrap,
+.curl-flap {
+  position: absolute;
+  inset: 0;
+  will-change: clip-path, transform;
+}
+.curl-front {
+  background: var(--r-bg);
+}
+.curl-front .leaf {
+  position: absolute;
+  inset: 0;
+  visibility: visible;
+}
+.curl-under,
+.curl-flapwrap {
+  display: none;
+}
+.curl-flapwrap {
+  filter: drop-shadow(-6px 2px 9px rgba(0, 0, 0, 0.3));
+}
+.curl-flap {
+  transform-origin: 0 0;
+}
+/* a copy of the text must not look selected, listen, or react */
+.curl .flow {
+  pointer-events: none;
+  user-select: none;
+}
+/* no more strip down the side: the curl draws its own shadows */
+.reader-scroll.paged.flipping::after {
+  display: none;
+}

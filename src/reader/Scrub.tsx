@@ -71,3 +71,63 @@ export function Scrub({ value, label, onChange, className = '', ariaLabel }: { v
     </div>
   );
 }
+
+/**
+ * The same bar, for when the controls are tucked away: a slim rail on the right edge while scrolling, along the bottom
+ * while turning pages. It is only grabbed where the handle is (so scrolling and swiping are never in its way), and a label
+ * says where the finger would land. `value` follows the page through the CSS variable `--p` (set on the reader), so it
+ * never makes the reader redraw.
+ */
+export function EdgeScrub({ vertical, label, onChange, ariaLabel }: { vertical: boolean; label: (v: number) => string; onChange: (v: number, final: boolean) => void; ariaLabel: string }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [held, setHeld] = useState<number | null>(null);
+  const last = useRef(0);
+  const at = (e: React.PointerEvent) => {
+    const r = box.current!.getBoundingClientRect();
+    const t = 52;
+    return vertical ? Math.max(0, Math.min(1, (e.clientY - r.top - t / 2) / Math.max(1, r.height - t))) : Math.max(0, Math.min(1, (e.clientX - r.left - 22 - t / 2) / Math.max(1, r.width - 44 - t)));
+  };
+  const style = held !== null ? ({ ['--p' as string]: held } as React.CSSProperties) : undefined;
+  return (
+    <div ref={box} className={`edge ${vertical ? 'v' : 'h'}${held !== null ? ' held' : ''}`} style={style}>
+      <i className="edge-line" />
+      <b className="edge-thumb" />
+      <div
+        className="edge-hit"
+        role="slider"
+        aria-label={ariaLabel}
+        aria-valuetext={label(held ?? 0)}
+        onPointerDown={(e) => {
+          e.currentTarget.setPointerCapture(e.pointerId);
+          const x = at(e);
+          setHeld(x);
+          tap('select');
+          window.dispatchEvent(new CustomEvent('frogity:scrub', { detail: true }));
+          onChange(x, false);
+        }}
+        onPointerMove={(e) => {
+          if (held === null) return;
+          const x = at(e);
+          setHeld(x);
+          const now = performance.now();
+          if (now - last.current > 90) {
+            last.current = now;
+            onChange(x, false);
+          }
+        }}
+        onPointerUp={(e) => {
+          if (held === null) return;
+          const x = at(e);
+          setHeld(null);
+          window.dispatchEvent(new CustomEvent('frogity:scrub', { detail: false }));
+          onChange(x, true);
+        }}
+        onPointerCancel={() => {
+          setHeld(null);
+          window.dispatchEvent(new CustomEvent('frogity:scrub', { detail: false }));
+        }}
+      />
+      {held !== null && <span className="scrub-tip mono">{label(held)}</span>}
+    </div>
+  );
+}

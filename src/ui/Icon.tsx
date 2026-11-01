@@ -35,6 +35,7 @@ const P: Record<string, string> = {
   edit: 'M4 20h4L19 9l-4-4L4 16z',
   convert: 'M4 8h13l-3-3M20 16H7l3 3',
   scan: 'M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16',
+  scrollv: 'M12 3v18M8 7l4-4 4 4M8 17l4 4 4-4',
   book: 'M4 5a2 2 0 0 1 2-2h13v15H6a2 2 0 0 0-2 2zM4 20a2 2 0 0 0 2 1h13',
   zoomIn: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-3.5-3.5M11 8v6M8 11h6',
   zoomOut: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-3.5-3.5M8 11h6',

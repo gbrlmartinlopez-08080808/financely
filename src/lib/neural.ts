@@ -214,7 +214,17 @@ export class NeuralEngine {
     }
   }
   say(text: string, rate: number) {
-    return this.call<{ samples: Float32Array; rate: number }>({ type: 'say', text, rate });
+    const job = this.call<{ samples: Float32Array; rate: number }>({ type: 'say', text, rate });
+    // a piece that takes this long means the engine is stuck (a phone short of memory, a worker that died quietly):
+    // start the engine afresh and say so, instead of waiting for ever
+    let timer = 0;
+    const limit = new Promise<never>((_, no) => {
+      timer = window.setTimeout(() => {
+        this.dispose();
+        no(new Error('the voice engine stopped answering'));
+      }, Math.max(25_000, text.length * 400));
+    });
+    return Promise.race([job, limit]).finally(() => clearTimeout(timer));
   }
   /** Stops at once: sentences waiting are dropped (the one being made finishes, and its result is ignored). */
   cancel() {
@@ -262,12 +272,23 @@ export class NeuralPlayer {
   private heldSecs = 0;
   private released = false;
   private born = performance.now();
+  private paused = false; // we stopped the clock on purpose (waiting for the next piece)
+  private watch = 0;
   constructor(
     private tempo = 1,
     private prebuffer = 1.4, // seconds of speech to have in hand before starting, so the first words never run dry
   ) {
     this.ctx.resume().catch(() => {});
+    // the phone may stop the audio clock by itself (an incoming call, another app, the screen going off): start it again
+    const wake = () => {
+      if (!this.paused && this.ctx.state !== 'running' && this.ctx.state !== 'closed') this.ctx.resume().catch(() => {});
+    };
+    this.ctx.onstatechange = wake;
+    this.watch = window.setInterval(wake, 800);
+    document.addEventListener('visibilitychange', wake);
+    this.dropWake = () => document.removeEventListener('visibilitychange', wake);
   }
+  private dropWake = () => {};
   /** seconds of speech that are scheduled but not yet heard */
   ahead() {
     return Math.max(0, this.nextAt - this.ctx.currentTime);
@@ -335,9 +356,11 @@ export class NeuralPlayer {
   }
   /** Wait: the clock stops (nothing is heard) until `unhold`; what is placed meanwhile plays right after. */
   hold() {
+    this.paused = true;
     this.ctx.suspend().catch(() => {});
   }
   unhold() {
+    this.paused = false;
     this.ctx.resume().catch(() => {});
   }
   /** nothing at all was voiced */
@@ -372,6 +395,9 @@ export class NeuralPlayer {
     });
     this.srcs = [];
     this.slots = [];
+    clearInterval(this.watch);
+    this.dropWake();
+    this.ctx.onstatechange = null;
     this.ctx.close().catch(() => {});
   }
 }
