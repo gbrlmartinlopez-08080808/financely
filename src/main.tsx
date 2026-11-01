@@ -4,6 +4,7 @@ import './styles/fonts.css';
 import './styles/reader.css';
 import './styles/ui.css';
 import './styles/overlays.css';
+import './styles/interesting.css';
 import App from './App';
 
 /** Lay the interface out ~8% smaller than the device width (everything scales together). */

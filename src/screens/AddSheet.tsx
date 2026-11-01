@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pixel, PixelLoader, Sheet } from '../ui/kit';
 import { Icon } from '../ui/Icon';
+import { Art } from '../ui/Art';
 import { looksLikeUrl } from '../lib/links';
 
 type Mode = 'menu' | 'link' | 'paste';
@@ -53,6 +54,7 @@ export function AddSheet({
   return (
     <Sheet open={open} onClose={busy ? () => {} : onClose} title={mode === 'menu' ? 'Add' : mode === 'link' ? 'Save a link' : 'Paste text'} onBackBtn={mode !== 'menu' && !busy ? () => setMode('menu') : undefined}>
       <div className="sheet-body" style={{ paddingBottom: 16 }}>
+        {mode === 'menu' && <Art name="froggy:wink" className="slim" />}
         {mode === 'menu' && (
           <div className="actions">
             <button className="action" onClick={() => (onClose(), onFiles())}>

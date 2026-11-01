@@ -34,7 +34,7 @@ export function About({ open, onClose }: { open: boolean; onClose: () => void })
         <div className="section-label">your data</div>
         <p>Your library, notes, highlights and reading history live only on this phone. Frogity has no account system and no analytics.</p>
         <p>
-          The internet is used only when you ask for it: looking up a word (the word is sent to Wikipedia / Wiktionary / dictionaryapi.dev), saving a web link (the page is fetched), the optional <b>Ask</b> feature (your question and a few short excerpts go to Pollinations’ open AI service, only after you opt in), <b>Find free books</b> (your search goes to Project Gutenberg, the Internet Archive, arXiv, Google Books or Open Library, and the file you choose is downloaded), and the one-time download of a <b>studio voice</b> (from Hugging Face, with its speech engine from jsDelivr and cdnjs; after that it runs offline on the phone).
+          The internet is used only when you ask for it: opening the <b>Interesting</b> tab (one small shared file with the day’s news, a figure, a picture and an article is downloaded — it holds nothing about you), looking up a word (the word is sent to Wikipedia / Wiktionary / dictionaryapi.dev), saving a web link (the page is fetched), the optional <b>Froggy</b> feature (your question and a few short excerpts go to Pollinations’ open AI service, only after you opt in), <b>Find free books</b> (your search goes to Project Gutenberg, the Internet Archive, arXiv, Google Books or Open Library, and the file you choose is downloaded), and the one-time download of a <b>studio voice</b> (from Hugging Face, with its speech engine from jsDelivr and cdnjs; after that it runs offline on the phone).
         </p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="pill sm ghost" onClick={() => openExternal(PRIVACY_URL)}>
@@ -46,7 +46,7 @@ export function About({ open, onClose }: { open: boolean; onClose: () => void })
         </div>
 
         <div className="section-label">fair use</div>
-        <p>Everything in Frogity is free. The shared free AI service is rate-limited, so Ask is capped at 30 questions a day on this phone (it resets at midnight). Everything else — reading, listening, OCR, lookups, books, voices — has no limit set by Frogity.</p>
+        <p>Everything in Frogity is free. The shared free AI service is rate-limited, so Froggy is capped at 30 questions a day on this phone (it resets at midnight). Everything else — reading, listening, OCR, lookups, books, voices — has no limit set by Frogity.</p>
 
         <div className="section-label">sources</div>
         <p>

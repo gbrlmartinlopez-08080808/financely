@@ -45,11 +45,17 @@ async function cached<T>(key: string, fn: () => Promise<T>): Promise<T> {
   return v;
 }
 
+const LIG: Record<string, string> = { '\ufb00': 'ff', '\ufb01': 'fi', '\ufb02': 'fl', '\ufb03': 'ffi', '\ufb04': 'ffl' };
+/** The word as a dictionary spells it: no soft hyphens, ligature glyphs, curly quotes or the punctuation next to it. */
 export const normalizeWord = (w: string) =>
   w
+    .normalize('NFC')
+    .replace(/[\ufb00-\ufb04]/g, (c) => LIG[c] ?? c)
+    .replace(/\u00ad/g, '')
+    .replace(/[’‘`´]/g, "'")
     .trim()
     .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '')
-    .replace(/[’']s$/i, '');
+    .replace(/'s$/i, '');
 
 const stripTags = (h: string) => {
   const d = new DOMParser().parseFromString(h, 'text/html');
@@ -58,10 +64,25 @@ const stripTags = (h: string) => {
 };
 
 /** "running" → running, run; "studies" → studies, study, studie … (tried in order) */
-function variants(w: string): string[] {
+function variants(w: string, lang = 'en'): string[] {
   const lw = w.toLowerCase();
   const out = [lw];
   const add = (x: string) => x.length > 2 && !out.includes(x) && out.push(x);
+  if (lang !== 'en') {
+    // other languages: plurals, feminine forms, common verb endings, and the word without its accents' variants
+    if (lw.endsWith('s')) add(lw.slice(0, -1));
+    if (lw.endsWith('es')) add(lw.slice(0, -2));
+    if (lw.endsWith('x')) add(lw.slice(0, -1));
+    if (lw.endsWith('a') || lw.endsWith('as')) add(lw.replace(/as?$/, 'o'));
+    if (lw.endsWith('e') && lang === 'fr') add(lw.slice(0, -1));
+    if (/(ando|iendo|ado|ido)$/.test(lw)) add(lw.replace(/(ando|ado)$/, 'ar').replace(/(iendo|ido)$/, 'er'));
+    if (/(ent|ons|ez)$/.test(lw) && lang === 'fr') add(lw.replace(/(ent|ons|ez)$/, 'er'));
+    if (/(en|te|st|t)$/.test(lw) && lang === 'de') add(lw.replace(/(en|te|st|t)$/, 'en'));
+    if (/(er|e)$/.test(lw) && lang === 'de') add(lw.replace(/e$/, ''));
+    if (lw.includes('-')) lw.split('-').forEach(add);
+    return out;
+  }
+  if (lw.includes('-')) lw.split('-').forEach(add);
   if (lw.endsWith('ies')) add(lw.slice(0, -3) + 'y');
   if (lw.endsWith('es')) add(lw.slice(0, -2));
   if (lw.endsWith('s')) add(lw.slice(0, -1));
@@ -80,8 +101,10 @@ function variants(w: string): string[] {
   return out;
 }
 
-async function fromDictionaryApi(w: string): Promise<Definition | null> {
-  const r = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(w)}`);
+const DICT_LANGS = new Set(['en', 'es', 'fr', 'de', 'it', 'ru', 'tr', 'ko', 'ja', 'hi', 'ar']);
+async function fromDictionaryApi(w: string, lang = 'en'): Promise<Definition | null> {
+  if (!DICT_LANGS.has(lang)) return null;
+  const r = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/${lang}/${encodeURIComponent(w)}`);
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`dictionary ${r.status}`);
   const data = (await r.json()) as {
@@ -108,12 +131,13 @@ async function fromDictionaryApi(w: string): Promise<Definition | null> {
   };
 }
 
-async function fromWiktionary(w: string): Promise<Definition | null> {
+async function fromWiktionary(w: string, lang = 'en'): Promise<Definition | null> {
   const r = await fetch(`https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(w)}`, { headers: HDRS });
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`wiktionary ${r.status}`);
-  const j = (await r.json()) as { en?: { partOfSpeech: string; definitions: { definition: string; examples?: string[] }[] }[] };
-  const en = j.en;
+  const j = (await r.json()) as Record<string, { partOfSpeech: string; definitions: { definition: string; examples?: string[] }[] }[]>;
+  // the book's own language first; otherwise English, otherwise whatever language the word belongs to
+  const en = j[lang] ?? j.en ?? Object.values(j)[0];
   if (!en?.length) return null;
   const meanings = en
     .map((e) => ({
@@ -128,11 +152,11 @@ async function fromWiktionary(w: string): Promise<Definition | null> {
   return meanings.length ? { word: w, meanings, source: 'Wiktionary' } : null;
 }
 
-export async function define(word: string): Promise<Definition | null> {
-  return cached('def:' + word.toLowerCase(), async () => {
+export async function define(word: string, lang = 'en'): Promise<Definition | null> {
+  return cached(`def:${lang}:` + word.toLowerCase(), async () => {
     let failure: unknown = null;
-    for (const v of variants(word)) {
-      for (const src of [fromDictionaryApi, fromWiktionary]) {
+    for (const v of variants(word, lang)) {
+      for (const src of [(x: string) => fromDictionaryApi(x, lang), (x: string) => fromWiktionary(x, lang)]) {
         try {
           const d = await src(v);
           if (d) return d;
@@ -140,6 +164,11 @@ export async function define(word: string): Promise<Definition | null> {
           failure = e;
         }
       }
+    }
+    // a word the book borrowed from English (or the reverse): the other dictionary may know it
+    if (lang !== 'en') {
+      const d = await fromWiktionary(word.toLowerCase(), 'en').catch(() => null);
+      if (d) return d;
     }
     if (failure) throw failure;
     return null;

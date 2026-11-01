@@ -8,7 +8,7 @@ import { PixelLoader } from '../ui/kit';
 
 type Tab = 'define' | 'origin' | 'wiki';
 
-export function LookupCard({ word, onClose }: { word: string | null; onClose: () => void }) {
+export function LookupCard({ word, lang = 'en', onClose }: { word: string | null; lang?: string; onClose: () => void }) {
   const w = word ? normalizeWord(word) : '';
   const [tab, setTab] = useState<Tab>('define');
   const [def, setDef] = useState<Definition | null | undefined>();
@@ -33,10 +33,10 @@ export function LookupCard({ word, onClose }: { word: string | null; onClose: ()
     setTab(multi ? 'wiki' : 'define');
     setFailed({ define: false, origin: false, wiki: false });
     const fail = (t: Tab) => () => setFailed((f) => ({ ...f, [t]: true }));
-    define(w).then(setDef, () => (setDef(null), fail('define')()));
+    define(w, lang).then(setDef, () => (setDef(null), fail('define')()));
     origin(w).then(setEty, () => (setEty(null), fail('origin')()));
     wiki(w).then(setWk, () => (setWk(null), fail('wiki')()));
-  }, [w, attempt]);
+  }, [w, attempt, lang]);
 
   // If there's no dictionary entry but Wikipedia knows it, lead with Wikipedia.
   useEffect(() => {

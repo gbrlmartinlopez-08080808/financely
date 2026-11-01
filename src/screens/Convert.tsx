@@ -1,3 +1,4 @@
+import { Art } from '../ui/Art';
 import { useEffect, useState } from 'react';
 import type { DocMeta } from '../lib/types';
 import { getFile, importFile, loadContent } from '../lib/library';
@@ -134,6 +135,7 @@ export function ConvertSheet({ doc, root, onClose, onOpenDoc }: { doc: DocMeta |
   return (
     <Sheet open={!!doc} onClose={onClose} title="Convert">
       <div className="sheet-body" style={{ paddingBottom: 16 }}>
+        <Art name="convert" />
         <div className="mono muted" style={{ fontSize: 12, textAlign: 'center', margin: '-4px 0 16px' }}>
           {doc.fileName}
         </div>

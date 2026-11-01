@@ -289,7 +289,7 @@ const STEPS: StepDef[] = [
   { id: 'liquid', title: () => 'Liquid mode keeps the maths.', body: () => 'Two-column papers become one calm column that fits your phone. Equations stay crisp. Flip back to the original page any time.', cta: 'Next' },
   { id: 'listen', title: () => 'Let it read to you.', body: () => 'Tap Listen and the page is read aloud in your phone’s voices, at your pace, sentence by sentence.', cta: 'Next' },
   { id: 'lookup', title: () => 'Press a word. Know it.', body: () => 'Hold any word for its meaning, origin, Wikipedia entry and pictures — in a card, without leaving the page.', cta: 'Next' },
-  { id: 'ask', title: () => 'Questions, scans, conversions.', body: () => 'Ask your document anything (free, optional, only with your OK). Scan paper with OCR. Convert to other formats.', cta: 'Next' },
+  { id: 'ask', title: () => 'Meet Froggy.', body: () => 'Ask your document anything — Froggy answers (free, optional, only with your OK). Scan paper with OCR, convert to other formats, and find something new every day in Interesting.', cta: 'Next' },
   { id: 'streak', title: (n) => (n ? `${n}, let’s keep a quiet streak.` : 'Let’s keep a quiet streak.'), body: () => 'Reach your daily goal and a place lights up on your globe at midnight — and a yellow @ appears in your calendar. Fall short and nothing shouts; any minute still keeps the streak alive.', cta: 'Sounds good' },
   {
     id: 'goal',

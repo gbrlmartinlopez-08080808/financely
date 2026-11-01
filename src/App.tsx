@@ -11,6 +11,7 @@ import { Reader } from './reader/Reader';
 import { StatsBubble } from './screens/Stats';
 import { AddSheet } from './screens/AddSheet';
 import { Discover } from './screens/Discover';
+import { Interesting } from './screens/Interesting';
 import { JobsHost } from './screens/ScanBadge';
 import { resumeScans } from './lib/scan';
 import { prefetch as prefetchCatalog } from './lib/catalog';
@@ -60,7 +61,8 @@ export default function App() {
   const [scanFiles, setScanFiles] = useState<File[] | null>(null);
   const [importing, setImporting] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [discover, setDiscover] = useState(false);
+  const [discover, setDiscover] = useState<false | { q?: string }>(false);
+  const [interesting, setInteresting] = useState(false);
   const [linkBusy, setLinkBusy] = useState<string | null>(null);
   const [linkErr, setLinkErr] = useState<string | null>(null);
   const fileIn = useRef<HTMLInputElement>(null);
@@ -302,7 +304,7 @@ export default function App() {
   }, [ready, onboarded]);
 
   // after the first streak milestone (3 days) ask, once, how it's going — and offer a freeze day for feedback
-  const idle = !openId && !stats && !settings && !addOpen && !discover && !convert && !scanFiles;
+  const idle = !openId && !stats && !settings && !addOpen && !discover && !interesting && !convert && !scanFiles;
   useEffect(() => {
     if (!ready || !onboarded || !idle || rate || tour) return;
     let alive = true;
@@ -411,7 +413,8 @@ export default function App() {
         onStats={() => setStats(true)}
         onSettings={() => setSettings(true)}
         onConvert={(doc) => setConvert({ doc })}
-        onDiscover={() => setDiscover(true)}
+        onDiscover={() => setDiscover({})}
+        onInteresting={() => setInteresting(true)}
         onSample={() => importFile(new Blob([welcome], { type: 'text/markdown' }), 'Welcome to Frogity.md', { title: 'Welcome to Frogity' }).then((m) => setOpenId(m.id))}
       />
       <StatsBubble open={stats} onClose={() => (setStats(false), setReward(null))} reward={reward} onRewardDone={() => {}} />
@@ -439,7 +442,7 @@ export default function App() {
         onFiles={pickFiles}
         onFolder={isNative ? pickFolder : undefined}
         onScan={() => camIn.current?.click()}
-        onDiscover={() => setDiscover(true)}
+        onDiscover={() => setDiscover({})}
         onLink={saveLink}
         onPaste={async (text, title) => {
           const m = await importText(text, title);
@@ -456,7 +459,8 @@ export default function App() {
         busy={linkBusy}
         error={linkErr}
       />
-      {discover && <Discover onClose={() => setDiscover(false)} onOpen={setOpenId} />}
+      {interesting && !openDoc && <Interesting docs={docs} onSwitch={() => setInteresting(false)} onFindBooks={(q) => setDiscover({ q })} />}
+      {discover && <Discover initial={discover.q} onClose={() => setDiscover(false)} onOpen={setOpenId} />}
       <JobsHost />
       <Toasts />
       <input

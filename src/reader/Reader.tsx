@@ -1175,7 +1175,7 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
     { id: 'edit', label: 'Edit this note', icon: 'pen', hidden: doc.kind !== 'fr' },
     { id: 'tonote', label: 'Make an editable note (Frogity)', icon: 'edit', right: 'edit anywhere', hidden: !['docx', 'odt', 'rtf', 'html', 'markdown', 'text', 'epub'].includes(doc.kind) },
     { id: 'form', label: 'Fill this form', icon: 'edit', right: form ? `${form.fields.length} fields` : undefined, hidden: !form },
-    { id: 'ask', label: 'Ask this document', icon: 'ask', right: 'free ai' },
+    { id: 'ask', label: 'Ask Froggy', icon: 'frog', right: 'free ai' },
     { id: 'bookmark', label: hereMark ? 'Remove bookmark here' : 'Bookmark this spot', icon: 'bookmark' },
     { id: 'mode', label: liquid ? 'Original pages' : 'Liquid view', icon: liquid ? 'page' : 'liquid', right: !liquid && liq.busy && !liq.ready ? `${Math.round(liq.progress * 100)}%` : undefined, hidden: !isPdf },
     { id: 'thumbs', label: thumbs ? 'Hide page thumbnails' : 'Page thumbnails', icon: 'sidebar', hidden: !isPdf || liquid },
@@ -1318,9 +1318,9 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
               setAskSel(undefined);
               setSheet('ask');
             }}
-            aria-label="Ask this document"
+            aria-label="Ask Froggy"
           >
-            <Icon name="ask" />
+            <Icon name="frog" />
           </button>
           {isPdf && <ViewButton active={liquid} prep={liq} onClick={() => switchMode(liquid ? 'page' : 'liquid')} />}
           <button className={`r-ibtn${hereMark ? ' on' : ''}`} onClick={addBookmark} aria-label={hereMark ? 'Remove bookmark' : 'Bookmark this spot'}>
@@ -1436,7 +1436,7 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
           clearSel();
         }}
       />
-      <LookupCard word={lookup} onClose={() => setLookup(null)} />
+      <LookupCard word={lookup} lang={flowRef.current?.dataset.lang ?? 'en'} onClose={() => setLookup(null)} />
       <ZoomViewer src={zoom?.src ?? null} mask={zoom?.mask} ratio={zoom?.ratio} onClose={() => setZoom(null)} />
 
       <TypeSheet open={sheet === 'type'} onClose={() => setSheet(null)} isPdf={isPdf} mode={mode} onMode={switchMode} prep={liq} pages={doc.pages} onRetry={() => prepareNow(doc)} />
@@ -1502,6 +1502,7 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
       <ConfirmSheet
         open={sheet === 'remove'}
         onClose={() => setSheet(null)}
+        art={doc.uri ? 'shelf' : 'bin'}
         title={doc.uri ? 'Remove from your shelf?' : 'Delete this file?'}
         body={doc.uri ? 'The file stays where it is on your phone; only its place on your shelf, with bookmarks and highlights, goes.' : 'The copy inside Frogity, with its bookmarks and highlights, is deleted. Originals you opened from other apps are untouched.'}
         names={[doc.name]}
@@ -1538,6 +1539,8 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
         open={sheet === 'ask'}
         onClose={() => setSheet(null)}
         title={doc.name}
+        docId={id}
+        lang={flowRef.current?.dataset.lang}
         getText={getDocText}
         selection={askSel}
         aiOk={settings.aiOk}

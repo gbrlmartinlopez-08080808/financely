@@ -1,3 +1,4 @@
+import { Art } from '../ui/Art';
 import { useEffect, useState } from 'react';
 import { useLiquid, useRunningJobs, type ScanJob } from '../lib/scan';
 import { askWorkFree, kindLabel, left, workFree } from '../lib/workNotice';
@@ -39,6 +40,7 @@ export function JobsHost() {
     <>
     <Sheet open={bg} onClose={() => setBg(false)} title="Keep reading with Frogity closed?">
       <div className="sheet-body" style={{ paddingBottom: 18 }}>
+        <Art name="froggy:sleepy" className="slim" />
         <p style={{ marginTop: 0 }}>
           Reading a scanned book takes a while. To save battery, your phone pauses apps you are not using — so the reading would only move on while
           Frogity is open.

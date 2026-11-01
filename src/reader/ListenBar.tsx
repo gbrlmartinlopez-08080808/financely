@@ -240,8 +240,8 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
         toast('The studio voice couldn’t start — using the phone’s voice');
         return void run(sys.at, 0);
       }
-      if (sys.done) return;
       setNote('');
+      if (sys.done) return;
       return runNeural(sys.at, my, sel, n, 0);
     }
     setNote('');

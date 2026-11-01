@@ -7,13 +7,14 @@ A calm, ad-free, paywall-free reader for Android that opens almost anything: PDF
 ## What it does
 
 - **Liquid mode for PDFs.** Reflows fixed pages into one phone-sized column. It handles two-column papers, running headers, footnotes and hyphenation. Display equations, inline fractions, tables and figures are lifted from the page as crisp masks sized in `em`, so maths keeps its exact structure, scales with your font size and follows dark themes.
-- **Listen.** Sentence-by-sentence read-aloud with highlight, speed ruler, voice picker, sleep timer and a focus mode. Uses Android's native TTS engine.
+- **Listen.** Sentence-by-sentence read-aloud with highlight, speed ruler, voice picker, reading-language detection (the voice follows the book's language), sleep timer and a focus mode. Natural studio voices or Android's native TTS engine.
 - **Look up.** Select a word and tap *Define* to get the definition, its origin (Greek and Latin roots shown as chips) and a Wikipedia card.
-- **Ask.** Free AI Q&A about the open document (opt-in; sends only your question and a few short excerpts to an open service).
+- **Froggy.** The reading companion: free AI Q&A about the open document (opt-in; sends only your question and a few short excerpts to an open service). Remembers the conversation per book, with one-tap things to ask.
+- **Interesting.** A second half of the home screen with something new every day, free and the same for everyone: news from public broadcasters worldwide as swipeable reels (each story names every outlet that reported it), a figure of the day, a fact, a picture, this day in history, and a weekly article that goes with the book you are reading. One shared file is rebuilt a few times a day by `.github/workflows/feed.yml` (`scripts/build-feed.mjs`), so it costs the same for any number of readers.
 - **Save anything.** Files, web links (saved as clean readable pages with images), pasted text and scans; sort and filter the shelf.
 - **Convert.** To PDF, TXT, Markdown, standalone HTML, PNG pages, CSV or JPEG. Photos get on-device OCR to text.
 - **Scan.** Photograph pages to get cleaned images, on-device OCR (Tesseract, bundled) and a searchable PDF.
-- **Reading kit.** Page / liquid views, pinch zoom, page thumbnails, search, contents, bookmarks, highlights, four reading themes, typography controls.
+- **Reading kit.** Page / liquid views, scrolling or real page-curl turning (one tap to switch), a position bar that is always within reach, pinch zoom, page thumbnails, search, contents, bookmarks, highlights, four reading themes, typography controls.
 - **Reading globe.** A spinning ASCII globe lights one place for every day you read; tap the plant on the library for the bubble.
 - **Fonts.** Twelve bundled typefaces; star four favourites for quick switching.
 - **Open with Frogity.** Registered for “Open with…” and the Share sheet for every file type.

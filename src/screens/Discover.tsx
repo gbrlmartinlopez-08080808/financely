@@ -5,11 +5,11 @@ import { onBack, openExternal, tap } from '../lib/native';
 import { Icon } from '../ui/Icon';
 import { PixelLoader, toast } from '../ui/kit';
 
-export function Discover({ onClose, onOpen }: { onClose: () => void; onOpen: (id: string) => void }) {
+export function Discover({ onClose, onOpen, initial }: { onClose: () => void; onOpen: (id: string) => void; initial?: string }) {
   const [source, setSource] = useState<SourceId>('books');
   const [topic, setTopic] = useState(0);
-  const [text, setText] = useState('');
-  const [q, setQ] = useState('');
+  const [text, setText] = useState(initial ?? '');
+  const [q, setQ] = useState(initial ?? '');
   const [items, setItems] = useState<Item[]>([]);
   const [next, setNext] = useState<number | undefined>();
   const [loading, setLoading] = useState(false);

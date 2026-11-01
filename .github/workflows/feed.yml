@@ -1,0 +1,29 @@
+name: Daily feed
+
+# Builds docs/feed/daily.json (the "Interesting" tab: the day's news from public broadcasters around the world, a figure,
+# a picture, an article, this day in history) a few times a day and publishes it with GitHub Pages. Every phone downloads
+# that one small file, so the cost does not grow with the number of readers.
+on:
+  schedule:
+    - cron: '17 */4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  feed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/build-feed.mjs
+      - name: Publish
+        run: |
+          mkdir -p public/feed && cp docs/feed/daily.json public/feed/daily.json
+          git config user.name "frogity-feed"
+          git config user.email "feed@users.noreply.github.com"
+          git add docs/feed/daily.json public/feed/daily.json
+          git diff --cached --quiet || (git commit -m "Daily feed" && git push)

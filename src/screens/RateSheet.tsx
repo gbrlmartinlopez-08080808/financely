@@ -3,6 +3,7 @@ import { Sheet, toast } from '../ui/kit';
 import { APP_VERSION, PLAY_URL, SUPPORT_EMAIL } from '../lib/config';
 import { grantFreeze } from '../lib/store';
 import { openExternal, tap } from '../lib/native';
+import { Art } from '../ui/Art';
 
 /**
  * Shown once, after the first streak milestone. The stars are only a mood check: the reward (a freeze day)
@@ -30,6 +31,7 @@ export function RateSheet({ open, onClose, streak }: { open: boolean; onClose: (
   return (
     <Sheet open={open} onClose={() => onClose(false)} title={`${streak} days in a row`}>
       <div className="sheet-body rate">
+        <Art name={stars === 0 ? 'froggy:happy' : stars >= 4 ? 'froggy:bigSmile' : 'froggy:worried'} />
         <p className="rate-lead">Enjoying Frogity so far?</p>
         <div className="rate-stars" role="radiogroup" aria-label="Your rating">
           {[1, 2, 3, 4, 5].map((n) => (

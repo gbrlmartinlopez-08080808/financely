@@ -1,6 +1,7 @@
 import { Sheet } from './kit';
 import { Icon } from './Icon';
 import { PixelLoader } from './kit';
+import { Art, type ArtName } from './Art';
 
 /**
  * The selection mark: a softly rounded box with a stepped, pixel-cut tick. Sits between a plain vector tick and a
@@ -29,8 +30,6 @@ export function Tick({ on, size = 26 }: { on: boolean; size?: number }) {
   );
 }
 
-const BIN = ['       ___       ', '   ___/___\\___   ', '   \\_________/   ', '    | | | | |    ', '    | | | | |    ', "    '-------'    "];
-
 /** A confirmation that looks like the rest of the app: a little ASCII bin, plain words, two clear buttons. */
 export function ConfirmSheet({
   open,
@@ -42,6 +41,7 @@ export function ConfirmSheet({
   confirmLabel,
   keepLabel = 'Keep',
   busy,
+  art = 'bin',
   onConfirm,
 }: {
   open: boolean;
@@ -53,6 +53,8 @@ export function ConfirmSheet({
   confirmLabel: string;
   keepLabel?: string;
   busy?: boolean;
+  /** the picture on top: the bin for things that are deleted, something gentler for things that are only put away */
+  art?: ArtName;
   onConfirm: () => void;
 }) {
   const shown = (names ?? []).slice(0, 3);
@@ -60,10 +62,9 @@ export function ConfirmSheet({
   return (
     <Sheet open={open} onClose={busy ? () => {} : onClose} className="over">
       <div className="sheet-body confirm">
-        <div className="bin" aria-hidden>
-          <span className="drop mono">[#]</span>
-          <pre>{BIN.join('\n')}</pre>
-        </div>
+        <Art name={art} className="confirm-art">
+          {art === 'bin' && <span className="drop mono">[#]</span>}
+        </Art>
         <h3>{title}</h3>
         <p>{body}</p>
         {!!shown.length && (

@@ -1,3 +1,4 @@
+import { Art } from '../ui/Art';
 import { useEffect, useRef, useState } from 'react';
 import * as db from '../lib/db';
 import { saveDoc } from '../lib/store';
@@ -78,6 +79,7 @@ export function ScanSheet({ files, onClose, onDone }: { files: File[] | null; on
   return (
     <Sheet open={!!files} onClose={busy ? () => {} : onClose} title="Scan">
       <div className="sheet-body" style={{ paddingBottom: 16 }}>
+        {!busy && <Art name="scan" />}
         {busy ? (
           <div style={{ display: 'grid', justifyItems: 'center', gap: 16, padding: '30px 0 36px' }}>
             <PixelLoader grid={4} size={7} label={busy.label} />

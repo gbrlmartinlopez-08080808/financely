@@ -2122,7 +2122,7 @@
   font: 13px/1.15 var(--mono);
   text-align: left;
 }
-.confirm .bin .drop {
+.confirm .bin .drop, .art-card .drop {
   position: absolute;
   left: 50%;
   top: -4px;
@@ -2185,7 +2185,7 @@
   justify-content: center;
 }
 @media (prefers-reduced-motion: reduce) {
-  .confirm .bin .drop {
+  .confirm .bin .drop, .art-card .drop {
     animation: none;
   }
 }
@@ -2310,4 +2310,57 @@
   50% {
     opacity: 0.3;
   }
+}
+
+/* ------------------------------------------------------------------ Froggy, and the picture at the top of a small sheet */
+.froggy {
+  margin: 0;
+  font-family: var(--mono);
+  font-weight: 600;
+  line-height: 1.12;
+  white-space: pre;
+  text-align: left;
+  user-select: none;
+  letter-spacing: 0;
+}
+.froggy.sm {
+  font-size: 11px;
+}
+.froggy.md {
+  font-size: 16px;
+}
+.froggy.lg {
+  font-size: 26px;
+}
+.art-card {
+  position: relative;
+  margin: 4px auto 14px;
+  width: max-content;
+  max-width: 100%;
+  padding: 14px 26px 10px;
+  background: var(--dark-card, #0a0a0a);
+  color: #e8e7e3;
+  border-radius: 20px;
+  overflow: hidden;
+}
+.art-card.slim {
+  padding: 10px 22px 6px;
+}
+.art-scene {
+  margin: 0;
+  font: 13px/1.15 var(--mono);
+  text-align: left;
+}
+.art-card .drop {
+  position: absolute;
+  left: 50%;
+  top: -4px;
+  margin-left: -1.5ch;
+  font-size: 13px;
+  color: #f2c94c;
+  text-shadow: 0 0 8px rgba(242, 201, 76, 0.7);
+  animation: drop 1.6s steps(7) infinite;
+}
+.confirm .art-card {
+  margin: 4px auto 14px;
 }

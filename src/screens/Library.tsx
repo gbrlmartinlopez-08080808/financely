@@ -9,6 +9,7 @@ import { JobMark } from './ScanBadge';
 import { Icon } from '../ui/Icon';
 import { Pixel, Screws, Sheet, toast } from '../ui/kit';
 import { ASCII } from '../lib/ascii';
+import { HomeTabs } from './Interesting';
 import { shareFile, tap } from '../lib/native';
 
 export function useCover(doc?: DocMeta) {
@@ -121,6 +122,7 @@ export function Library({
   onConvert,
   onSample,
   onDiscover,
+  onInteresting,
 }: {
   onOpen: (id: string) => void;
   onAdd: () => void;
@@ -130,6 +132,7 @@ export function Library({
   onConvert: (doc: DocMeta) => void;
   onSample: () => void;
   onDiscover: () => void;
+  onInteresting: () => void;
 }) {
   const docs = useStore((s) => s.docs);
   const settings = useStore((s) => s.settings);
@@ -226,7 +229,9 @@ export function Library({
     <div className="lib">
       <div className="lib-card">
         <div className="lib-top">
-          <h1>library</h1>
+          <h1>
+            <HomeTabs active="library" onPick={(t) => t === 'interesting' && onInteresting()} />
+          </h1>
           <div className="lib-meta">
             <span>@{settings.name}</span>
             <span>
@@ -615,6 +620,7 @@ function DocMenu({ doc, onClose, onOpen, onConvert, onSelect }: { doc: DocMeta |
           <ConfirmSheet
             open={confirm}
             onClose={() => setConfirm(false)}
+            art={d.uri ? 'shelf' : 'bin'}
             title={d.uri ? 'Remove from your shelf?' : 'Delete this file?'}
             body={d.uri ? 'The file stays where it is on your phone; only its place on your shelf, with bookmarks and highlights, goes.' : 'The copy inside Frogity, with its bookmarks and highlights, is deleted. Originals you opened from other apps are untouched.'}
             names={[d.name]}

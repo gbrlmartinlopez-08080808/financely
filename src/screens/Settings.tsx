@@ -171,14 +171,14 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
           </div>
         )}
 
-        <div className="section-label">ask (free ai)</div>
+        <div className="section-label">froggy (free ai)</div>
         <div className="row">
-          <Icon name="ask" />
+          <Icon name="frog" />
           <div className="grow">
-            <div className="row-label">Ask this document</div>
-            <div className="row-sub">Sends your question and a few short excerpts to a free open AI service. Off until you turn it on.</div>
+            <div className="row-label">Froggy, your reading companion</div>
+            <div className="row-sub">Froggy answers questions about what you read. It sends your question and a few short excerpts to a free open AI service. Off until you turn it on.</div>
           </div>
-          <Toggle on={s.aiOk} onChange={(v) => updateSettings({ aiOk: v })} label="Ask this document" />
+          <Toggle on={s.aiOk} onChange={(v) => updateSettings({ aiOk: v })} label="Froggy" />
         </div>
 
         <div className="section-label">files</div>
