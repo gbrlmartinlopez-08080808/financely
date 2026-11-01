@@ -1651,7 +1651,6 @@
 .curl-front .leaf {
   position: absolute;
   inset: 0;
-  visibility: visible;
 }
 .curl-under,
 .curl-flapwrap {
