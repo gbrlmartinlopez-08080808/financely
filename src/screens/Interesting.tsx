@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { readArticle, type Article } from '../lib/article';
 import { agoShort, articleOfWeek, factOfDay, loadDaily, wikiUrl, type Card, type Daily, type Story, type WeekPick } from '../lib/interesting';
 import { moodFor, type Mood } from '../lib/froggy';
 import { useStore } from '../lib/store';
@@ -8,7 +9,7 @@ import type { DocMeta } from '../lib/types';
 import { AskSheet } from '../reader/Ask';
 import { Froggy } from '../ui/Froggy';
 import { Icon } from '../ui/Icon';
-import { PixelLoader, Segmented, Sheet } from '../ui/kit';
+import { PixelLoader, Segmented, Sheet, toast } from '../ui/kit';
 import { updateSettings } from '../lib/store';
 
 type Tab = 'today' | 'news' | 'you';
@@ -35,6 +36,32 @@ const Img = ({ src, alt = '', className = '' }: { src?: string; alt?: string; cl
   if (!src || bad) return <div className={`img-ph ${className}`} aria-hidden />;
   return <img className={className} src={src} alt={alt} loading="lazy" decoding="async" referrerPolicy="no-referrer" draggable={false} onError={() => setBad(true)} />;
 };
+
+/**
+ * A photograph shown whole: never cropped to a corner. It keeps its own shape (within reason) and, where the frame is
+ * wider or taller than the picture, the same picture softly blurred fills the space, so the frame always looks finished.
+ */
+function Photo({ src, w, h, fill = false, className = '' }: { src?: string; w?: number; h?: number; fill?: boolean; className?: string }) {
+  const [ratio, setRatio] = useState<number | undefined>(w && h ? w / h : undefined);
+  const [bad, setBad] = useState(false);
+  if (!src || bad) return <div className={`photo empty ${fill ? 'fill' : ''} ${className}`} aria-hidden />;
+  const ar = Math.max(0.8, Math.min(1.78, ratio ?? 1.5));
+  return (
+    <div className={`photo ${fill ? 'fill' : ''} ${className}`} style={fill ? undefined : { aspectRatio: String(ar) }}>
+      <img className="bg" src={src} alt="" aria-hidden referrerPolicy="no-referrer" />
+      <img
+        className="fg"
+        src={src}
+        alt=""
+        decoding="async"
+        referrerPolicy="no-referrer"
+        draggable={false}
+        onLoad={(e) => !ratio && setRatio(e.currentTarget.naturalWidth / Math.max(1, e.currentTarget.naturalHeight))}
+        onError={() => setBad(true)}
+      />
+    </div>
+  );
+}
 
 type Detail = { kind: 'card'; label: string; card: Card; note?: string } | { kind: 'story'; story: Story } | { kind: 'method' };
 
@@ -87,6 +114,7 @@ export function Interesting({ docs, onSwitch, onFindBooks }: { docs: DocMeta[]; 
         />
         <Segmented
           className="int-seg"
+          light
           value={tab}
           onChange={setTab}
           options={[
@@ -161,7 +189,7 @@ function Today({ data, offline, mood, onDetail, onRefresh }: { data: Daily; offl
 
       {data.figure && (
         <button className="tcard figure" onClick={() => onDetail({ kind: 'card', label: 'Figure of the day', card: data.figure!, note: `Born ${data.figure!.year}` })}>
-          <Img src={data.figure.image} className="timg" />
+          <Photo src={data.figure.image} w={data.figure.iw} h={data.figure.ih} />
           <div className="tcard-body">
             <span className="tag mono">figure of the day · {data.figure.year}</span>
             <h3>{data.figure.title}</h3>
@@ -182,7 +210,7 @@ function Today({ data, offline, mood, onDetail, onRefresh }: { data: Daily; offl
 
       {data.picture?.image && (
         <button className="tcard picture" onClick={() => onDetail({ kind: 'card', label: 'Picture of the day', card: { ...data.picture!, extract: data.picture!.description } })}>
-          <Img src={data.picture.image} className="pimg" />
+          <Photo src={data.picture.image} />
           <div className="pcap">
             <span className="tag mono">picture of the day</span>
             <p>{(data.picture.description || data.picture.title).slice(0, 140)}</p>
@@ -209,7 +237,7 @@ function Today({ data, offline, mood, onDetail, onRefresh }: { data: Daily; offl
 
       {data.featured && (
         <button className="tcard featured" onClick={() => onDetail({ kind: 'card', label: 'Article of the day', card: data.featured! })}>
-          <Img src={data.featured.image} className="timg sm" />
+          <Photo src={data.featured.image} w={data.featured.iw} h={data.featured.ih} />
           <div className="tcard-body">
             <span className="tag mono">wikipedia’s article of the day</span>
             <h3>{data.featured.title}</h3>
@@ -252,8 +280,7 @@ function Reels({ stories, onDetail, onMethod, onAsk }: { stories: Story[]; onDet
       {stories.map((s, i) => (
         <article className={`reel${at === i ? ' act' : ''}`} key={s.id} data-i={i}>
           <div className="reel-img">
-            <Img src={s.image} />
-            <div className="reel-shade" />
+            <Photo src={s.image} w={s.iw} h={s.ih} fill />
             <span className="reel-count mono">
               {i + 1} / {stories.length}
             </span>
@@ -337,7 +364,7 @@ function ForYou({ book, fallback, onDetail }: { book?: DocMeta; fallback?: Card;
           </div>
           {fallback && (
             <button className="tcard figure big" onClick={() => onDetail({ kind: 'card', label: 'Article of the day', card: fallback })}>
-              <Img src={fallback.image} className="timg" />
+              <Photo src={fallback.image} w={fallback.iw} h={fallback.ih} />
               <div className="tcard-body">
                 <h3>{fallback.title}</h3>
                 <p className="sub">{fallback.description}</p>
@@ -351,7 +378,7 @@ function ForYou({ book, fallback, onDetail }: { book?: DocMeta; fallback?: Card;
         <>
           <p className="int-because mono">article of the week · because you are reading “{pick.because.length > 34 ? pick.because.slice(0, 34) + '…' : pick.because}”</p>
           <button className="tcard figure big" onClick={() => onDetail({ kind: 'card', label: 'Article of the week', card: pick.article, note: `Because you are reading “${pick.because}”` })}>
-            <Img src={pick.article.image} className="timg" />
+            <Photo src={pick.article.image} w={pick.article.iw} h={pick.article.ih} />
             <div className="tcard-body">
               <h3>{pick.article.title}</h3>
               <p className="sub">{pick.article.description}</p>
@@ -365,7 +392,6 @@ function ForYou({ book, fallback, onDetail }: { book?: DocMeta; fallback?: Card;
                 {pick.more.map((m) => (
                   <li key={m.title}>
                     <button onClick={() => openExternal(m.url ?? wikiUrl(m.title))}>
-                      <Img src={m.image} className="mini" />
                       <span>
                         <b>{m.title}</b>
                         <small>{m.description}</small>
@@ -396,43 +422,11 @@ function DetailBody({ d, onAsk, onFindBooks }: { d: Detail; onAsk: (id: string, 
         <p>Only a headline, a short summary and the picture are shown, each credited, and every card links to the full article at its source.</p>
       </div>
     );
-  if (d.kind === 'story') {
-    const s = d.story;
-    return (
-      <div className="sheet-body int-detail">
-        <Img src={s.image} className="dimg" />
-        <span className="tag mono">
-          {agoShort(s.time)} · photo {s.imageFrom}
-        </span>
-        <h3>{s.title}</h3>
-        <p>{s.summary}</p>
-        <div className="tag mono" style={{ marginTop: 14 }}>
-          {s.sources.length > 1 ? `reported by ${s.sources.length} outlets` : 'reported by'}
-        </div>
-        <ul className="src-list">
-          {s.sources.map((x) => (
-            <li key={x.url}>
-              <button onClick={() => openExternal(x.url)}>
-                <span>
-                  <b>{x.name}</b>
-                  <small className="mono">{x.region}</small>
-                </span>
-                <em>{x.title}</em>
-                <Icon name="right" size={16} />
-              </button>
-            </li>
-          ))}
-        </ul>
-        <button className="pill ghost wide" onClick={() => onAsk('news:' + s.id, s.title, `${s.title}\n\n${s.summary}`)}>
-          Ask Froggy about this
-        </button>
-      </div>
-    );
-  }
+  if (d.kind === 'story') return <StoryDetail story={d.story} onAsk={onAsk} />;
   const c = d.card;
   return (
     <div className="sheet-body int-detail">
-      <Img src={c.image} className="dimg" />
+      <Photo src={c.image} w={c.iw} h={c.ih} className="dimg" />
       <span className="tag mono">{d.label.toLowerCase()}</span>
       <h3>{c.title}</h3>
       {(d.note || c.description) && <p className="sub">{[d.note, c.description].filter(Boolean).join(' · ')}</p>}
@@ -454,6 +448,133 @@ function DetailBody({ d, onAsk, onFindBooks }: { d: Detail; onAsk: (id: string, 
         </button>
       </div>
       <span className="srcline mono static">source · Wikipedia / Wikimedia</span>
+    </div>
+  );
+}
+
+/**
+ * One story, in three steps that the reader chooses: the card (a headline and three lines), this overview (the whole summary
+ * and every outlet that reported it), and the full story itself, read here, in plain type, from any of those outlets.
+ */
+function StoryDetail({ story: s, onAsk }: { story: Story; onAsk: (id: string, title: string, text: string) => void }) {
+  const [open, setOpen] = useState<number | null>(null);
+  const [art, setArt] = useState<Article | null>(null);
+  const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [err, setErr] = useState('');
+  const top = useRef<HTMLDivElement>(null);
+  const read = async (i: number) => {
+    setOpen(i);
+    setArt(null);
+    setState('loading');
+    top.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    try {
+      setArt(await readArticle(s.sources[i].url));
+      setState('idle');
+    } catch (e) {
+      const m = (e as Error).message || '';
+      setErr(/Failed to fetch|NetworkError|Load failed|^$/i.test(m) ? 'Froggy could not reach that site. Check your connection, or open it in the browser.' : m);
+      setState('error');
+    }
+  };
+  const src = open !== null ? s.sources[open] : null;
+  return (
+    <div className="sheet-body int-detail story" ref={top}>
+      {!src && <Photo src={s.image} w={s.iw} h={s.ih} className="dimg" />}
+      <span className="tag mono">
+        {agoShort(s.time)} · photo {s.imageFrom}
+      </span>
+      <h3>{s.title}</h3>
+      {!src && (
+        <>
+          <p>{s.summary}</p>
+          <button className="pill wide" onClick={() => read(0)}>
+            Read the full story
+          </button>
+          <div className="tag mono" style={{ marginTop: 14 }}>
+            {s.sources.length > 1 ? `reported by ${s.sources.length} outlets — read it from any of them` : 'reported by'}
+          </div>
+          <ul className="src-list">
+            {s.sources.map((x, i) => (
+              <li key={x.url}>
+                <button onClick={() => read(i)}>
+                  <span>
+                    <b>{x.name}</b>
+                    <small className="mono">{x.region}</small>
+                  </span>
+                  <em>{x.title}</em>
+                  <Icon name="right" size={16} />
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button className="pill ghost wide" onClick={() => onAsk('news:' + s.id, s.title, `${s.title}\n\n${s.summary}`)}>
+            Ask Froggy about this
+          </button>
+        </>
+      )}
+      {src && (
+        <>
+          <div className="story-bar">
+            <button className="mono" onClick={() => (setOpen(null), setArt(null), setState('idle'))}>
+              ← overview
+            </button>
+            {s.sources.length > 1 && (
+              <div className="story-src">
+                {s.sources.map((x, i) => (
+                  <button key={x.url} className={`mono${i === open ? ' on' : ''}`} onClick={() => i !== open && read(i)}>
+                    {x.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {state === 'loading' && (
+            <div className="int-wait inline">
+              <Froggy mood="dizzy" size="sm" />
+              <PixelLoader size={4} gap={2} label={`fetching the story from ${src.name}`} />
+            </div>
+          )}
+          {state === 'error' && (
+            <div className="int-wait inline">
+              <Froggy mood="worried" size="md" />
+              <p>{err}</p>
+              <div className="det-act">
+                <button className="pill" onClick={() => openExternal(src.url)}>
+                  Open at {src.name}
+                </button>
+                {s.sources.length > 1 && (
+                  <button className="pill ghost" onClick={() => read(((open ?? 0) + 1) % s.sources.length)}>
+                    Try another outlet
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          {art && (
+            <>
+              <p className="byline mono">
+                {art.site} · {Math.max(1, Math.round(art.words / 220))} min read
+              </p>
+              <div className="article" dangerouslySetInnerHTML={{ __html: art.html }} />
+              <div className="det-act">
+                <button className="pill ghost" onClick={() => openExternal(art.url)}>
+                  Open at {src.name} ↗
+                </button>
+                <button
+                  className="pill ghost"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(art.url);
+                    toast('Link copied');
+                  }}
+                >
+                  Copy link
+                </button>
+              </div>
+              <span className="srcline mono static">source · {art.site} — all rights belong to the publisher</span>
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }

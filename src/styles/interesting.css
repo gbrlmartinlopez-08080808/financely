@@ -634,3 +634,239 @@ button.tcard:active {
     display: none;
   }
 }
+
+/* ------------------------------------------------------------------ one tone: nothing is a block of black
+   ASCII and faces sit softly on the page; the player and the reader's controls are glass that takes the page's own colours. */
+.art-card,
+.confirm .bin,
+.ask-head .froggy,
+.ask-frog .froggy,
+.int-wait .froggy,
+.int-hello .froggy,
+.reel-end .froggy,
+.int-detail .froggy.inline {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: var(--ink-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.art-card .drop {
+  color: var(--ink);
+  text-shadow: none;
+}
+.tcard.fact {
+  background: var(--surface);
+  color: var(--ink);
+}
+.tcard.fact .froggy {
+  color: var(--ink-2);
+  opacity: 1;
+}
+.tcard.fact .tag,
+.tcard.fact .srcline {
+  color: var(--muted);
+}
+.tcard.fact p {
+  color: var(--ink);
+}
+.home-tabs button {
+  color: var(--faint);
+}
+
+/* photographs: whole, never cropped to a corner */
+.photo {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  width: 100%;
+  background: var(--surface-2);
+}
+.photo.fill {
+  height: 100%;
+}
+.photo .bg {
+  position: absolute;
+  inset: -14%;
+  width: 128%;
+  height: 128%;
+  object-fit: cover;
+  filter: blur(26px) saturate(1.15);
+  opacity: 0.5;
+  z-index: -1;
+}
+.photo .fg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.photo.empty {
+  min-height: 140px;
+}
+.photo.dimg {
+  border-radius: 20px;
+}
+.reel-img .photo {
+  border-radius: 0;
+}
+.reel-img {
+  box-shadow: none;
+  background: var(--surface-2);
+}
+.reel-img img.fg,
+.reel-img .photo .fg {
+  transform: none !important;
+  transition: none;
+}
+.reel-shade {
+  background: linear-gradient(rgba(0, 0, 0, 0.14), transparent 22%, transparent 80%, rgba(0, 0, 0, 0.18));
+}
+.tcard.picture .pcap {
+  position: static;
+  background: none;
+  color: var(--ink);
+  padding: 14px 20px 18px;
+}
+.tcard.picture .pcap .tag {
+  color: var(--muted);
+}
+.tcard.picture .pcap p {
+  font-size: 14px;
+  color: var(--ink-2);
+}
+.tcard.picture {
+  min-height: 0;
+}
+.tcard.more button {
+  grid-template-columns: 1fr;
+}
+
+/* the whole story, read in the app */
+.int-detail.story {
+  max-height: 80vh;
+  overflow-y: auto;
+  padding-bottom: calc(var(--safe-b) + 24px);
+}
+.story-bar {
+  display: grid;
+  gap: 8px;
+  position: sticky;
+  top: -1px;
+  z-index: 2;
+  padding: 6px 0 8px;
+  background: var(--surface);
+}
+.story-bar > button {
+  justify-self: start;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 4px 0;
+}
+.story-src {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.story-src button {
+  flex: none;
+  font-size: 11px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+.story-src button.on {
+  background: var(--ink);
+  color: var(--surface);
+}
+.byline {
+  font-size: 11px;
+  color: var(--muted);
+}
+.article {
+  font: 400 18px/1.55 var(--serif);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.article p {
+  margin: 0 0 0.9em;
+  font: inherit;
+}
+.article h2,
+.article h3 {
+  font: 650 19px/1.25 var(--sans);
+  margin: 1.2em 0 0.4em;
+}
+.article img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  margin: 0.8em 0;
+}
+.article figure {
+  margin: 0.8em 0;
+}
+.article figcaption {
+  font: 400 12px/1.4 var(--sans);
+  color: var(--muted);
+}
+.article a {
+  color: inherit;
+  text-decoration-color: var(--line-2);
+}
+.article blockquote {
+  margin: 1em 0;
+  padding-left: 14px;
+  border-left: 2px solid var(--line-2);
+  color: var(--ink-2);
+}
+
+/* the reader's controls: glass that takes the page's colours */
+.r-dock .pill,
+.r-dock .seg,
+.reader[data-dark='1'] .r-dock .pill,
+.reader[data-dark='1'] .r-dock .seg {
+  --pill: color-mix(in srgb, var(--r-bg) 58%, transparent);
+  --pill-ink: var(--r-ink);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  backdrop-filter: blur(18px) saturate(1.5);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--r-ink) 13%, transparent), 0 6px 22px rgba(0, 0, 0, 0.06);
+}
+.r-dock .seg .seg-thumb {
+  background: color-mix(in srgb, var(--r-ink) 88%, var(--r-bg));
+}
+.r-dock .seg button {
+  color: var(--r-ink);
+}
+.r-dock .seg button.on {
+  color: var(--r-bg);
+}
+.listen,
+.reader[data-dark='1'] .listen {
+  background: color-mix(in srgb, var(--r-bg) 84%, transparent);
+  color: var(--r-ink);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  backdrop-filter: blur(22px) saturate(1.5);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--r-ink) 13%, transparent), 0 14px 40px rgba(0, 0, 0, 0.1);
+  --scrub-ring: color-mix(in srgb, var(--r-bg) 90%, transparent);
+  --scrub-ink: var(--r-ink);
+}
+.listen-ctrl .big {
+  background: var(--r-ink);
+}
+.listen-ctrl .big svg,
+.reader[data-dark='1'] .listen-ctrl .big svg {
+  color: var(--r-bg);
+}
+.listen-chips button.on {
+  background: color-mix(in srgb, var(--r-ink) 12%, transparent);
+}
+.reader .timechip {
+  color: var(--r-ink);
+}
+.reel-act .pill:not(.ghost),
+.int-detail .pill:not(.ghost),
+.story-src button.on {
+  background: var(--ink-2);
+}

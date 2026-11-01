@@ -22,6 +22,8 @@ export interface Story {
   summary: string;
   image: string;
   imageFrom: string;
+  iw?: number;
+  ih?: number;
   time: number;
   sources: NewsSource[];
 }
@@ -30,6 +32,8 @@ export interface Card {
   description?: string;
   extract?: string;
   image?: string;
+  iw?: number;
+  ih?: number;
   url?: string;
   year?: number;
   credit?: string;
@@ -147,14 +151,24 @@ interface Summary {
   extract?: string;
   type?: string;
   thumbnail?: { source: string };
-  originalimage?: { source: string };
+  originalimage?: { source: string; width?: number; height?: number };
   content_urls?: { desktop?: { page?: string } };
 }
+/** the largest standard Wikimedia size the original can fill sharply (never a small picture stretched) */
+const bestThumb = (p: Summary) => {
+  const src = p.thumbnail?.source;
+  if (!src) return p.originalimage?.source;
+  const max = Math.min(960, p.originalimage?.width ?? 320);
+  const w = [1280, 960, 500, 320].find((x) => x <= max) ?? 320;
+  return src.replace(/\/\d+px-/, `/${w}px-`);
+};
 const asCard = (p: Summary): Card => ({
   title: p.title,
   description: p.description,
   extract: p.extract,
-  image: p.thumbnail?.source?.replace(/\/\d+px-/, '/500px-'),
+  image: bestThumb(p),
+  iw: p.originalimage?.width,
+  ih: p.originalimage?.height,
   url: p.content_urls?.desktop?.page ?? wikiUrl(p.title),
 });
 

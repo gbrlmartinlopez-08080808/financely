@@ -48,6 +48,57 @@ const get = async (url, tries = 3, accept = '*/*') => {
   throw err;
 };
 
+// ------------------------------------------------------------------ is this picture good enough to show?
+/** width × height of a JPEG / PNG / WebP / GIF from its first bytes */
+function dims(b) {
+  if (b.length > 24 && b[0] === 0x89 && b[1] === 0x50) return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
+  if (b.length > 10 && b.toString('ascii', 0, 3) === 'GIF') return { w: b.readUInt16LE(6), h: b.readUInt16LE(8) };
+  if (b.length > 30 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP') {
+    const k = b.toString('ascii', 12, 16);
+    if (k === 'VP8X') return { w: 1 + b.readUIntLE(24, 3), h: 1 + b.readUIntLE(27, 3) };
+    if (k === 'VP8 ') return { w: b.readUInt16LE(26) & 0x3fff, h: b.readUInt16LE(28) & 0x3fff };
+    if (k === 'VP8L') { const v = b.readUInt32LE(21); return { w: (v & 0x3fff) + 1, h: ((v >> 14) & 0x3fff) + 1 }; }
+  }
+  if (b[0] === 0xff && b[1] === 0xd8) {
+    let i = 2;
+    while (i + 9 < b.length) {
+      if (b[i] !== 0xff) { i++; continue; }
+      const m = b[i + 1];
+      if (m >= 0xc0 && m <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(m)) return { h: b.readUInt16BE(i + 5), w: b.readUInt16BE(i + 7) };
+      i += 2 + b.readUInt16BE(i + 2);
+    }
+  }
+  return null;
+}
+async function probe(url) {
+  try {
+    const r = await fetch(url, { headers: { 'User-Agent': UA, Range: 'bytes=0-65535' }, signal: AbortSignal.timeout(15000) });
+    if (!r.ok) return null;
+    const chunks = [];
+    let n = 0;
+    const rd = r.body.getReader();
+    while (n < 65536) {
+      const { done, value } = await rd.read();
+      if (done) break;
+      chunks.push(value);
+      n += value.length;
+    }
+    rd.cancel().catch(() => {});
+    return dims(Buffer.concat(chunks));
+  } catch {
+    return null;
+  }
+}
+const WIKI_STEPS = [320, 500, 960, 1280, 1920];
+/** a Wikimedia thumbnail at the largest standard size the original can fill (never a stretched small one) */
+const wikiThumb = (p, want = 960) => {
+  const src = p?.thumbnail?.source;
+  if (!src) return p?.originalimage?.source ?? '';
+  const max = Math.min(want, p.originalimage?.width ?? 320);
+  const w = [...WIKI_STEPS].reverse().find((x) => x <= max) ?? 320;
+  return src.replace(/\/\d+px-/, `/${w}px-`);
+};
+
 // ------------------------------------------------------------------ a tiny RSS / Atom reader (no dependencies)
 const dec = (s) =>
   s
@@ -156,6 +207,7 @@ async function news() {
     const lead = c.items.find((i) => i.image) ?? c.items[0];
     if (!lead.image) continue;
     if ((used[lead.src.id] ?? 0) >= 3 && c.items.length < 2) continue;
+    if (/\b(bulletin|podcast|newsletter|quiz|crossword|horoscope|live blog|watch live|in pictures)\b/i.test(lead.title)) continue;
     used[lead.src.id] = (used[lead.src.id] ?? 0) + 1;
     out.push({
       id: createHash('sha1').update(lead.link).digest('hex').slice(0, 10),
@@ -163,12 +215,34 @@ async function news() {
       summary: [...c.items].sort((a, b) => b.summary.length - a.summary.length)[0].summary,
       image: lead.image,
       imageFrom: lead.src.name,
+      alts: c.items.filter((i) => i.image && i !== lead).map((i) => ({ image: i.image, from: i.src.name })),
       time: Math.max(...c.items.map((i) => i.time || 0)) || now,
       sources: c.items.map((i) => ({ name: i.src.name, region: i.src.region, title: i.title, url: i.link })),
     });
-    if (out.length >= 14) break;
+    if (out.length >= 26) break;
   }
-  return out;
+  // only photographs that are good enough: wide enough to fill a phone sharply, and a sensible shape
+  const good = [];
+  for (const st of out) {
+    const cands = [{ image: st.image, from: st.imageFrom }, ...st.alts];
+    let best = null;
+    for (const cnd of cands) {
+      const d = await probe(cnd.image);
+      if (!d || d.w < 640 || d.h < 360) continue;
+      const ar = d.w / d.h;
+      if (ar < 0.6 || ar > 2.4) continue;
+      if (!best || d.w * d.h > best.w * best.h) best = { ...cnd, w: d.w, h: d.h };
+    }
+    if (!best) continue;
+    delete st.alts;
+    st.image = best.image;
+    st.imageFrom = best.from;
+    st.iw = best.w;
+    st.ih = best.h;
+    good.push(st);
+    if (good.length >= 14) break;
+  }
+  return good;
 }
 
 // ------------------------------------------------------------------ Wikipedia / Wikimedia: figure, picture, article of the day, this day in history
@@ -177,7 +251,9 @@ const slim = (p) =>
     title: p.titles?.normalized ?? p.title,
     description: p.description ?? '',
     extract: (p.extract ?? '').slice(0, 700),
-    image: p.thumbnail?.source?.replace(/\/\d+px-/, '/500px-') ?? p.originalimage?.source ?? '',
+    image: wikiThumb(p),
+    iw: p.originalimage?.width ?? 0,
+    ih: p.originalimage?.height ?? 0,
     url: p.content_urls?.desktop?.page ?? '',
   };
 
@@ -209,7 +285,7 @@ async function wikipedia(d) {
     const seed = Number(`${y}${mm}${dd}`);
     const pool = (b.births ?? [])
       .map((e) => ({ e, p: e.pages?.[0] }))
-      .filter(({ p }) => p?.thumbnail && (p.extract?.length ?? 0) > 120 && p.type === 'standard' && !/disambig/i.test(p.description ?? ''))
+      .filter(({ p }) => p?.thumbnail && (p.originalimage?.width ?? 0) >= 600 && (p.extract?.length ?? 0) > 120 && p.type === 'standard' && !/disambig/i.test(p.description ?? ''))
       .filter(({ e }) => e.year > 0 && e.year < y - 25);
     // the best-known people first (by how many people read their article last month), then a different one each day
     const month = new Date(Date.UTC(y, d.getUTCMonth() - 1, 1));

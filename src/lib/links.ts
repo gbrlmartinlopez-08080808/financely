@@ -12,9 +12,9 @@ export const normalizeUrl = (s: string) => {
   return /^https?:\/\//i.test(t) ? t : `https://${t}`;
 };
 
-const NOISE = /(comment|sidebar|share|social|promo|newsletter|cookie|consent|advert|\bads?\b|related|recommend|footer|menu|navbar|breadcrumb|subscribe|popup|modal|toolbar|paywall|signup|login)/i;
+export const NOISE = /(comment|sidebar|share|social|promo|newsletter|cookie|consent|advert|\bads?\b|related|recommend|footer|menu|navbar|breadcrumb|subscribe|popup|modal|toolbar|paywall|signup|login)/i;
 
-async function fetchBlob(url: string, max = 25_000_000): Promise<{ blob: Blob; type: string; finalUrl: string }> {
+export async function fetchBlob(url: string, max = 25_000_000): Promise<{ blob: Blob; type: string; finalUrl: string }> {
   const r = await fetch(url, { redirect: 'follow', headers: { Accept: 'text/html,application/xhtml+xml,application/pdf,*/*;q=0.8' } });
   if (!r.ok) throw new Error(`The site answered ${r.status}.`);
   const blob = await r.blob();
@@ -30,7 +30,7 @@ const toDataUri = (b: Blob) =>
     f.readAsDataURL(b);
   });
 
-function pickMain(doc: Document): Element {
+export function pickMain(doc: Document): Element {
   const sem = doc.querySelector('article') ?? doc.querySelector('[role="main"], main');
   const textLen = (e: Element) => (e.textContent ?? '').trim().length;
   if (sem && textLen(sem) > 600) return sem;
@@ -51,7 +51,7 @@ function pickMain(doc: Document): Element {
   return bestScore > 200 ? best : (sem ?? doc.body);
 }
 
-function meta(doc: Document, ...names: string[]) {
+export function meta(doc: Document, ...names: string[]) {
   for (const n of names) {
     const v = doc.querySelector(`meta[property="${n}"], meta[name="${n}"]`)?.getAttribute('content');
     if (v?.trim()) return v.trim();
