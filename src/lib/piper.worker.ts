@@ -35,13 +35,18 @@ async function load(id: string) {
   const bytes = new Uint8Array(await (await file('piper', `${id}.onnx`)).arrayBuffer());
   session = await ort.InferenceSession.create(bytes, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
   loadedId = id;
-  // the very first run of a model is several times slower than the rest (memory, compiled code): do it now, on a
-  // word nobody hears, so the first sentence the reader asks for comes out at full speed
+}
+
+/** how long this phone takes per second of speech, measured on a real sentence once the voice is loaded */
+async function benchmark(): Promise<number> {
   try {
     phon ??= await newPhonemizer();
-    await say('Ready.', 1);
+    await say('Ready.', 1); // the first run of a model is several times slower than the rest (memory, compiled code)
+    const t0 = performance.now();
+    const r = await say('The quick brown fox jumps over the lazy dog, and then it sleeps.', 1);
+    return Math.max(0.05, (performance.now() - t0) / 1000 / (r.samples.length / r.rate));
   } catch {
-    /* warming up is only a nicety */
+    return 0.6;
   }
 }
 
@@ -90,8 +95,7 @@ async function say(text: string, rate: number): Promise<{ samples: Float32Array;
     input: new ort.Tensor('int64', BigInt64Array.from(ids.map((n) => BigInt(n))), [1, ids.length]),
     input_lengths: new ort.Tensor('int64', BigInt64Array.from([BigInt(ids.length)]), [1]),
     // length_scale is the voice's own speed control: a faster voice keeps its natural pitch
-    // a touch more variation than the voice's defaults: livelier, less monotone reading
-    scales: new ort.Tensor('float32', Float32Array.from([Math.min(0.9, cfg.inference.noise_scale * 1.15), cfg.inference.length_scale / rate, Math.min(1.1, cfg.inference.noise_w * 1.12)]), [3]),
+    scales: new ort.Tensor('float32', Float32Array.from([cfg.inference.noise_scale, cfg.inference.length_scale / rate, cfg.inference.noise_w]), [3]),
   };
   if (Object.keys(cfg.speaker_id_map ?? {}).length) feeds.sid = new ort.Tensor('int64', BigInt64Array.from([0n]), [1]);
   const out = await session.run(feeds);
@@ -101,15 +105,24 @@ async function say(text: string, rate: number): Promise<{ samples: Float32Array;
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 let queue: Promise<void> = Promise.resolve();
+/** sentences asked for up to this number were stopped: they are skipped without being made */
+let cancelledUpTo = 0;
+let lastSay = 0;
 ctx.onmessage = (e: MessageEvent) => {
-  const m = e.data as { type: 'init'; id: string; voice: string } | { type: 'say'; id: number; text: string; rate: number } | { type: 'bye' };
+  const m = e.data as { type: 'init'; id: number; voice: string } | { type: 'say'; id: number; text: string; rate: number } | { type: 'cancel' } | { type: 'bye' };
   if (m.type === 'bye') return ctx.close();
+  if (m.type === 'cancel') {
+    cancelledUpTo = lastSay;
+    return;
+  }
+  if (m.type === 'say') lastSay = m.id;
   queue = queue.then(async () => {
     try {
       if (m.type === 'init') {
         await load(m.voice);
-        ctx.postMessage({ type: 'ready', id: m.id });
+        ctx.postMessage({ type: 'ready', id: m.id, rtf: await benchmark() });
       } else {
+        if (m.id <= cancelledUpTo) return ctx.postMessage({ type: 'error', id: m.id, message: 'stopped' });
         const r = await say(m.text, m.rate);
         ctx.postMessage({ type: 'audio', id: m.id, samples: r.samples, rate: r.rate }, [r.samples.buffer]);
       }

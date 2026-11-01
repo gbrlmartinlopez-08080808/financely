@@ -1,4 +1,5 @@
 export type DocKind =
+  | 'fr' // a Frogity note: editable here and on the computer
   | 'pdf'
   | 'epub'
   | 'docx'
@@ -93,6 +94,10 @@ export interface Settings {
   defaultPdfMode: ReadMode;
   onboarded: boolean;
   v: number; // settings schema version
+  /** read each book with a voice of its own language (when one is installed) */
+  autoVoice?: boolean;
+  /** show a Liquid view as flipping pages instead of one long scroll */
+  pageFlip?: boolean;
   aiOk: boolean; // user agreed to send questions + short excerpts to the free AI service
 }
 

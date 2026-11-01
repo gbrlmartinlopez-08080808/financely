@@ -5,6 +5,8 @@ import { epubChapters, type Chapter } from '../lib/epub';
 import { cleanHtml } from '../lib/convert';
 import { getUi } from './state';
 import { Icon } from './Icon';
+import { Pixel } from './px';
+import { WebListen } from './WebListen';
 import { downloadOriginal } from './actions';
 
 /** An EPUB as one long, comfortable column, with its chapters at the side. */
@@ -14,6 +16,8 @@ export function EpubView({ doc, blob }: { doc: LocalDoc; blob: Blob }) {
   const [t, setT] = useState(() => localStorage.getItem('frogity-read-theme') ?? 'paper');
   const [size, setSize] = useState(() => Number(localStorage.getItem('frogity-read-size')) || 20);
   const [side, setSide] = useState(true);
+  const [listening, setListening] = useState(false);
+  const col = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   useEffect(() => {
     epubChapters(blob, true).then(setChs, (e) => setErr((e as Error).message));
@@ -62,6 +66,9 @@ export function EpubView({ doc, blob }: { doc: LocalDoc; blob: Blob }) {
             {x}
           </button>
         ))}
+        <button className={`ib${listening ? ' on' : ''}`} data-tip="Listen" onClick={() => setListening((l) => !l)}>
+          <Pixel name="ear" size={17} />
+        </button>
         <button className="ib" onClick={() => setSize((s) => Math.max(14, s - 1))} data-tip="Smaller">
           <span style={{ font: '600 12px var(--mono)' }}>A−</span>
         </button>
@@ -81,13 +88,14 @@ export function EpubView({ doc, blob }: { doc: LocalDoc; blob: Blob }) {
           </div>
         )}
         <div className="reading" data-t={t} ref={scroller}>
-          <div className="column" style={{ fontSize: size }}>
+          <div className="column" style={{ fontSize: size }} ref={col}>
             {chs.map((c, i) => (
               <section key={i} data-ch={i} dangerouslySetInnerHTML={{ __html: cleanHtml(c.html) }} />
             ))}
           </div>
         </div>
       </div>
+      {listening && <WebListen getRoot={() => col.current} onClose={() => setListening(false)} />}
     </div>
   );
 }

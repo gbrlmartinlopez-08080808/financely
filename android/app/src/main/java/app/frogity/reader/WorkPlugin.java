@@ -25,8 +25,9 @@ public class WorkPlugin extends Plugin {
         WorkService.text = call.getString("text", "");
         WorkService.progress = call.getInt("progress", 0);
         WorkService.max = call.getInt("max", 100);
+        WorkService.idle = Boolean.TRUE.equals(call.getBoolean("idle", false));
         NotificationManagerCompat.from(ctx).cancel(READY);
-        FrogityWebView.keepWorking = true;
+        FrogityWebView.keepWorking = true; // the page keeps running at full speed while this is shown (also just to stay reachable)
         try {
             ContextCompat.startForegroundService(ctx, new Intent(ctx, WorkService.class));
         } catch (Exception e) {

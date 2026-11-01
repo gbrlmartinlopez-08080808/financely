@@ -71,6 +71,18 @@ export function TypeSheet({ open, onClose, isPdf, mode, onMode, prep, pages, onR
             <Ruler value={s.lineHeight} min={1.2} max={2.2} step={0.05} onChange={(v) => updateSettings({ lineHeight: v })} format={(v) => v.toFixed(2)} label="Line spacing" />
             <div className="section-label">margins</div>
             <Ruler value={s.margin} min={8} max={56} step={2} onChange={(v) => updateSettings({ margin: v })} format={(v) => `${v}`} label="Margins" />
+            <div className="section-label">layout</div>
+            <Segmented
+              value={s.pageFlip ? 'pages' : 'scroll'}
+              onChange={(v) => updateSettings({ pageFlip: v === 'pages' })}
+              options={[
+                { value: 'scroll', label: 'Scroll' },
+                { value: 'pages', label: 'Flip pages' },
+              ]}
+            />
+            <div className="row-sub" style={{ marginTop: 6 }}>
+              Pages: swipe sideways or tap the edges to turn, and the bar below moves through the book. (Text views only.)
+            </div>
             <div className="row" style={{ marginTop: 8 }}>
               <div className="grow">
                 <div className="row-label">Justify text</div>

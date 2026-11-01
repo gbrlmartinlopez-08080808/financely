@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as db from '../lib/db';
 import { addReading, patchDoc, removeDoc, useStore, updateSettings } from '../lib/store';
-import { loadContent, getFile, importFile, type Content } from '../lib/library';
+import { loadContent, getFile, importFile, docById, type Content } from '../lib/library';
 import type { Bookmark, DocMeta, Highlight, TocEntry } from '../lib/types';
 import { pdfOutline, type PDFDocumentProxy } from '../lib/formats/pdf';
 import { blocksToHtml, pdfToLiquid, type LBlock } from '../lib/formats/liquidPdf';
@@ -11,6 +11,8 @@ import { LiquidIntro, LiquidStatus, ViewButton } from './LiquidStatus';
 import { foldSources } from './sources';
 import { openCached } from '../lib/pdfCache';
 import { Scrub } from './Scrub';
+import { FrEditor } from './FrEditor';
+import { goPage, pageCount, pageIndex, usePager } from './paged';
 import { Icon, TypeGlyph } from '../ui/Icon';
 import { PixelBar, PixelLoader, Segmented, Sheet, toast } from '../ui/kit';
 import { PdfView, type PdfViewHandle } from './PdfView';
@@ -46,7 +48,7 @@ function prepLine(p: Prep): string {
   return `liquid · ${Math.round(p.progress * 100)}% · ${doing}`;
 }
 
-export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () => void; onConvert: (doc: DocMeta, root?: HTMLElement | null) => void }) {
+export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; onClose: () => void; onConvert: (doc: DocMeta, root?: HTMLElement | null) => void; onOpenDoc?: (id: string) => void }) {
   const id = doc.id;
   const settings = useStore((s) => s.settings);
   const [content, setContent] = useState<Content | null>(null);
@@ -100,6 +102,8 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   const growing = isPdf && liquid && !liq.ready;
   // (until the book's state is known — a few milliseconds — nothing is said, so a finished book never flashes a status)
   const showGrowth = growing && liq.known;
+  /** a Liquid view that flips pages (set in the typography sheet) */
+  const paged = !!settings.pageFlip && liquid && (content?.type === 'flow' || content?.type === 'pdf');
   // the first PDF ever opened: a few words on what Liquid mode is, and why it is sometimes instant and sometimes slow
   const [intro, setIntro] = useState(false);
   useEffect(() => {
@@ -427,7 +431,8 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
       const el = root.querySelector<HTMLElement>(`#page-${page}`);
       if (el) {
         restoredLiquid.current = true;
-        scroller.scrollTop = el.offsetTop - 70;
+        if (live.current.paged) goPage(scroller, Math.round((scroller.scrollLeft + el.getBoundingClientRect().left) / Math.max(1, scroller.clientWidth)), false);
+        else scroller.scrollTop = el.offsetTop - 70;
       } else if (scroller.scrollTop > 40) restoredLiquid.current = true; // the page isn't made yet and they began reading: stay
     } else restoredLiquid.current = true;
   };
@@ -453,7 +458,11 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     if (!flowReady || !scroller || isPdf || restoredLiquid.current) return;
     restoredLiquid.current = true;
     const v = doc.position?.value ?? doc.progress;
-    if (v > 0.001) requestAnimationFrame(() => (scroller.scrollTop = v * (scroller.scrollHeight - scroller.clientHeight)));
+    if (v > 0.001)
+      requestAnimationFrame(() => {
+        if (live.current.paged) goPage(scroller, Math.round(v * (pageCount(scroller) - 1)), false);
+        else scroller.scrollTop = v * (scroller.scrollHeight - scroller.clientHeight);
+      });
   }, [flowReady, scroller]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // highlights
@@ -555,8 +564,8 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     clearTimeout(progT.current);
     progT.current = window.setTimeout(() => setProgress(p), 400);
   }, []);
-  const live = useRef({ page, growing, finished: !!doc.finished, liquid, isPdf });
-  live.current = { page, growing, finished: !!doc.finished, liquid, isPdf };
+  const live = useRef({ page, growing, finished: !!doc.finished, liquid, isPdf, paged });
+  live.current = { page, growing, finished: !!doc.finished, liquid, isPdf, paged };
 
   const onPdfPage = useCallback(
     (p: number) => {
@@ -575,18 +584,32 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     let markersAt = 0;
     const frame = () => {
       raf = 0;
-      const y = el.scrollTop;
+      const st = live.current;
+      const flip = st.paged;
+      const y = flip ? el.scrollLeft : el.scrollTop;
       const dy = y - lastY.current;
       lastY.current = y;
-      if (y > 120 && dy > 10 && !listeningRef.current) setChrome(false);
-      else if (dy < -14) setChrome(true);
-      const st = live.current;
+      if (!flip) {
+        if (y > 120 && dy > 10 && !listeningRef.current) setChrome(false);
+        else if (dy < -14) setChrome(true);
+      }
       if (!st.liquid) return;
-      const max = el.scrollHeight - el.clientHeight;
+      const max = flip ? el.scrollWidth - el.clientWidth : el.scrollHeight - el.clientHeight;
       const prog = max > 0 ? y / max : 0;
       setProg(prog);
       let p = st.page;
-      if (st.isPdf) {
+      if (st.isPdf && flip) {
+        const ms = Array.from(flowRef.current?.querySelectorAll<HTMLElement>('.pg') ?? []);
+        let at = ms[0];
+        for (const m of ms) {
+          if (m.getBoundingClientRect().left <= el.clientWidth * 0.8) at = m;
+          else break;
+        }
+        if (at) {
+          p = Number(at.dataset.page) || 1;
+          if (p !== st.page) setPage(p);
+        }
+      } else if (st.isPdf) {
         const now = performance.now();
         if (!markers.length || now - markersAt > 2500) {
           markers = Array.from(flowRef.current?.querySelectorAll<HTMLElement>('.pg') ?? []);
@@ -998,6 +1021,55 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     return text;
   };
 
+  usePager(scroller, paged);
+  // a Frogity note: written here (and on the computer)
+  const [writing, setWriting] = useState(false);
+  useEffect(() => {
+    if (doc.kind === 'fr' && sessionStorage.getItem('fr:edit') === id) {
+      sessionStorage.removeItem('fr:edit');
+      setWriting(true);
+    }
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** Makes an editable Frogity note from this document's text (Word, web pages, Markdown, text…). */
+  const makeNote = async () => {
+    const root = flowRef.current;
+    if (!root) return;
+    toast('Making a note…');
+    const copy = root.cloneNode(true) as HTMLElement;
+    copy.querySelectorAll('.pg, .lq-wait, .lq-status-wrap, script, style').forEach((n) => n.remove());
+    copy.querySelectorAll('.s').forEach((sp) => sp.replaceWith(...Array.from(sp.childNodes)));
+    // pictures inside the document come along (small ones), as data
+    for (const img of Array.from(copy.querySelectorAll('img'))) {
+      try {
+        const b = await (await fetch(img.src)).blob();
+        if (b.size > 400_000) throw new Error('large');
+        const url = await new Promise<string>((res) => {
+          const r = new FileReader();
+          r.onload = () => res(String(r.result));
+          r.readAsDataURL(b);
+        });
+        img.src = url;
+      } catch {
+        img.remove();
+      }
+    }
+    copy.querySelectorAll('[class], [id], [data-i], [data-page], [style]').forEach((n) => ['class', 'id', 'data-i', 'data-page', 'style', 'data-wrapped'].forEach((a) => n.removeAttribute(a)));
+    const { makeFr } = await import('../lib/fr');
+    const m = await importFile(makeFr(doc.name, copy.innerHTML), `${doc.name}.fr`, { title: doc.name });
+    toast('Made an editable note');
+    sessionStorage.setItem('fr:edit', m.id);
+    onOpenDoc?.(m.id);
+  };
+  // while the position bar is held, the controls step aside (see reader.css)
+  useEffect(() => {
+    const on = (e: Event) => document.querySelector('.reader')?.classList.toggle('scrubbing', !!(e as CustomEvent<boolean>).detail);
+    window.addEventListener('frogity:scrub', on);
+    return () => {
+      window.removeEventListener('frogity:scrub', on);
+      document.querySelector('.reader')?.classList.remove('scrubbing');
+    };
+  }, []);
+
   // ---------------------------------------------------------------- derived
   const words = useMemo(() => {
     if (!flowReady || !flowRef.current) return 0;
@@ -1011,6 +1083,8 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     { id: 'contents', label: 'Contents', icon: 'list', quick: true },
     { id: 'share', label: 'Share', icon: 'share', quick: true },
     { id: 'convert', label: 'Convert', pixel: 'convert', quick: true },
+    { id: 'edit', label: 'Edit this note', icon: 'pen', hidden: doc.kind !== 'fr' },
+    { id: 'tonote', label: 'Make an editable note (Frogity)', icon: 'edit', right: 'edit anywhere', hidden: !['docx', 'odt', 'rtf', 'html', 'markdown', 'text', 'epub'].includes(doc.kind) },
     { id: 'form', label: 'Fill this form', icon: 'edit', right: form ? `${form.fields.length} fields` : undefined, hidden: !form },
     { id: 'ask', label: 'Ask this document', icon: 'ask', right: 'free ai' },
     { id: 'bookmark', label: hereMark ? 'Remove bookmark here' : 'Bookmark this spot', icon: 'bookmark' },
@@ -1034,6 +1108,8 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     else if (a === 'convert') onConvert(doc, liquid ? flowRef.current : null);
     else if (a === 'ocr') runOcr();
     else if (a === 'info') setSheet('info');
+    else if (a === 'edit') setWriting(true);
+    else if (a === 'tonote') void makeNote();
     else if (a === 'remove') setSheet('remove');
     else if (a === 'card') (await import('../lib/shareCard')).shareBookCard(doc).catch(() => toast('Couldn’t make the card'));
     else if (a === 'share') {
@@ -1056,7 +1132,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
   return (
     <div className="reader" data-theme={settings.readerTheme} data-dark={dark ? '1' : undefined} style={style}>
       <div className="r-progress" ref={barRef} style={{ width: `${Math.round(progress * 100)}%` }} />
-      <div className="reader-scroll" ref={setScroller} style={{ paddingLeft: showPdfPages && thumbs ? 84 : 0 }}>
+      <div className={`reader-scroll${paged ? ' paged' : ''}`} ref={setScroller} style={{ paddingLeft: showPdfPages && thumbs ? 84 : 0 }}>
         {error ? (
           <div className="empty" style={{ paddingTop: 140 }}>
             <h2>Couldn’t open this file</h2>
@@ -1099,7 +1175,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
           />
         ) : (
           <>
-            <div className={`flow${showGrowth ? ' growing' : ''}`} data-font={settings.font} ref={flowRef} onClick={onContentTap} lang={settings.lang && settings.lang !== 'other' ? settings.lang : 'en'} />
+            <div className={`flow${showGrowth ? ' growing' : ''}${paged ? ' paged' : ''}`} data-font={settings.font} ref={flowRef} onClick={onContentTap} lang={settings.lang && settings.lang !== 'other' ? settings.lang : 'en'} />
             {showGrowth && (
               <div className="lq-status-wrap">
                 <LiquidStatus prep={liq} pages={doc.pages} onRetry={() => prepareNow(doc)} onPages={() => switchMode('page')} />
@@ -1235,6 +1311,9 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
               if (isPdf && !liquid) {
                 const n = Math.round(v * Math.max(1, (doc.pages ?? 1) - 1)) + 1;
                 if (final || n !== page) pdfRef.current?.goTo(n);
+              } else if (scroller && paged) {
+                goPage(scroller, Math.round(v * (pageCount(scroller) - 1)), final);
+                if (final) setProgress(v);
               } else if (scroller) {
                 scroller.scrollTop = v * (scroller.scrollHeight - scroller.clientHeight);
                 if (final) setProgress(v);
@@ -1340,6 +1419,18 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
           getData={async () => (await (await getFile(id))!.arrayBuffer()) as ArrayBuffer}
           onAddToLibrary={async (blob, name) => {
             await importFile(blob, name, { title: name.replace(/\.pdf$/i, '') });
+          }}
+        />
+      )}
+      {writing && (
+        <FrEditor
+          doc={docById(id) ?? doc}
+          onClose={async (changed) => {
+            setWriting(false);
+            if (changed) {
+              const fresh = docById(id);
+              if (fresh) setContent(await loadContent(fresh));
+            }
           }}
         />
       )}

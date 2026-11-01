@@ -8,9 +8,11 @@ import { Workspace } from './Workspace';
 import { Marks } from './Marks';
 import { Palette } from './Palette';
 import { Devices, Keys } from './Dialogs';
-import { Frog, Toasts, ago } from './bits';
+import { Toasts, ago } from './bits';
+import { Mark, Pixel, PixelLoader, hasPixel } from './px';
 import { Icon } from './Icon';
-import { newDocument } from './actions';
+import { newFrDoc } from './actions';
+import { Welcome } from './Welcome';
 
 export function App() {
   const phase = useStore((s) => s.phase);
@@ -18,14 +20,14 @@ export function App() {
     <>
       <div className="small-screen">
         <div>
-          <Frog size={48} />
+          <Mark size={96} />
           <h1>Made for big screens</h1>
           <p className="muted">Frogity for the computer needs a wider window. On your phone, use the Frogity app — it has everything.</p>
         </div>
       </div>
       {phase === 'loading' ? (
         <div className="loading" style={{ height: '100%' }}>
-          <i className="spin" />
+          <PixelLoader grid={4} size={7} />
         </div>
       ) : phase === 'unpaired' ? (
         <Pair />
@@ -45,6 +47,7 @@ function Shell() {
   const dialog = useUi((u) => u.dialog);
   const docs = useStore((s) => s.docs);
   const [drag, setDrag] = useState(false);
+  const [welcome, setWelcome] = useState(() => !localStorage.getItem('frogity-welcome'));
 
   // tabs of documents deleted elsewhere close themselves
   useEffect(() => {
@@ -65,7 +68,7 @@ function Shell() {
         void pick();
       } else if (mod && e.altKey && e.key.toLowerCase() === 'n') {
         e.preventDefault();
-        void newDocument();
+        void newFrDoc();
       } else if (mod && e.key.toLowerCase() === 'w' && getUi().active !== 'library' && getUi().active !== 'marks') {
         e.preventDefault();
         closeTab(getUi().active);
@@ -120,14 +123,14 @@ function Shell() {
     <div className="shell">
       <div className="tabs">
         <div className="logo">
-          <Frog size={22} />
+          <Mark size={26} />
         </div>
         <button className={`tab${active === 'library' ? ' on' : ''}`} onClick={() => setUi({ active: 'library' })} style={{ paddingRight: 12 }}>
-          <Icon name="grid" size={15} />
+          <Pixel name="block" size={14} className="px" />
           <span>Library</span>
         </button>
         <button className={`tab${active === 'marks' ? ' on' : ''}`} onClick={() => setUi({ active: 'marks' })} style={{ paddingRight: 12 }}>
-          <Icon name="hl" size={15} />
+          <Pixel name="note" size={14} className="px" />
           <span>Highlights</span>
         </button>
         {tabs.map((id) => {
@@ -184,6 +187,14 @@ function Shell() {
       {palette && <Palette />}
       {dialog === 'devices' && <Devices />}
       {dialog === 'keys' && <Keys />}
+      {welcome && (
+        <Welcome
+          onDone={() => {
+            localStorage.setItem('frogity-welcome', '1');
+            setWelcome(false);
+          }}
+        />
+      )}
       {drag && (
         <div className="drop">
           <div>Drop to add to your library</div>
@@ -221,7 +232,7 @@ function SyncDot() {
         setUi({ dialog: 'devices' });
       }}
     >
-      <i />
+      <Pixel name={s.error && s.error !== 'offline' ? 'dash' : 'plug'} size={12} />
       {text}
     </button>
   );

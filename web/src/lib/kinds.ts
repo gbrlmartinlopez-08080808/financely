@@ -1,8 +1,8 @@
 // What a file is, and a cover for it (the same kinds the phone knows).
-export type Kind = 'pdf' | 'epub' | 'docx' | 'markdown' | 'html' | 'text' | 'code' | 'sheet' | 'slides' | 'odt' | 'rtf' | 'image' | 'audio' | 'video' | 'scan' | 'unknown';
+export type Kind = 'fr' | 'pdf' | 'epub' | 'docx' | 'markdown' | 'html' | 'text' | 'code' | 'sheet' | 'slides' | 'odt' | 'rtf' | 'image' | 'audio' | 'video' | 'scan' | 'unknown';
 
 const BY_EXT: Record<string, Kind> = {
-  pdf: 'pdf', epub: 'epub', docx: 'docx', doc: 'docx', md: 'markdown', markdown: 'markdown', txt: 'text', text: 'text',
+  fr: 'fr', pdf: 'pdf', epub: 'epub', docx: 'docx', doc: 'docx', md: 'markdown', markdown: 'markdown', txt: 'text', text: 'text',
   html: 'html', htm: 'html', csv: 'sheet', tsv: 'sheet', xlsx: 'sheet', xls: 'sheet', ods: 'sheet', pptx: 'slides', odt: 'odt', rtf: 'rtf',
   png: 'image', jpg: 'image', jpeg: 'image', webp: 'image', gif: 'image', svg: 'image', bmp: 'image', avif: 'image',
   mp3: 'audio', m4a: 'audio', wav: 'audio', ogg: 'audio', flac: 'audio', aac: 'audio', mp4: 'video', webm: 'video', mov: 'video', mkv: 'video',
@@ -10,6 +10,7 @@ const BY_EXT: Record<string, Kind> = {
   rb: 'code', php: 'code', swift: 'code', kt: 'code', json: 'code', xml: 'code', yml: 'code', yaml: 'code', sh: 'code', css: 'code', sql: 'code', tex: 'code',
 };
 const MIME: Record<string, string> = {
+  fr: 'application/x-frogity',
   pdf: 'application/pdf', epub: 'application/epub+zip', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   md: 'text/markdown', txt: 'text/plain', html: 'text/html', htm: 'text/html', csv: 'text/csv', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
   webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml', mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav', ogg: 'audio/ogg', mp4: 'video/mp4', webm: 'video/webm',
@@ -20,11 +21,11 @@ export const mimeOf = (name: string, type = '') => type || MIME[extOf(name)] || 
 export const titleOf = (name: string) => name.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').trim() || name;
 
 export const KIND_LABEL: Record<string, string> = {
-  pdf: 'PDF', epub: 'EPUB', docx: 'Word', markdown: 'Markdown', html: 'Web page', text: 'Text', code: 'Code', sheet: 'Sheet', slides: 'Slides',
+  fr: 'Frogity', pdf: 'PDF', epub: 'EPUB', docx: 'Word', markdown: 'Markdown', html: 'Web page', text: 'Text', code: 'Code', sheet: 'Sheet', slides: 'Slides',
   odt: 'ODT', rtf: 'RTF', image: 'Image', audio: 'Audio', video: 'Video', scan: 'Scan', unknown: 'File',
 };
 /** kinds the computer can edit as text */
-export const EDITABLE = new Set(['markdown', 'text', 'html', 'docx', 'code']);
+export const EDITABLE = new Set(['fr', 'markdown', 'text', 'html', 'docx', 'code']);
 
 const PALETTE = [
   ['#1f3d2b', '#c8f169'],

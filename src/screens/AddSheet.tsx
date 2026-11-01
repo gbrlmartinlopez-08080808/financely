@@ -14,6 +14,7 @@ export function AddSheet({
   onDiscover,
   onLink,
   onPaste,
+  onNote,
   busy,
   error,
 }: {
@@ -25,6 +26,7 @@ export function AddSheet({
   onDiscover: () => void;
   onLink: (url: string) => void;
   onPaste: (text: string, title: string) => void;
+  onNote: () => void;
   busy: string | null;
   error: string | null;
 }) {
@@ -89,6 +91,13 @@ export function AddSheet({
               </span>
               Scan paper
               <span className="r">camera · ocr</span>
+            </button>
+            <button className="action" onClick={() => (onClose(), onNote())}>
+              <span className="ic">
+                <Pixel name="note" size={16} />
+              </span>
+              New note
+              <span className="r">write · edit anywhere</span>
             </button>
             <button className="action" onClick={() => setMode('paste')}>
               <span className="ic">

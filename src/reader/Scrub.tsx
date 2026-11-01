@@ -31,6 +31,7 @@ export function Scrub({ value, label, onChange, className = '', ariaLabel }: { v
       onPointerDown={(e) => {
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         const x = at(e.clientX);
+        window.dispatchEvent(new CustomEvent('frogity:scrub', { detail: true }));
         setHeld(x);
         tap('select');
         onChange(x, false);
@@ -50,9 +51,13 @@ export function Scrub({ value, label, onChange, className = '', ariaLabel }: { v
         if (held === null) return;
         const x = at(e.clientX);
         setHeld(null);
+        window.dispatchEvent(new CustomEvent('frogity:scrub', { detail: false }));
         onChange(x, true);
       }}
-      onPointerCancel={() => setHeld(null)}
+      onPointerCancel={() => {
+        setHeld(null);
+        window.dispatchEvent(new CustomEvent('frogity:scrub', { detail: false }));
+      }}
     >
       <div className="scrub-track" ref={track}>
         <i className="scrub-fill" style={{ width: `${v * 100}%` }} />

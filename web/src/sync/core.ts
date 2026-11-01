@@ -202,8 +202,8 @@ export const STORE_MAX = 4 * 1024 * 1024;
  * Seals a file (and a cover) and uploads it in parts. Returns what the item row needs. With `store` false only the
  * cover goes up: the file stays on the phone and is handed over when a computer asks for it.
  */
-export async function uploadFile(cfg: SyncConfig, creds: Creds, key: CryptoKey, id: string, file: Blob | null, cover?: Blob | null, onPart?: (done: number, total: number) => void, store = true) {
-  const ver = file ? newId() : undefined;
+export async function uploadFile(cfg: SyncConfig, creds: Creds, key: CryptoKey, id: string, file: Blob | null, cover?: Blob | null, onPart?: (done: number, total: number) => void, store = true, fixedVer?: string) {
+  const ver = file ? (fixedVer ?? newId()) : undefined;
   const allParts = file ? Math.max(1, Math.ceil(file.size / PART)) : 0;
   const parts = store ? allParts : 0;
   const coverVer = cover ? newId() : undefined;
@@ -239,15 +239,31 @@ async function putBytes(url: string, data: Uint8Array) {
 const RELAY_PART = 4 * 1024 * 1024; // small pieces: the computer fetches each one while the phone sends the next
 
 export async function relaySend(cfg: SyncConfig, creds: Creds, key: CryptoKey, req: string, file: Blob, ver: string | null, onPart?: (done: number, total: number) => void) {
+  const T = Date.now();
   const parts = Math.max(1, Math.ceil(file.size / RELAY_PART));
   const { urls } = await call<{ urls: string[] }>(cfg, creds, 'relay_upload_urls', { req, parts });
-  for (let i = 0; i < parts; i++) {
-    await putBytes(urls[i], await seal(key, new Uint8Array(await file.slice(i * RELAY_PART, (i + 1) * RELAY_PART).arrayBuffer())));
-    onPart?.(i + 1, parts);
-    // (not waited for: the next piece is already on its way)
-    if (i + 1 < parts) void call(cfg, creds, 'relay_part', { req, parts, got: i + 1 }).catch(() => {});
-  }
+  console.debug(`[sync] upload places after ${Date.now() - T} ms`);
+  // a few pieces at a time; the computer starts on the first ones while the rest are still going up
+  const done: boolean[] = new Array(parts).fill(false);
+  let next = 0;
+  let announced = 0;
+  const worker = async () => {
+    while (next < parts) {
+      const i = next++;
+      await putBytes(urls[i], await seal(key, new Uint8Array(await file.slice(i * RELAY_PART, (i + 1) * RELAY_PART).arrayBuffer())));
+      done[i] = true;
+      onPart?.(done.filter(Boolean).length, parts);
+      let c = 0;
+      while (c < parts && done[c]) c++;
+      if (c > announced && c < parts) {
+        announced = c;
+        void call(cfg, creds, 'relay_part', { req, parts, got: c }).catch(() => {});
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(3, parts) }, worker));
   await call(cfg, creds, 'relay_ready', { req, parts, size: file.size, ver });
+  console.debug(`[sync] handed over in ${Date.now() - T} ms`);
 }
 
 /**
@@ -255,8 +271,10 @@ export async function relaySend(cfg: SyncConfig, creds: Creds, key: CryptoKey, r
  * `onWait` is told how long it has been waiting, so the screen can say what is going on.
  */
 export async function relayFetch(cfg: SyncConfig, creds: Creds, key: CryptoKey, id: string, mime: string, onWait?: (secs: number) => void, onPart?: (done: number, total: number) => void, signal?: { stop: boolean }): Promise<Blob> {
+  const T = Date.now();
   const { req } = await call<{ req: string }>(cfg, creds, 'fetch_request', { id });
   const t0 = Date.now();
+  console.debug(`[sync] asked the phone (${t0 - T} ms)`);
   const out: Uint8Array[] = [];
   let started = false;
   for (;;) {
@@ -265,15 +283,21 @@ export async function relayFetch(cfg: SyncConfig, creds: Creds, key: CryptoKey, 
     const r = await call<{ status: string; parts?: number; got?: number; urls?: string[] }>(cfg, creds, 'relay_status', { req, from: out.length });
     if (r.status === 'gone') throw new SyncError(404, 'The request ran out — try again.');
     if (r.urls?.length) {
+      if (!started) console.debug(`[sync] first piece ready after ${Date.now() - t0} ms`);
       started = true;
-      for (const u of r.urls) {
-        const res = await fetch(u);
-        if (!res.ok) throw new SyncError(res.status, 'download failed');
-        out.push(await unseal(key, new Uint8Array(await res.arrayBuffer())));
-        onPart?.(out.length, r.parts ?? out.length);
-      }
+      // the pieces that are there come down together
+      const got = await Promise.all(
+        r.urls.map(async (u) => {
+          const res = await fetch(u);
+          if (!res.ok) throw new SyncError(res.status, 'download failed');
+          return unseal(key, new Uint8Array(await res.arrayBuffer()));
+        }),
+      );
+      for (const g of got) out.push(g);
+      onPart?.(out.length, r.parts ?? out.length);
     }
     if (r.status === 'ready' && out.length >= (r.parts ?? 1)) {
+      console.debug(`[sync] whole file after ${Date.now() - t0} ms`);
       void call(cfg, creds, 'relay_done', { req }).catch(() => {});
       return new Blob(out as BlobPart[], { type: mime });
     }
@@ -287,6 +311,7 @@ async function fetchParts(cfg: SyncConfig, creds: Creds, key: CryptoKey, id: str
   const { urls } = await call<{ urls: Record<string, string> }>(cfg, creds, 'download_urls', { id, names });
   const out: Uint8Array[] = [];
   for (let i = 0; i < names.length; i++) {
+    if (!urls[names[i]]) throw new SyncError(404, 'the file is not on the server');
     const r = await fetch(urls[names[i]]);
     if (!r.ok) throw new SyncError(r.status, 'download failed');
     out.push(await unseal(key, new Uint8Array(await r.arrayBuffer())));

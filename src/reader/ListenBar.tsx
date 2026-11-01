@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { bestVoice, listVoices, openVoiceInstall, speak, speechText, stopSpeaking, ttsAvailable, guessLang, type Voice } from '../lib/tts';
-import { NEURAL_PREFIX, NEURAL_VOICES, NeuralPlayer, enginePool, sharedEngine, warmSecond, isNeural, neuralDownload, neuralId, neuralRemove, neuralStored, neuralSupported } from '../lib/neural';
+import { NEURAL_PREFIX, NEURAL_VOICES, NeuralPlayer, sharedEngine, isNeural, lighterThan, neuralId, neuralStored, neuralSupported } from '../lib/neural';
+import { VoiceSheet } from './VoiceSheet';
 import { Scrub } from './Scrub';
+import { goPage } from './paged';
 import { firstVisibleSentence, markSaying, sentenceAtPoint, sentenceRaw, sentenceText, wrapSentences } from './dom';
 import { updateSettings, useStore } from '../lib/store';
 import { isNative, mediaStart, mediaStop, mediaUpdate, onMediaAction, tap } from '../lib/native';
@@ -33,7 +35,9 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
   const [sleep, setSleep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [stored, setStored] = useState<string[]>([]);
-  const [dl, setDl] = useState<{ id: string; p: number } | null>(null);
+  const [note, setNote] = useState('');
+  const storedRef = useRef<string[]>([]);
+  storedRef.current = stored;
   const player = useRef<NeuralPlayer | null>(null);
   const neuralBroken = useRef(false);
   const bestRef = useRef<string | undefined>(undefined);
@@ -104,7 +108,9 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
     const v = settings.ttsVoice;
     if (!isNeural(v) || !neuralSupported() || neuralBroken.current) return;
     // the first engine first, then the helper (so the first one never competes for the phone while it loads)
-    sharedEngine.init(neuralId(v)).then(() => warmSecond(neuralId(v)), () => {});
+    // the voice loads while the reader looks at the controls; pressing play never waits for it (the phone's voice covers)
+    const t = setTimeout(() => sharedEngine.init(neuralId(v)).catch(() => {}), 300);
+    return () => clearTimeout(t);
   }, [settings.ttsVoice]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -119,6 +125,11 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
     if (!el || !scroller) return;
     const r = el.getBoundingClientRect();
     const sr = scroller.getBoundingClientRect();
+    if (scroller.classList.contains('paged')) {
+      // flipping pages: turn to the page the sentence is on
+      if (r.left < sr.left - 2 || r.right > sr.right + 2) goPage(scroller, Math.round((scroller.scrollLeft + r.left - sr.left) / Math.max(1, scroller.clientWidth)));
+      return;
+    }
     if (r.top < sr.top + 90 || r.bottom > sr.bottom - 260) {
       scroller.scrollTo({ top: scroller.scrollTop + r.top - sr.top - sr.height * 0.3, behavior: 'smooth' });
     }
@@ -136,7 +147,7 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
     for (; i < n; i++) {
       const raw = i === from && offset > 0 ? sentenceRaw(root, i).slice(offset) : sentenceText(root, i);
       let t = speechText(raw);
-      if (!t || !/[\p{L}\p{N}]/u.test(t)) continue;
+      if (!t || !speakable(t)) continue;
       if (!/[.!?…:;,"”’)\]]$/.test(t)) t += '.'; // a heading or list line: a breath before the next one
       if (text && text.length + t.length > target * 1.35) break;
       parts.push({ i, at: text ? text.length + 1 : 0, w: t.length });
@@ -149,32 +160,96 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
     return text ? { text, parts, next: i } : null;
   };
 
+  /** The voice to use for this document: the chosen one, unless the book is in another language (then one of that language). */
+  const resolveVoice = (): string | undefined => {
+    const chosen = opts.current.ttsVoice;
+    if (!chosen || opts.current.autoVoice === false) return chosen;
+    const dl = lang.current.slice(0, 2);
+    const cl = isNeural(chosen) ? NEURAL_VOICES.find((v) => NEURAL_PREFIX + v.id === chosen)?.lang.slice(0, 2) : voices.find((v) => v.id === chosen)?.lang.slice(0, 2);
+    if (!cl || cl === dl) return chosen;
+    const mine = NEURAL_VOICES.filter((v) => v.lang.slice(0, 2) === dl && storedRef.current.includes(v.id)).sort((x, y) => Number(!!y.rec) - Number(!!x.rec))[0];
+    return mine ? NEURAL_PREFIX + mine.id : undefined; // none installed: the phone's own voice for that language
+  };
+
+  /** Skips what is not worth hearing: rows of numbers, formulas, table cells. */
+  const speakable = (t: string) => {
+    const letters = (t.match(/\p{L}/gu) ?? []).length;
+    return letters >= 2 && (t.length < 14 || letters / t.length > 0.45);
+  };
+
   /**
-   * Studio voice. A worker keeps the voice loaded and voices chunk after chunk; every chunk is placed on one audio
-   * clock right behind the previous one, so speech flows without gaps. The highlight follows that clock.
+   * Studio voice. One engine keeps the voice loaded; pieces are made ahead and placed on one audio clock right behind
+   * the last, so speech flows. If the phone ever falls behind, playback waits (a short, deliberate pause while it catches
+   * up) instead of stuttering. While the voice is still loading, the phone's own voice reads and hands over by itself.
    */
   const runNeural = async (from: number, my: number, sel: string, n: number, offset: number) => {
     if (!root) return;
-    setBusy(true);
-    let engines: Awaited<ReturnType<typeof enginePool>>;
-    try {
-      engines = await enginePool(neuralId(sel), (e) => my === token.current && !engines.includes(e) && engines.push(e));
-    } catch (e) {
-      console.warn('studio voice failed to load', e);
-      setBusy(false);
-      neuralBroken.current = true;
-      toast('The studio voice couldn’t start — using the phone’s voice');
-      if (my === token.current) run(from, offset);
-      return;
+    const eng = sharedEngine;
+    const vid = neuralId(sel);
+    if (!eng.isReady(vid)) {
+      // never make the reader wait for the voice to load: the phone's own voice starts now, the studio voice joins when ready
+      setBusy(true);
+      setNote('starting with the phone’s voice · the studio voice is loading');
+      let ready = false;
+      let failed = false;
+      const cut = () => {
+        // the phone's voice is cut short and the studio voice takes over from the sentence being heard
+        if (my === token.current) stopSpeaking();
+      };
+      eng.init(vid).then(
+        () => {
+          ready = true;
+          cut();
+        },
+        (e) => {
+          failed = true;
+          console.warn('studio voice failed to load', e);
+          cut();
+        },
+      );
+      const sys = await runSystem(from, my, n, offset, undefined, () => ready || failed, true);
+      if (my !== token.current) return;
+      if (failed) {
+        neuralBroken.current = true;
+        setNote('');
+        toast('The studio voice couldn’t start — using the phone’s voice');
+        return void run(sys.at, 0);
+      }
+      if (sys.done) return;
+      setNote('');
+      return runNeural(sys.at, my, sel, n, 0);
     }
-    if (my !== token.current) return;
+    setNote('');
+    // a slow phone: a lighter voice of this language plays smoother
+    if (eng.rtf > 0.9) {
+      const cur = NEURAL_VOICES.find((v) => v.id === vid);
+      const light = cur && lighterThan(cur);
+      if (light && storedRef.current.includes(light.id)) {
+        await updateSettings({ ttsVoice: NEURAL_PREFIX + light.id });
+        toast(`${cur.label} is heavy for this phone — using ${light.label}`);
+        return void run(from, offset);
+      }
+      if (light) toast(`${cur.label} is heavy for this phone. “${light.label}” would play smoother — open Voice to get it`, undefined, () => setVoiceSheet(true));
+    }
     const rate = opts.current.ttsRate;
     const say = Math.min(rate, 2);
     const tempo = rate > 2 ? rate / 2 : 1; // beyond 2× the voice itself stops getting faster: speed up playback a little
-    // starts the moment the first (short) piece is ready; the next ones are made while it plays
-    const pl = (player.current = new NeuralPlayer(tempo, 0.3));
-    let shown = -1;
+    const pl = (player.current = new NeuralPlayer(tempo, 0.25));
+    setBusy(true);
+
+    // the pipeline: pieces being made (in order), what has been placed, how fast this phone is
+    type Job = { ch: NonNullable<ReturnType<typeof buildChunk>>; p: Promise<{ samples: Float32Array; rate: number }> };
+    const jobs: Job[] = [];
+    let at = from;
+    let off = offset;
+    let made = 0;
+    let rtf = Math.max(0.15, eng.rtf || 0.5); // seconds of work per second of speech (measured, then kept up to date)
     let finished = false;
+    let shown = -1;
+    let holding = false;
+    let holdTarget = 2.5; // seconds to have in hand before playing on after running dry (grows if it happens again)
+    const CPS = 14; // characters per second of speech at 1×
+
     const watch = () => {
       if (my !== token.current) return;
       const i = pl.current();
@@ -185,13 +260,24 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
         localStorage.setItem('listen:' + docId, String(i));
         follow(markSaying(root, i));
       }
+      // ran dry while more is on its way: wait quietly, then go on once there is enough in hand
+      if (!holding && pl.started() && !finished && pl.ahead() < 0.12 && (jobs.length || at < n)) {
+        holding = true;
+        holdTarget = Math.min(14, holdTarget * 1.6);
+        pl.hold();
+        setNote('catching up…');
+      } else if (holding && (pl.ahead() >= holdTarget || (finished && jobs.length === 0))) {
+        holding = false;
+        pl.unhold();
+        setNote('');
+      }
       if (sleepAt.current && Date.now() > sleepAt.current && pl.started()) {
         sleepAt.current = 0;
         setSleep(0);
         toast('Sleep timer — paused. Sweet dreams.');
         return pause();
       }
-      if (finished && (pl.drained() || pl.empty())) {
+      if (finished && !holding && (pl.drained() || pl.empty())) {
         setPlaying(false);
         onPlaying(false);
         return;
@@ -200,39 +286,25 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
     };
     requestAnimationFrame(watch);
 
-    // A pipeline: up to one piece per engine is being made at any moment, and pieces are played in order. The first
-    // piece is a short phrase (it is heard within about a second), the second a little longer, then whole runs of
-    // sentences sized so each is ready long before the speech in hand runs out.
-    type Job = { ch: NonNullable<ReturnType<typeof buildChunk>>; p: Promise<{ samples: Float32Array; rate: number }> };
-    const jobs: Job[] = [];
-    let at = from;
-    let off = offset;
-    let made = 0;
-    let turn = 0;
-    let rtf = 0.5; // seconds of work per second of speech, per engine (measured as we go)
     // how many characters may the next piece have, so it is ready before the speech ahead of it has been heard?
-    const CPS = 14; // characters per second of speech at 1×
     const size = () => {
-      if (made === 0) return 22;
+      if (made === 0) return 24;
       const ahead = pl.buffered() + jobs.reduce((x, j) => x + j.ch.text.length / (CPS * say), 0);
       const budget = Math.round(((ahead * CPS * say) / rtf) * 0.55);
-      // grow gently at the start, then up to whole runs of sentences
       return Math.max(30, Math.min(made < 3 ? 40 * 2 ** made : 340, budget));
     };
     /** The next piece: whole sentences when they fit, otherwise the next phrase of a long sentence. */
     const piece = (target: number) => {
       const ch = buildChunk(at, n, off, target);
-      if (!ch || !root || ch.text.length <= target * 1.15) return ch;
+      if (!ch || ch.text.length <= target * 1.15) return ch;
       const first = ch.parts[0];
       if (ch.parts.length > 1) {
-        // several sentences and too long: keep only those that fit
         const keep = ch.parts.filter((p) => p.at + p.w <= target * 1.15);
         if (keep.length) {
           const last = keep[keep.length - 1];
           return { text: ch.text.slice(0, last.at + last.w), parts: keep, next: last.i + 1 };
         }
       }
-      // one long sentence: up to its first natural break after a little while (or a space)
       const startOff = first.i === at ? off : 0;
       const raw = sentenceRaw(root, first.i).slice(startOff);
       const lo = Math.min(made === 0 ? 12 : 20, raw.length);
@@ -245,7 +317,7 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
       return { text: head, parts: [{ i: first.i, at: 0, w: head.length }], next: first.i, off: startOff + cut };
     };
     const fill = () => {
-      while (my === token.current && at < n && jobs.length < engines.length + 1 && pl.ahead() < 40) {
+      while (my === token.current && at < n && jobs.length < 2 && pl.ahead() < 40) {
         const ch = piece(size()) as (NonNullable<ReturnType<typeof buildChunk>> & { off?: number }) | null;
         if (!ch) {
           at = n;
@@ -253,7 +325,6 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
         }
         off = ch.off ?? 0;
         at = ch.next;
-        const eng = engines[turn++ % engines.length];
         const t0 = performance.now();
         const p = eng.say(ch.text, say).then((r) => {
           const secs = r.samples.length / r.rate / say;
@@ -272,15 +343,13 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
       try {
         const r = await job.p;
         if (my !== token.current) return;
-        console.debug(`[studio] ${job.ch.parts.length} sentence(s), ${(r.samples.length / r.rate).toFixed(1)} s of speech · ${pl.ahead().toFixed(1)} s ready ahead · ${engines.length} engine(s) · rtf ${rtf.toFixed(2)}`);
-        // a breath after a full stop, a shorter one after a phrase
-        // pauses like a narrator's: a breath after a sentence, a longer one between paragraphs and after a heading,
-        // a short one at a phrase break inside a sentence
+        console.debug(`[studio] ${job.ch.parts.length} sentence(s), ${(r.samples.length / r.rate).toFixed(1)} s of speech · ${pl.ahead().toFixed(1)} s ready ahead · rtf ${rtf.toFixed(2)}`);
+        // pauses like a narrator's: a breath after a sentence, a longer one between paragraphs and after a heading
         const lastI = job.ch.parts[job.ch.parts.length - 1].i;
         const endsSentence = /[.!?…]["”’)\]]*$/.test(job.ch.text) && job.ch.next > lastI;
         const blockOf = (i: number) => root.querySelector(`.s[data-i="${i}"]`)?.closest('p, li, h1, h2, h3, h4, h5, h6, blockquote, figcaption, td, pre, dd, dt');
         const here = endsSentence ? blockOf(lastI) : null;
-        const gap = !endsSentence ? (/[,;:—–]$/.test(job.ch.text) ? 0.08 : 0.02) : here && /^H\d$/.test(here.tagName) ? 0.55 : here && here !== blockOf(lastI + 1) ? 0.42 : 0.17;
+        const gap = !endsSentence ? (/[,;:—–]$/.test(job.ch.text) ? 0.08 : 0.02) : here && /^H\d$/.test(here.tagName) ? 0.5 : here && here !== blockOf(lastI + 1) ? 0.38 : 0.2;
         pl.enqueue(job.ch.parts.map((p) => ({ i: p.i, w: p.w })), r.samples, r.rate, gap);
       } catch (e) {
         if (my !== token.current) return;
@@ -291,71 +360,89 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
         run(job.ch.parts[0].i);
         return;
       }
-      // keep at most about forty seconds ready
       while (my === token.current && pl.ahead() > 40) await new Promise((r) => setTimeout(r, 250));
     }
+    if (my !== token.current) return;
     pl.release();
     finished = true;
+  };
+
+  /**
+   * The phone's own voice: several sentences per request (so it doesn't end every sentence on a falling note), and the
+   * engine's word positions move the highlight. `handoff` is asked after each piece: when it says yes, this returns and the
+   * studio voice takes over from the next sentence.
+   */
+  const runSystem = async (from: number, my: number, n: number, offset: number, chosen: string | undefined, handoff?: () => boolean, short = false): Promise<{ at: number; done: boolean }> => {
+    let at = from;
+    let off = offset;
+    let first = true;
+    while (at < n) {
+      if (my !== token.current) return { at, done: true };
+      if (handoff?.()) return { at, done: false };
+      const ch = buildChunk(at, n, off, first || short ? 90 : 300);
+      off = 0;
+      first = false;
+      if (!ch) break;
+      at = ch.next;
+      const show = (k: number) => {
+        const i = ch.parts[k].i;
+        setIdx(i);
+        localStorage.setItem('listen:' + docId, String(i));
+        follow(markSaying(root!, i));
+      };
+      let cur = 0;
+      let heard = false;
+      const t0 = Date.now();
+      show(0);
+      setBusy(false);
+      const move = (pos: number) => {
+        let k = cur;
+        while (k + 1 < ch.parts.length && ch.parts[k + 1].at <= pos) k++;
+        if (k !== cur) {
+          cur = k;
+          show(k);
+        }
+      };
+      const s = opts.current;
+      const timer = setInterval(() => !heard && move(((Date.now() - t0) / 1000) * 14 * s.ttsRate), 250);
+      const r = await speak(ch.text, { rate: s.ttsRate, pitch: s.ttsPitch, voice: chosen ?? bestRef.current, lang: lang.current }, (ci) => {
+        heard = true;
+        move(ci);
+      });
+      clearInterval(timer);
+      if (my !== token.current) return { at, done: true };
+      // handed over mid-piece: the sentence being heard is read again by the new voice
+      if (r === 'stopped' && handoff?.()) return { at: ch.parts[Math.min(cur, ch.parts.length - 1)].i, done: false };
+      if (r === 'stopped') return { at, done: true };
+      if (sleepAt.current && Date.now() > sleepAt.current) {
+        sleepAt.current = 0;
+        setSleep(0);
+        toast('Sleep timer — paused. Sweet dreams.');
+        return { at, done: true };
+      }
+    }
+    if (my === token.current) {
+      setPlaying(false);
+      onPlaying(false);
+    }
+    return { at, done: true };
   };
 
   const run = useCallback(
     async (from: number, offset = 0) => {
       if (!root) return;
+      // whatever was playing stops first, completely: no old audio, no sentences still being made
+      player.current?.stop();
+      player.current = null;
+      stopSpeaking();
+      sharedEngine.cancel();
       const my = ++token.current;
       setPlaying(true);
       onPlaying(true);
       const n = Number(root.dataset.wrapped ?? 0);
-      const chosen = opts.current.ttsVoice;
+      const chosen = resolveVoice();
       if (isNeural(chosen) && !neuralBroken.current) return runNeural(from, my, chosen, n, offset);
-      // The phone's own voice: several sentences per request (so it doesn't end every sentence on a falling note), and the
-      // engine's word positions move the highlight. Engines that don't report positions get an estimate from the clock.
-      let at = from;
-      let off = offset;
-      let first = true;
-      while (at < n) {
-        if (my !== token.current) return;
-        const ch = buildChunk(at, n, off, first ? 120 : 300);
-        off = 0;
-        first = false;
-        if (!ch) break;
-        at = ch.next;
-        const show = (k: number) => {
-          const i = ch.parts[k].i;
-          setIdx(i);
-          localStorage.setItem('listen:' + docId, String(i));
-          follow(markSaying(root, i));
-        };
-        let cur = 0;
-        let heard = false;
-        const t0 = Date.now();
-        show(0);
-        const move = (pos: number) => {
-          let k = cur;
-          while (k + 1 < ch.parts.length && ch.parts[k + 1].at <= pos) k++;
-          if (k !== cur) {
-            cur = k;
-            show(k);
-          }
-        };
-        const s = opts.current;
-        const timer = setInterval(() => !heard && move(((Date.now() - t0) / 1000) * 14 * s.ttsRate), 250);
-        const r = await speak(ch.text, { rate: s.ttsRate, pitch: s.ttsPitch, voice: chosen ?? bestRef.current, lang: lang.current }, (ci) => {
-          heard = true;
-          move(ci);
-        });
-        clearInterval(timer);
-        if (my !== token.current || r === 'stopped') return;
-        if (sleepAt.current && Date.now() > sleepAt.current) {
-          sleepAt.current = 0;
-          setSleep(0);
-          toast('Sleep timer — paused. Sweet dreams.');
-          break;
-        }
-      }
-      if (my === token.current) {
-        setPlaying(false);
-        onPlaying(false);
-      }
+      await runSystem(from, my, n, offset, chosen);
     },
     [root, docId, onPlaying], // eslint-disable-line react-hooks/exhaustive-deps
   );
@@ -365,6 +452,8 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
     stopSpeaking();
     player.current?.stop();
     player.current = null;
+    sharedEngine.cancel();
+    setNote('');
     setBusy(false);
     setPlaying(false);
     onPlaying(false);
@@ -450,8 +539,6 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
   const nv = isNeural(settings.ttsVoice) ? NEURAL_VOICES.find((v) => NEURAL_PREFIX + v.id === settings.ttsVoice) : undefined;
   const voice = voices.find((v) => v.id === settings.ttsVoice) ?? (nv ? undefined : voices.find((v) => v.id === bestRef.current));
   const docLang = lang.current.slice(0, 2);
-  const sortedVoices = [...voices].sort((a, b) => Number(b.lang.startsWith(docLang)) - Number(a.lang.startsWith(docLang)) || b.score - a.score || a.lang.localeCompare(b.lang));
-  const studio = [...NEURAL_VOICES].sort((a, b) => Number(b.lang.startsWith(docLang)) - Number(a.lang.startsWith(docLang)));
 
   return (
     <div className="listen" style={{ position: 'relative' }}>
@@ -480,7 +567,7 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
           <i />
           <i />
         </span>
-        <span className="grow">{busy ? 'preparing the voice…' : playing ? 'reading aloud' : 'paused'} · {idx + 1}/{total || '–'}</span>
+        <span className="grow">{note || (busy ? 'getting ready…' : playing ? 'reading aloud' : 'paused')} · {idx + 1}/{total || '–'}</span>
         <span>{leftMin} min left</span>
       </div>
       <Scrub
@@ -551,110 +638,19 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
           <Icon name="ear" size={15} /> Focus
         </button>
       </div>
-      <Sheet open={voiceSheet} onClose={() => setVoiceSheet(false)} title="Voice">
-        <div className="sheet-body">
-          {neuralSupported() && (
-            <>
-              <div className="voice-h">
-                <b>Natural voices</b>
-                <span>{stored.length ? 'the most natural · free · works offline' : 'the most natural · free · the first one also installs a ~30 MB speech engine'}</span>
-              </div>
-              <div className="actions">
-                {studio.map((v) => {
-                  const have = stored.includes(v.id);
-                  const on = settings.ttsVoice === NEURAL_PREFIX + v.id;
-                  const busyDl = dl?.id === v.id;
-                  return (
-                    <div key={v.id} className="voice-row">
-                      <button
-                        className="action"
-                        disabled={busyDl}
-                        onClick={async () => {
-                          if (have) {
-                            neuralBroken.current = false;
-                            await updateSettings({ ttsVoice: NEURAL_PREFIX + v.id });
-                            setVoiceSheet(false);
-                            restartAtCurrent();
-                            return;
-                          }
-                          setDl({ id: v.id, p: 0 });
-                          try {
-                            await neuralDownload(v.id, (p) => setDl({ id: v.id, p }));
-                            setStored(await neuralStored());
-                            neuralBroken.current = false;
-                            await updateSettings({ ttsVoice: NEURAL_PREFIX + v.id });
-                            toast(`${v.label} is ready`);
-                            setVoiceSheet(false);
-                            restartAtCurrent();
-                          } catch {
-                            toast('Download failed — check your connection');
-                          } finally {
-                            setDl(null);
-                          }
-                        }}
-                      >
-                        <span className="ic mono" style={{ fontSize: 11 }}>
-                          {v.lang.slice(0, 2)}
-                        </span>
-                        <span style={{ flex: 1, minWidth: 0 }}>
-                          <span style={{ display: 'block' }}>{v.label}</span>
-                          <small className="muted mono" style={{ fontSize: 10.5 }}>
-                            {busyDl ? `downloading ${Math.round((dl?.p ?? 0) * 100)}%` : `${v.note}${have ? '' : ` · ${v.mb} MB`}`}
-                          </small>
-                        </span>
-                        {on ? <Icon name="check" /> : !have && !busyDl ? <span className="mono" style={{ fontSize: 11 }}>get</span> : null}
-                      </button>
-                      {have && (
-                        <button
-                          className="chip"
-                          aria-label={`Remove ${v.label}`}
-                          onClick={async () => {
-                            await neuralRemove(v.id).catch(() => {});
-                            setStored(await neuralStored());
-                            if (on) updateSettings({ ttsVoice: undefined });
-                          }}
-                        >
-                          <Icon name="trash" size={16} />
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-          <div className="voice-h" style={{ marginTop: 18 }}>
-            <b>Fast voices</b>
-            <span>this phone’s own voices, in many accents · start instantly</span>
-          </div>
-          {isNative && (
-            <button className="pill ghost sm" style={{ margin: '0 0 10px' }} onClick={() => openVoiceInstall()}>
-              Get more natural voices
-            </button>
-          )}
-          {!voices.length && <p className="muted mono" style={{ fontSize: 12 }}>No voices reported by the system. Install voices in Android Settings → Text-to-speech.</p>}
-          <div className="actions">
-            {sortedVoices.slice(0, 80).map((v) => (
-              <button
-                key={v.id}
-                className="action"
-                onClick={async () => {
-                  await updateSettings({ ttsVoice: v.id });
-                  setVoiceSheet(false);
-                  restartAtCurrent();
-                }}
-              >
-                <span className="ic mono" style={{ fontSize: 11 }}>
-                  {v.lang.slice(0, 2)}
-                </span>
-                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.name}</span>
-                {v.natural && <span className="mono" style={{ fontSize: 10, opacity: 0.6 }}>natural</span>}
-                {(settings.ttsVoice === v.id || (!settings.ttsVoice && bestRef.current === v.id)) && <Icon name="check" />}
-              </button>
-            ))}
-          </div>
-        </div>
-      </Sheet>
+      <VoiceSheet
+        open={voiceSheet}
+        onClose={() => setVoiceSheet(false)}
+        docLang={docLang}
+        stored={stored}
+        refreshStored={async () => setStored(await neuralStored())}
+        voices={voices}
+        bestId={bestRef.current}
+        onPicked={() => {
+          neuralBroken.current = false;
+          restartAtCurrent();
+        }}
+      />
     </div>
   );
 }

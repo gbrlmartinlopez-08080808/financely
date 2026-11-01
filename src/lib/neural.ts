@@ -4,31 +4,62 @@
 // scheduled sentence by sentence on one timeline, so phrases follow each other without gaps.
 export type VoiceId = string;
 
+export type Tier = 'light' | 'standard' | 'hd';
 export interface NeuralVoice {
   id: VoiceId;
   label: string;
   note: string;
   lang: string; // BCP-47
   mb: number;
+  /** light: smallest and fastest · standard: balanced (the default) · hd: richest, for recent phones */
+  tier: Tier;
+  /** the one offered first for its language */
+  rec?: boolean;
 }
 
-export const NEURAL_VOICES: NeuralVoice[] = [
-  { id: 'en_US-lessac-high', label: 'Lessac HD', note: 'most natural · audiobook · US · needs a recent phone', lang: 'en-US', mb: 114 },
-  { id: 'en_US-ryan-high', label: 'Ryan HD', note: 'most natural · narrator · US man · recent phone', lang: 'en-US', mb: 121 },
-  { id: 'en_GB-cori-high', label: 'Cori HD', note: 'most natural · British woman · recent phone', lang: 'en-GB', mb: 114 },
-  { id: 'en_US-hfc_female-medium', label: 'Ava', note: 'warm, clear · US woman', lang: 'en-US', mb: 63 },
-  { id: 'en_US-ryan-medium', label: 'Ryan', note: 'steady narrator · US man', lang: 'en-US', mb: 63 },
-  { id: 'en_US-lessac-medium', label: 'Lessac', note: 'audiobook style · US', lang: 'en-US', mb: 63 },
-  { id: 'en_GB-alba-medium', label: 'Alba', note: 'gentle · Scottish woman', lang: 'en-GB', mb: 63 },
-  { id: 'en_GB-alan-medium', label: 'Alan', note: 'calm · British man', lang: 'en-GB', mb: 63 },
-  { id: 'es_ES-davefx-medium', label: 'Dave', note: 'español · hombre', lang: 'es-ES', mb: 63 },
-  { id: 'fr_FR-siwis-medium', label: 'Siwis', note: 'français · femme', lang: 'fr-FR', mb: 63 },
-  { id: 'de_DE-thorsten-medium', label: 'Thorsten', note: 'Deutsch · Mann', lang: 'de-DE', mb: 63 },
-  { id: 'de_DE-thorsten-high', label: 'Thorsten HD', note: 'Deutsch · Mann · am natürlichsten', lang: 'de-DE', mb: 114 },
-  { id: 'es_MX-claude-high', label: 'Claude HD', note: 'español (México) · hombre · más natural', lang: 'es-MX', mb: 63 },
-  { id: 'it_IT-riccardo-x_low', label: 'Riccardo', note: 'italiano · uomo · compact', lang: 'it-IT', mb: 28 },
-  { id: 'pt_BR-faber-medium', label: 'Faber', note: 'português · homem', lang: 'pt-BR', mb: 63 },
+export const TIER_INFO: Record<Tier, { label: string; hint: string }> = {
+  light: { label: 'Light', hint: 'small and very fast — any phone' },
+  standard: { label: 'Standard', hint: 'natural and quick — most phones' },
+  hd: { label: 'HD', hint: 'richest sound — needs a recent phone' },
+};
+
+/** Languages the studio voices cover (the order they are listed in). */
+export const VOICE_LANGS: { code: string; label: string }[] = [
+  { code: 'en', label: 'English' },
+  { code: 'es', label: 'Español' },
+  { code: 'fr', label: 'Français' },
+  { code: 'de', label: 'Deutsch' },
+  { code: 'it', label: 'Italiano' },
+  { code: 'pt', label: 'Português' },
 ];
+
+export const NEURAL_VOICES: NeuralVoice[] = [
+  { id: 'en_US-hfc_female-medium', label: 'Ava', note: 'warm, clear · US woman', lang: 'en-US', mb: 63, tier: 'standard', rec: true },
+  { id: 'en_US-ryan-medium', label: 'Ryan', note: 'steady narrator · US man', lang: 'en-US', mb: 63, tier: 'standard' },
+  { id: 'en_US-lessac-medium', label: 'Lessac', note: 'audiobook style · US', lang: 'en-US', mb: 63, tier: 'standard' },
+  { id: 'en_GB-alba-medium', label: 'Alba', note: 'gentle · Scottish woman', lang: 'en-GB', mb: 63, tier: 'standard' },
+  { id: 'en_GB-alan-medium', label: 'Alan', note: 'calm · British man', lang: 'en-GB', mb: 63, tier: 'standard' },
+  { id: 'en_US-lessac-high', label: 'Lessac HD', note: 'audiobook · US', lang: 'en-US', mb: 114, tier: 'hd' },
+  { id: 'en_US-ryan-high', label: 'Ryan HD', note: 'narrator · US man', lang: 'en-US', mb: 121, tier: 'hd' },
+  { id: 'en_GB-cori-high', label: 'Cori HD', note: 'British woman', lang: 'en-GB', mb: 114, tier: 'hd' },
+  { id: 'es_ES-carlfm-x_low', label: 'Carlos', note: 'español · hombre', lang: 'es-ES', mb: 28, tier: 'light' },
+  { id: 'es_ES-davefx-medium', label: 'Dave', note: 'español · hombre', lang: 'es-ES', mb: 63, tier: 'standard', rec: true },
+  { id: 'es_MX-ald-medium', label: 'Ald', note: 'español (México) · hombre', lang: 'es-MX', mb: 63, tier: 'standard' },
+  { id: 'es_MX-claude-high', label: 'Claude', note: 'español (México) · más natural', lang: 'es-MX', mb: 63, tier: 'hd' },
+  { id: 'fr_FR-siwis-low', label: 'Siwis', note: 'français · femme', lang: 'fr-FR', mb: 28, tier: 'light' },
+  { id: 'fr_FR-siwis-medium', label: 'Siwis', note: 'français · femme', lang: 'fr-FR', mb: 63, tier: 'standard', rec: true },
+  { id: 'de_DE-eva_k-x_low', label: 'Eva', note: 'Deutsch · Frau', lang: 'de-DE', mb: 21, tier: 'light' },
+  { id: 'de_DE-thorsten-medium', label: 'Thorsten', note: 'Deutsch · Mann', lang: 'de-DE', mb: 63, tier: 'standard', rec: true },
+  { id: 'de_DE-thorsten-high', label: 'Thorsten HD', note: 'Deutsch · Mann', lang: 'de-DE', mb: 114, tier: 'hd' },
+  { id: 'it_IT-riccardo-x_low', label: 'Riccardo', note: 'italiano · uomo', lang: 'it-IT', mb: 28, tier: 'light', rec: true },
+  { id: 'it_IT-paola-medium', label: 'Paola', note: 'italiano · donna', lang: 'it-IT', mb: 64, tier: 'standard' },
+  { id: 'pt_BR-faber-medium', label: 'Faber', note: 'português · homem', lang: 'pt-BR', mb: 63, tier: 'standard', rec: true },
+];
+
+/** The voice offered first for a language (light on slow phones). */
+export const recommendedFor = (lang: string, tier: Tier = 'standard') => NEURAL_VOICES.find((v) => v.lang.slice(0, 2) === lang && v.tier === tier && (v.rec || tier !== 'standard')) ?? NEURAL_VOICES.find((v) => v.lang.slice(0, 2) === lang && v.rec) ?? NEURAL_VOICES.find((v) => v.lang.slice(0, 2) === lang);
+/** The lighter voice of the same language, if there is one. */
+export const lighterThan = (v: NeuralVoice) => NEURAL_VOICES.find((x) => x.lang.slice(0, 2) === v.lang.slice(0, 2) && (v.tier === 'hd' ? x.tier === 'standard' && x.rec : v.tier === 'standard' ? x.tier === 'light' : false));
 
 export const NEURAL_PREFIX = 'neural:';
 export const isNeural = (voice?: string): voice is string => !!voice && voice.startsWith(NEURAL_PREFIX);
@@ -40,6 +71,9 @@ const RUNTIME: { name: string; url: string }[] = [
   { name: 'piper_phonemize.wasm', url: 'https://cdn.jsdelivr.net/npm/@diffusionstudio/piper-wasm@1.0.0/build/piper_phonemize.wasm' },
   { name: 'piper_phonemize.data', url: 'https://cdn.jsdelivr.net/npm/@diffusionstudio/piper-wasm@1.0.0/build/piper_phonemize.data' },
 ];
+
+/** A short recording of the voice (about 5 s), streamed when you tap ▶ — no download of the voice needed. */
+export const sampleUrl = (id: VoiceId) => `https://huggingface.co/rhasspy/piper-voices/resolve/main/${voicePath(id).split('/').slice(0, -1).join('/')}/samples/speaker_0.mp3`;
 
 /** en_US-ryan-medium → en/en_US/ryan/medium/en_US-ryan-medium */
 const voicePath = (id: string) => {
@@ -128,18 +162,22 @@ export async function neuralRemove(id: VoiceId) {
 export class NeuralEngine {
   private w: Worker | null = null;
   private seq = 0;
-  private waits = new Map<number, { ok: (v: { samples: Float32Array; rate: number } | void) => void; fail: (e: Error) => void }>();
+  private waits = new Map<number, { ok: (v: { samples: Float32Array; rate: number } | { rtf: number } | void) => void; fail: (e: Error) => void; say: boolean }>();
   private voice = '';
+  /** how long this phone takes to make one second of speech with the loaded voice (measured when it loaded) */
+  rtf = 0;
+  private loading: { voice: string; p: Promise<void> } | null = null;
 
   private worker() {
     if (!this.w) {
       this.w = new Worker(new URL('./piper.worker.ts', import.meta.url), { type: 'module' });
       this.w.onmessage = (e: MessageEvent) => {
-        const m = e.data as { type: string; id: number; samples?: Float32Array; rate?: number; message?: string };
+        const m = e.data as { type: string; id: number; samples?: Float32Array; rate?: number; message?: string; rtf?: number };
         const t = this.waits.get(m.id);
         if (!t) return;
         this.waits.delete(m.id);
         if (m.type === 'error') t.fail(new Error(m.message));
+        else if (m.type === 'ready') t.ok({ rtf: m.rtf ?? 0 });
         else t.ok(m.samples ? { samples: m.samples, rate: m.rate! } : undefined);
       };
       this.w.onerror = (e) => {
@@ -153,17 +191,20 @@ export class NeuralEngine {
   private call<T>(msg: Record<string, unknown>): Promise<T> {
     const id = ++this.seq;
     return new Promise<T>((ok, fail) => {
-      this.waits.set(id, { ok: ok as never, fail });
+      this.waits.set(id, { ok: ok as never, fail, say: msg.type === 'say' });
       this.worker().postMessage({ ...msg, id });
     });
   }
-  private loading: { voice: string; p: Promise<void> } | null = null;
+  isReady(voice: VoiceId) {
+    return this.voice === voice;
+  }
   async init(voice: VoiceId) {
     if (this.voice === voice) return;
     // asked again while it is loading: wait for the same load
     if (this.loading?.voice === voice) return this.loading.p;
-    const p = this.call<void>({ type: 'init', voice }).then(() => {
+    const p = this.call<{ rtf: number }>({ type: 'init', voice }).then((r) => {
       this.voice = voice;
+      this.rtf = r.rtf;
     });
     this.loading = { voice, p };
     try {
@@ -175,6 +216,17 @@ export class NeuralEngine {
   say(text: string, rate: number) {
     return this.call<{ samples: Float32Array; rate: number }>({ type: 'say', text, rate });
   }
+  /** Stops at once: sentences waiting are dropped (the one being made finishes, and its result is ignored). */
+  cancel() {
+    if (!this.w) return;
+    this.w.postMessage({ type: 'cancel' });
+    const err = new Error('stopped');
+    for (const [id, t] of [...this.waits]) {
+      if (!t.say) continue; // a voice that is loading carries on: it is wanted again soon
+      this.waits.delete(id);
+      t.fail(err);
+    }
+  }
   dispose() {
     this.w?.terminate();
     this.w = null;
@@ -185,25 +237,8 @@ export class NeuralEngine {
   }
 }
 
-/** One engine for the whole app: the voice stays loaded (and warm) between books, so Listen starts at once. */
+/** One engine for the whole app: the voice stays loaded between books, so Listen starts at once. */
 export const sharedEngine = new NeuralEngine();
-/**
- * A second engine on phones with the cores and memory for it: the two voice alternate chunks, so the next one is
- * always ready before the last one ends — no gaps, even on the bigger HD voices.
- */
-const cores = navigator.hardwareConcurrency ?? 4;
-const mem = (navigator as unknown as { deviceMemory?: number }).deviceMemory ?? 4;
-const secondEngine = cores >= 4 && mem >= 3 ? new NeuralEngine() : null;
-/**
- * The engines to use for `voice`: the first one loaded and warm; `onJoin` is called when the second one is ready too
- * (it starts helping from that moment, nobody waits for it).
- */
-export async function enginePool(voice: VoiceId, onJoin: (e: NeuralEngine) => void): Promise<NeuralEngine[]> {
-  await sharedEngine.init(voice);
-  if (secondEngine) secondEngine.init(voice).then(() => onJoin(secondEngine), () => {});
-  return [sharedEngine];
-}
-export const warmSecond = (voice: VoiceId) => void secondEngine?.init(voice).catch(() => {});
 
 // ------------------------------------------------------------------ gapless playback
 interface Slot {
@@ -297,6 +332,13 @@ export class NeuralPlayer {
     this.released = true;
     for (const h of this.held) this.place(h.parts, h.buf, h.gap);
     this.held = [];
+  }
+  /** Wait: the clock stops (nothing is heard) until `unhold`; what is placed meanwhile plays right after. */
+  hold() {
+    this.ctx.suspend().catch(() => {});
+  }
+  unhold() {
+    this.ctx.resume().catch(() => {});
   }
   /** nothing at all was voiced */
   empty() {

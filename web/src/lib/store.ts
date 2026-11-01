@@ -32,12 +32,14 @@ export interface State {
   phase: 'loading' | 'unpaired' | 'ready';
   docs: LocalDoc[];
   covers: Record<string, string>;
+  /** documents whose file is already on this computer (they open at once) */
+  cached: Record<string, boolean>;
   sync: SyncState;
   /** why this computer was disconnected, if it was */
   notice: string;
 }
 
-let state: State = { phase: 'loading', docs: [], covers: {}, sync: { live: false, busy: 0, error: '', last: 0 }, notice: '' };
+let state: State = { phase: 'loading', docs: [], covers: {}, cached: {}, sync: { live: false, busy: 0, error: '', last: 0 }, notice: '' };
 const subs = new Set<() => void>();
 export const getState = () => state;
 export function setState(patch: Partial<State> | ((s: State) => Partial<State>)) {

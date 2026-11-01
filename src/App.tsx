@@ -417,7 +417,7 @@ export default function App() {
         onSample={() => importFile(new Blob([welcome], { type: 'text/markdown' }), 'Welcome to Frogity.md', { title: 'Welcome to Frogity' }).then((m) => setOpenId(m.id))}
       />
       <StatsBubble open={stats} onClose={() => (setStats(false), setReward(null))} reward={reward} onRewardDone={() => {}} />
-      {openDoc && <Reader key={openDoc.id} doc={openDoc} onClose={() => setOpenId(null)} onConvert={(doc, root) => setConvert({ doc, root })} />}
+      {openDoc && <Reader key={openDoc.id} doc={openDoc} onClose={() => setOpenId(null)} onConvert={(doc, root) => setConvert({ doc, root })} onOpenDoc={setOpenId} />}
       <Settings open={settings} onClose={() => setSettings(false)} />
       {tour && <Tour onDone={() => (setTour(false), db.put('kv', 'tour', 'done'))} />}
       <RateSheet open={rate} onClose={closeRate} streak={streakInfo(getState().days).current} />
@@ -447,6 +447,12 @@ export default function App() {
           const m = await importText(text, title);
           setAddOpen(false);
           toast('Saved to your shelf');
+          setOpenId(m.id);
+        }}
+        onNote={async () => {
+          const { makeFr } = await import('./lib/fr');
+          const m = await importFile(makeFr('Untitled note', ''), 'Untitled note.fr', { title: 'Untitled note' });
+          sessionStorage.setItem('fr:edit', m.id); // opens ready to write in
           setOpenId(m.id);
         }}
         busy={linkBusy}

@@ -3,6 +3,8 @@ import { docById, toast } from '../lib/store';
 import { deleteDoc, getFile, importFiles, updateDoc } from '../sync/engine';
 import { ask, download, prompt } from './bits';
 import { forgetTabs, openDoc } from './state';
+import { makeFr } from '../lib/fr';
+import { cleanHtml } from '../lib/convert';
 
 export async function newDocument(title = 'Untitled') {
   const name = await prompt('New document', title, 'Create');
@@ -80,4 +82,64 @@ export async function exportMarks(ids: string[]) {
   const md = marksMarkdown(ids);
   if (!md) return toast('No highlights yet');
   download(new Blob([md], { type: 'text/markdown' }), 'Frogity highlights.md');
+}
+
+// ---------------------------------------------------------------- Frogity documents (.fr): editable everywhere
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+/** A new, empty note; it opens ready to write in (and appears on the phone). */
+export async function newFrDoc(title = 'Untitled note'): Promise<string | undefined> {
+  const name = await prompt('New note', title, 'Create');
+  if (!name) return;
+  const [id] = await importFiles([{ name: `${name}.fr`, blob: makeFr(name, '') }]);
+  if (id) openDoc(id);
+  return id;
+}
+/** The HTML of a document, for turning it into a Frogity document. */
+async function htmlOf(blob: Blob, kind: string): Promise<string | null> {
+  if (kind === 'docx') return (await (await import('mammoth')).convertToHtml({ arrayBuffer: await blob.arrayBuffer() })).value;
+  if (kind === 'markdown') return await (await import('marked')).marked.parse(await blob.text(), { gfm: true });
+  if (kind === 'html') return cleanHtml(await blob.text());
+  if (kind === 'text' || kind === 'code') return (await blob.text()).split(/\n{2,}/).map((p) => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`).join('');
+  return null;
+}
+/** Word, Markdown, web pages and text become Frogity documents: editable on the computer and the phone alike. */
+export async function convertToFr(id: string): Promise<string | undefined> {
+  const d = docById(id);
+  if (!d) return;
+  try {
+    const html = await htmlOf(await getFile(id), d.meta.doc.kind);
+    if (html === null) return void toast('This kind of file can’t be turned into an editable note yet');
+    const [nid] = await importFiles([{ name: `${d.meta.doc.name}.fr`, blob: makeFr(d.meta.doc.name, html) }]);
+    toast('Made an editable copy — it is on your phone too');
+    return nid;
+  } catch (e) {
+    toast('Could not convert: ' + (e as Error).message);
+  }
+}
+/** Notes from Word, Google Docs (downloaded as Word), Markdown or text: each becomes a Frogity document. */
+export async function importNotes(files: File[]) {
+  const made: string[] = [];
+  for (const f of files) {
+    const kind = (await import('../lib/kinds')).kindOf(f.name, f.type);
+    if (kind === 'pdf' || kind === 'epub' || kind === 'image') {
+      const ids = await importFiles([f]);
+      made.push(...ids);
+      continue;
+    }
+    const html = await htmlOf(f, kind).catch(() => null);
+    if (html === null) {
+      toast(`“${f.name}” can’t be turned into a note — added as it is`);
+      made.push(...(await importFiles([f])));
+      continue;
+    }
+    const title = f.name.replace(/\.[^.]+$/, '');
+    made.push(...(await importFiles([{ name: `${title}.fr`, blob: makeFr(title, html) }])));
+  }
+  if (made.length === 1) openDoc(made[0]);
+  return made;
+}
+/** Paste from Google Docs or Word: a new note opens, ready for ⌘V. */
+export async function pasteFromDocs() {
+  const id = await newFrDoc('Pasted from Docs');
+  if (id) toast('Now paste (⌘V) — headings, lists, bold and links come with it');
 }

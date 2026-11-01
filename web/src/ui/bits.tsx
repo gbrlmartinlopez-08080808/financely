@@ -1,19 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useToasts } from '../lib/store';
+import { PixelLoader } from './px';
 
-export function Frog({ size = 22 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden>
-      <rect width="32" height="32" rx="8" fill="currentColor" opacity="0" />
-      <circle cx="10.5" cy="12" r="4" fill="#c8f169" />
-      <circle cx="21.5" cy="12" r="4" fill="#c8f169" />
-      <circle cx="10.5" cy="12" r="1.6" fill="#111" />
-      <circle cx="21.5" cy="12" r="1.6" fill="#111" />
-      <path d="M7 19.5q9 7 18 0" stroke="#c8f169" strokeWidth="2.6" fill="none" strokeLinecap="round" />
-    </svg>
-  );
-}
 
 export function Toasts() {
   const ts = useToasts();

@@ -20,6 +20,7 @@ const st = async (s: Store, mode: IDBTransactionMode = 'readonly') => (await ope
 export const get = async <T,>(s: Store, k: string) => wrap((await st(s)).get(k)) as Promise<T | undefined>;
 export const put = async (s: Store, k: string, v: unknown) => void (await wrap((await st(s, 'readwrite')).put(v, k)));
 export const del = async (s: Store, k: string) => void (await wrap((await st(s, 'readwrite')).delete(k)));
+export const keys = async (s: Store) => ((await wrap((await st(s)).getAllKeys())) as IDBValidKey[]).map(String);
 export const all = async <T,>(s: Store) => wrap((await st(s)).getAll()) as Promise<T[]>;
 export async function wipe() {
   for (const s of STORES) await wrap((await st(s, 'readwrite')).clear());

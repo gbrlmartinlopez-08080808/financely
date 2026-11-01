@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Sheet, toast } from '../ui/kit';
+import { Sheet, Toggle, toast } from '../ui/kit';
 import { Icon } from '../ui/Icon';
 import { ConfirmSheet } from '../ui/Confirm';
-import { connectComputer, disconnectDevice, listDevices, onSyncStatus, syncStatus, turnOff, type PairState } from '../lib/sync/engine';
+import { connectComputer, disconnectDevice, keepConnected, listDevices, onSyncStatus, setKeepConnected, syncStatus, turnOff, type PairState } from '../lib/sync/engine';
 import { WEB_URL } from '../lib/sync/config';
 
 type Dev = { id: string; kind: string; label: string; created_at: string; last_seen: string };
@@ -18,6 +18,10 @@ export function ComputerSheet({ open, onClose }: { open: boolean; onClose: () =>
   const [devs, setDevs] = useState<Dev[] | null>(null);
   const [now, setNow] = useState(Date.now());
   const [ask, setAsk] = useState(false);
+  const [keep, setKeep] = useState(true);
+  useEffect(() => {
+    if (open) void keepConnected().then(setKeep);
+  }, [open]);
   const alive = useRef(false);
 
   const refresh = () => void listDevices().then((r) => setDevs(r.devices.filter((d) => d.kind === 'web')), () => setDevs([]));
@@ -117,6 +121,13 @@ export function ComputerSheet({ open, onClose }: { open: boolean; onClose: () =>
                   </button>
                 </div>
               ))}
+              <div className="row" style={{ marginTop: 10 }}>
+                <div className="grow">
+                  <div className="row-label" style={{ fontSize: 15 }}>Stay connected in the background</div>
+                  <div className="row-sub">A quiet notification keeps this phone reachable, so documents open on the computer at once — even with the screen off.</div>
+                </div>
+                <Toggle on={keep} onChange={(v) => (setKeep(v), void setKeepConnected(v))} label="Stay connected in the background" />
+              </div>
               <button className="pill" style={{ width: '100%', marginTop: 14 }} onClick={start}>
                 Connect another computer
               </button>

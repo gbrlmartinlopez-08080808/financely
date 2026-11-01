@@ -1541,3 +1541,390 @@ kbd {
   color: var(--muted);
   gap: 12px;
 }
+
+/* ================================================================== Frogity's own look (as on the phone) */
+:root {
+  --yellow: #ffd23f;
+  --blue: #1b3cff;
+  --sand: #e8cf9a;
+  --lime: #ffd23f;
+}
+.pixload {
+  display: inline-grid;
+  gap: 3px;
+}
+.pixload i {
+  background: currentColor;
+  opacity: 0.12;
+  animation: pix 1.2s steps(1) infinite;
+}
+@keyframes pix {
+  0%,
+  100% {
+    opacity: 0.12;
+  }
+  10%,
+  30% {
+    opacity: 1;
+  }
+}
+.ascii {
+  font: 11px/1.15 var(--mono);
+  color: var(--muted);
+  margin: 0;
+  white-space: pre;
+  user-select: none;
+}
+.mark {
+  display: block;
+}
+
+/* soft colour at the top of the library and the first-run screens, like the phone's shelf */
+.lib {
+  background-image: radial-gradient(ellipse 90% 34% at 12% -4%, rgba(46, 76, 255, 0.14), transparent 70%), radial-gradient(ellipse 80% 30% at 92% -2%, rgba(232, 207, 154, 0.5), transparent 70%);
+  background-repeat: no-repeat;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .lib {
+    background-image: radial-gradient(ellipse 90% 34% at 12% -4%, rgba(46, 76, 255, 0.26), transparent 70%), radial-gradient(ellipse 80% 30% at 92% -2%, rgba(232, 207, 154, 0.12), transparent 70%);
+  }
+}
+:root[data-theme='dark'] .lib {
+  background-image: radial-gradient(ellipse 90% 34% at 12% -4%, rgba(46, 76, 255, 0.26), transparent 70%), radial-gradient(ellipse 80% 30% at 92% -2%, rgba(232, 207, 154, 0.12), transparent 70%);
+}
+.tabs .logo {
+  padding: 0 12px 6px 6px;
+}
+.tab .px {
+  opacity: 0.8;
+  flex: none;
+}
+.lib-head h1 {
+  font: 400 40px var(--serif);
+  letter-spacing: -0.01em;
+}
+.lib-head h1 small {
+  font: 12px var(--mono);
+  letter-spacing: 0.04em;
+}
+.card .cv .kind {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(17, 17, 17, 0.78);
+  letter-spacing: 0.02em;
+}
+.card .cv .prog {
+  height: 4px;
+  background: repeating-linear-gradient(90deg, var(--yellow) 0 5px, transparent 5px 7px);
+}
+.card .cv .away {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: rgba(17, 17, 17, 0.78);
+  color: #fff;
+}
+.card .cv .away.loading {
+  animation: pulse 1.1s infinite;
+}
+.empty {
+  border-style: solid;
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+/* ------------------------------------------------------------------ first screen: connect the phone */
+.pair-l {
+  background: #0e0e10;
+  background-image: radial-gradient(ellipse 70% 55% at 12% 0%, rgba(27, 60, 255, 0.5), transparent 70%), radial-gradient(ellipse 60% 50% at 100% 100%, rgba(232, 207, 154, 0.35), transparent 70%);
+}
+.pair-l::after {
+  display: none;
+}
+.pair-l .brand {
+  gap: 12px;
+}
+.pair-l h1 {
+  font: 400 62px/1.02 var(--serif);
+}
+.pair-l h1 i {
+  color: var(--yellow);
+}
+.pair-l .trail {
+  display: flex;
+  gap: 14px;
+  font: 600 20px var(--mono);
+  color: var(--yellow);
+  text-shadow: 0 0 12px rgba(255, 210, 63, 0.7);
+  position: relative;
+  z-index: 1;
+}
+.pair-l .trail span {
+  animation: bob 2.4s ease-in-out infinite;
+}
+@keyframes bob {
+  50% {
+    transform: translateY(-6px);
+  }
+}
+.pair-l li::before {
+  color: var(--yellow);
+}
+.pair-l .ascii {
+  color: #77766f;
+  position: relative;
+  z-index: 1;
+}
+.pair-r {
+  background-image: radial-gradient(ellipse 80% 40% at 90% -4%, rgba(232, 207, 154, 0.55), transparent 70%), radial-gradient(ellipse 70% 40% at 8% 104%, rgba(46, 76, 255, 0.13), transparent 70%);
+}
+.pair-card h2 {
+  font: 400 34px var(--serif);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.code input {
+  font-weight: 500;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.code input:focus {
+  box-shadow: var(--shadow), inset 0 0 0 2px var(--ink), 0 0 0 5px rgba(255, 210, 63, 0.45);
+}
+
+/* ------------------------------------------------------------------ first visit: a few cards, one glow per card */
+.wel {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: grid;
+  place-items: center;
+  background: rgba(10, 10, 12, 0.52);
+  backdrop-filter: blur(6px);
+  animation: fade 0.2s;
+}
+.wel-card {
+  width: 560px;
+  max-width: calc(100vw - 40px);
+  background: var(--bg);
+  border-radius: 28px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  position: relative;
+}
+.wel-card::before {
+  content: '';
+  position: absolute;
+  inset: -30% -20% auto -20%;
+  height: 80%;
+  pointer-events: none;
+  background: radial-gradient(ellipse 46% 52% at 24% 28%, var(--g1, #1b3cff), transparent 100%), radial-gradient(ellipse 46% 52% at 78% 22%, var(--g2, #e8cf9a), transparent 100%);
+  filter: blur(34px);
+  opacity: 0.34;
+  transition: opacity 0.5s;
+  animation: ob-drift 12s ease-in-out infinite alternate;
+}
+@keyframes ob-drift {
+  to {
+    transform: translate(4%, 6%) scale(1.08);
+  }
+}
+.wel-body {
+  position: relative;
+  padding: 36px 40px 26px;
+  min-height: 380px;
+  display: flex;
+  flex-direction: column;
+}
+.wel-pic {
+  height: 130px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 14px;
+}
+.wel-pic .ascii {
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.wel-pic b {
+  color: var(--yellow);
+  text-shadow: 0 0 10px rgba(255, 210, 63, 0.7);
+}
+.wel h2 {
+  font: 400 34px/1.1 var(--serif);
+  margin: 0 0 10px;
+  letter-spacing: -0.01em;
+}
+.wel p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 15px;
+  line-height: 1.55;
+}
+.wel-foot {
+  margin-top: auto;
+  padding-top: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wel-dots {
+  display: flex;
+  gap: 5px;
+  flex: 1;
+}
+.wel-dots i {
+  width: 6px;
+  height: 6px;
+  background: var(--ink);
+  opacity: 0.16;
+}
+.wel-dots i.on {
+  opacity: 1;
+}
+.wel-pixel {
+  color: var(--ink);
+}
+
+/* a document that is still on the phone: its first page now, the rest on its way */
+.arriving {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+  background: var(--page-bg);
+}
+.arriving .bg {
+  position: absolute;
+  inset: -40px;
+  background: center / cover no-repeat;
+  filter: blur(36px) saturate(1.2);
+  opacity: 0.55;
+}
+.arriving .sheet {
+  position: relative;
+  display: grid;
+  gap: 18px;
+  justify-items: center;
+  text-align: center;
+  color: var(--ink);
+}
+.arriving img {
+  width: min(300px, 40vw);
+  border-radius: 6px;
+  box-shadow: var(--shadow-lg);
+  background: #fff;
+}
+.arriving .label {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+.arriving small {
+  color: var(--ink-2);
+  max-width: 360px;
+  line-height: 1.5;
+}
+
+/* listening, on the computer */
+.listenbar {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--pill);
+  color: var(--pill-ink);
+  border-radius: 999px;
+  padding: 6px 8px 6px 8px;
+  box-shadow: var(--shadow-lg);
+  max-width: calc(100% - 40px);
+}
+.listenbar button {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: inherit;
+}
+.listenbar button.play {
+  background: var(--yellow);
+  color: #111;
+  width: 40px;
+  height: 40px;
+}
+.listenbar select {
+  background: rgba(255, 255, 255, 0.12);
+  color: inherit;
+  border: 0;
+  border-radius: 999px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  max-width: 190px;
+}
+.listenbar select option {
+  color: #111;
+}
+.listenbar .st {
+  font: 11px var(--mono);
+  opacity: 0.75;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+.saying {
+  background: rgba(255, 210, 63, 0.4);
+  border-radius: 3px;
+  box-decoration-break: clone;
+}
+.modes {
+  display: inline-flex;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  border-radius: 999px;
+  padding: 2px;
+}
+.modes button {
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.modes button.on {
+  background: var(--pill);
+  color: var(--pill-ink);
+}
+.fr-edit-banner {
+  margin: 14px auto 0;
+  max-width: 720px;
+  font: 12px var(--mono);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pillrow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+::highlight(saying) {
+  background-color: rgba(255, 210, 63, 0.5);
+  color: inherit;
+}

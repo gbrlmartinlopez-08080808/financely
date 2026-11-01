@@ -232,6 +232,7 @@ function mimeFor(kind: DocKind, name: string) {
   const map: Record<string, string> = {
     pdf: 'application/pdf',
     epub: 'application/epub+zip',
+    fr: 'application/x-frogity',
     md: 'text/markdown',
     txt: 'text/plain',
     html: 'text/html',
@@ -362,6 +363,10 @@ export async function loadContent(meta: DocMeta): Promise<Content> {
       return { type: 'flow', liquid: f.markdownToLiquid(buf) };
     case 'html':
       return { type: 'flow', liquid: f.htmlToLiquid(buf) };
+    case 'fr': {
+      const { parseFr } = await import('./fr');
+      return { type: 'flow', liquid: f.htmlToLiquid(new TextEncoder().encode(parseFr(new TextDecoder().decode(buf)).html).buffer as ArrayBuffer) };
+    }
     case 'text':
       return { type: 'flow', liquid: f.textToLiquid(buf) };
     case 'rtf':

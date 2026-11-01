@@ -16,6 +16,7 @@ import {
   importLibraryKey,
   listen,
   mergeMeta,
+  newId,
   newLibraryKey,
   relaySend,
   sealJson,
@@ -29,6 +30,7 @@ import {
   type SyncMeta,
 } from './core';
 import { SYNC, syncAvailable } from './config';
+import { setConnected } from '../workNotice';
 
 interface Mirror {
   /** hash of what was last sent or received for this document */
@@ -39,6 +41,8 @@ interface Mirror {
   sig: string;
   /** marks ids last seen (to notice deletions) */
   marks: string[];
+  /** the file itself is kept on the server (small files, once uploaded) */
+  kept?: boolean;
 }
 
 let creds: Creds | null = null;
@@ -74,6 +78,7 @@ export async function startSync() {
   key = await importLibraryKey(raw, true);
   mirror = (await db.get<Record<string, Mirror>>('kv', 'sync:mirror')) ?? {};
   setStatus({ on: true });
+  if ((await db.get<boolean>('kv', 'sync:keep')) !== false) setConnected(true);
   run();
 }
 
@@ -103,6 +108,7 @@ function run() {
         const reqSince = (await db.get<number>('kv', 'sync:reqrev')) ?? 0;
         const r = await call<{ changed: boolean; requests?: boolean; reqRev?: number }>(SYNC, creds, 'wait', { since, reqSince });
         if (r.requests) {
+          console.debug('[sync] a computer is asking for a document');
           await answerRequests();
           if (r.reqRev) await db.put('kv', 'sync:reqrev', r.reqRev);
         }
@@ -136,7 +142,12 @@ const failed = async (e: unknown) => {
 
 // ---------------------------------------------------------------- what a document looks like when synced
 const DOC_FIELDS = ['id', 'name', 'fileName', 'kind', 'mime', 'size', 'addedAt', 'openedAt', 'progress', 'readMs', 'pages', 'author', 'finished', 'position', 'url'] as const;
-const docPart = (d: DocMeta) => Object.fromEntries(DOC_FIELDS.filter((k) => d[k] !== undefined).map((k) => [k, d[k]])) as unknown as SyncMeta['doc'];
+const docPart = (d: DocMeta) => {
+  const part = Object.fromEntries(DOC_FIELDS.filter((k) => d[k] !== undefined).map((k) => [k, d[k]])) as unknown as SyncMeta['doc'];
+  // a phone scan reaches the computer as the PDF made of its pages
+  if (d.kind === 'scan') Object.assign(part, { kind: 'pdf', mime: 'application/pdf', fileName: d.fileName.replace(/\.[^.]+$/, '') + '.pdf' });
+  return part;
+};
 async function marksOf(id: string) {
   const all = await db.entries<Highlight | Bookmark>('marks');
   const h: Highlight[] = [];
@@ -190,6 +201,41 @@ export function push(): Promise<void> {
   })();
   return pushing;
 }
+/** The file of a document: the stored file, or — for a phone scan, which is only pictures — a PDF made of its pages. */
+async function fileOf(d: DocMeta): Promise<Blob | undefined> {
+  const f = await getFile(d.id).catch(() => undefined);
+  if (f || d.kind !== 'scan') return f;
+  const pages = ((await Promise.all((d.scanPages ?? []).map((p) => db.get<Blob>('blobs', p)))).filter(Boolean) as Blob[]) ?? [];
+  if (!pages.length) return undefined;
+  const { PDFDocument } = await import('pdf-lib');
+  const out = await PDFDocument.create();
+  for (const b of pages) {
+    const bytes = new Uint8Array(await b.arrayBuffer());
+    const img = /png/i.test(b.type) ? await out.embedPng(bytes) : await out.embedJpg(bytes).catch(() => out.embedPng(bytes));
+    const k = Math.min(1, 595 / img.width);
+    const page = out.addPage([img.width * k, img.height * k]);
+    page.drawImage(img, { x: 0, y: 0, width: img.width * k, height: img.height * k });
+  }
+  return new Blob([(await out.save()) as BlobPart], { type: 'application/pdf' });
+}
+
+/** Run `fn` over the items a few at a time. */
+async function each<T>(items: T[], n: number, fn: (x: T) => Promise<void>) {
+  let i = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(n, items.length) }, async () => {
+      while (i < items.length) await fn(items[i++]);
+    }),
+  );
+}
+
+/**
+ * Two steps, so the computer is never left with an empty or half-empty shelf:
+ *  1. every document, at once: its details and its first-page cover (small) — the whole library shows up in seconds;
+ *  2. then the files, smallest first: small ones are kept (sealed) for the computer, big ones just announced — the phone
+ *     hands them over the moment the computer opens one.
+ * A file the phone can't read right now (a linked folder that is not mounted) still shows up; it's fetched when asked for.
+ */
 async function pushOnce() {
   if (!creds || !key) return;
   const docs = getState().docs;
@@ -201,39 +247,59 @@ async function pushOnce() {
     delete mirror[id];
     await saveMirror();
   }
-  // small changes first (they are quick), new files after
-  const pending = docs.map((d) => ({ d, m: mirror[d.id] })).sort((a, b) => Number(!a.m) - Number(!b.m) || a.d.size - b.d.size);
-  setStatus({ queue: pending.filter((p) => !p.m?.fileVer).length });
-  for (const { d } of pending) {
-    if (!creds || !key) return;
-    const m = mirror[d.id];
+  const metaOf = async (d: DocMeta, m: Mirror | undefined, withText: boolean) => {
     const marks = await marksOf(d.id);
     const ids = [...marks.h, ...marks.b].map((x) => x.id);
     const gone = (m?.marks ?? []).filter((x) => !ids.includes(x));
-    const text = m ? undefined : await scanText(d);
-    const meta: SyncMeta = { v: 1, doc: docPart(d), marks, gone, t: Date.now(), ...(text ? { text } : {}) };
-    const h = hash({ doc: meta.doc, marks, gone });
-    const sig = `${d.size}:${d.modified ?? 0}`;
-    const needFile = !m?.fileVer || m.sig !== sig;
-    if (m && m.h === h && !needFile) continue;
-    let file: { ver: string; parts: number; size: number } | undefined;
+    const text = withText ? await scanText(d) : undefined;
+    const meta: SyncMeta = { v: 1, doc: docPart(d), marks, gone, t: Date.now(), ...(text && text.length < 40_000 ? { text } : {}) };
+    return { meta, ids, h: hash({ doc: meta.doc, marks, gone }) };
+  };
+  // ---- 1. details and covers (new documents), or just the changed details (known ones)
+  const order = [...docs].sort((a, b) => b.openedAt - a.openedAt); // what you read lately goes first
+  setStatus({ queue: docs.filter((d) => d.size <= STORE_MAX && !mirror[d.id]?.kept).length });
+  await each(order, 5, async (d) => {
+    if (!creds || !key) return;
+    const m = mirror[d.id];
+    const { meta, ids, h } = await metaOf(d, m, !m);
+    if (m && m.h === h) return;
     let cover: string | undefined;
-    if (needFile) {
-      const blob = await getFile(d.id).catch(() => undefined);
-      if (!blob) continue; // a linked file that can't be read right now: next time
-      setStatus({ sending: d.name });
-      const coverBlob = d.coverId ? ((await db.get<Blob>('blobs', d.coverId)) ?? null) : null;
-      // small files are kept (encrypted) on the server, so they open even with the phone off; big ones stay here and
-      // are handed over when a computer opens them
-      const up = await uploadFile(SYNC, creds, key, d.id, blob, coverBlob, undefined, blob.size <= STORE_MAX);
-      file = up.file;
-      cover = up.cover;
+    if (!m) {
+      const cb = d.coverId ? ((await db.get<Blob>('blobs', d.coverId)) ?? null) : null;
+      if (cb) cover = (await uploadFile(SYNC, creds, key, d.id, null, cb)).cover;
     }
-    if (!meta.text && !m) delete meta.text;
-    await call(SYNC, creds, 'put', { id: d.id, meta: await sealJson(key, meta), file, cover });
-    mirror[d.id] = { h, fileVer: file?.ver ?? m?.fileVer ?? null, coverVer: cover ?? m?.coverVer ?? null, sig, marks: ids };
+    // the file's version is fixed now (the computer knows a file exists, and asks the phone for it until it is kept there)
+    const ver = m?.fileVer ?? newId();
+    const announce = m?.fileVer ? undefined : { ver, parts: 0, size: d.size, stored: false };
+    await call(SYNC, creds, 'put', { id: d.id, meta: await sealJson(key, meta), cover, file: announce });
+    mirror[d.id] = { h, fileVer: ver, coverVer: cover ?? m?.coverVer ?? null, sig: m?.sig ?? '', marks: ids, kept: false };
     await saveMirror();
-    if (needFile) setStatus({ queue: Math.max(0, status.queue - 1) });
+  });
+  // ---- 2. the files (what is not kept on the server yet, or changed since), smallest first
+  const sigOf = (d: DocMeta) => `${d.size}:${d.modified ?? 0}`;
+  const files = order.filter((d) => {
+    const m = mirror[d.id];
+    return m && (m.sig !== sigOf(d) || (d.size <= STORE_MAX && !m.kept));
+  }).sort((a, b) => a.size - b.size);
+  for (const d of files) {
+    if (!creds || !key) return;
+    const m = mirror[d.id];
+    if (!m) continue;
+    const sig = sigOf(d);
+    const changedFile = m.sig !== '' && m.sig !== sig; // edited since the last time: a new version
+    const ver = changedFile ? newId() : m.fileVer ?? newId();
+    let file: { ver: string; parts: number; size: number; stored?: boolean };
+    if (d.size <= STORE_MAX) {
+      const blob = await fileOf(d);
+      if (!blob) continue; // not readable now: it is fetched when the computer asks for it
+      setStatus({ sending: d.name });
+      file = (await uploadFile(SYNC, creds, key, d.id, blob, null, undefined, true, ver)).file!;
+    } else file = { ver, parts: 0, size: d.size, stored: false }; // big: stays on the phone until asked for
+    const { meta, ids, h } = await metaOf(d, m, false);
+    await call(SYNC, creds, 'put', { id: d.id, meta: await sealJson(key, meta), file });
+    mirror[d.id] = { ...m, h, fileVer: ver, sig, marks: ids, kept: file.stored !== false };
+    await saveMirror();
+    setStatus({ queue: Math.max(0, status.queue - 1) });
   }
 }
 
@@ -301,7 +367,7 @@ async function apply(it: RemoteItem) {
   const merged = mergeMeta(mine, remote);
   const patch: Partial<DocMeta> = {};
   for (const k of DOC_FIELDS) {
-    if (k === 'id' || k === 'size') continue;
+    if (k === 'id' || k === 'size' || k === 'kind' || k === 'mime' || k === 'fileName') continue;
     const v = (merged.doc as unknown as Record<string, unknown>)[k];
     if (v !== undefined && JSON.stringify(v) !== JSON.stringify((local as unknown as Record<string, unknown>)[k])) (patch as Record<string, unknown>)[k] = v;
   }
@@ -344,7 +410,7 @@ function answerRequests(): Promise<void> {
       const r = await call<{ requests: { req: string; id: string; ver: string | null }[] }>(SYNC, creds!, 'requests');
       for (const q of r.requests) {
         const d = getState().docs.find((x) => x.id === q.id);
-        const blob = d ? await getFile(d.id).catch(() => undefined) : undefined;
+        const blob = d ? await fileOf(d) : undefined;
         if (!d || !blob) continue;
         reportJob('sync:' + q.req, d.name, 'sync', 0, 1);
         try {
@@ -400,7 +466,7 @@ export async function connectComputer(onState: (s: PairState) => void, cancelled
       onState({ stage: 'code', code: p.code, expires });
       while (Date.now() < expires) {
         if (cancelled()) return;
-        await new Promise((r) => setTimeout(r, 900));
+        await new Promise((r) => setTimeout(r, 500));
         const s = await call<{ status: string; pub?: string; label?: string }>(SYNC, creds, 'pair_status', { pairing: p.pairing });
         if (s.status === 'joined' && s.pub) {
           onState({ stage: 'joining', label: s.label ?? 'Computer', emoji: await fingerprint(s.pub) });
@@ -408,6 +474,7 @@ export async function connectComputer(onState: (s: PairState) => void, cancelled
           await call(SYNC, creds, 'pair_finish', { pairing: p.pairing, pub: w.pub, wrapped: w.wrapped });
           await db.put('kv', 'sync:on', true);
           setStatus({ on: true });
+          if ((await db.get<boolean>('kv', 'sync:keep')) !== false) setConnected(true);
           if (!stop) {
             mirror = (await db.get<Record<string, Mirror>>('kv', 'sync:mirror')) ?? {};
             run();
@@ -439,6 +506,14 @@ export async function turnOff(wipe: boolean) {
   creds = null;
   key = null;
   mirror = {};
-  for (const k of ['sync:creds', 'sync:key', 'sync:on', 'sync:mirror', 'sync:rev']) await db.del('kv', k);
+  setConnected(false);
+  for (const k of ['sync:creds', 'sync:key', 'sync:on', 'sync:mirror', 'sync:rev', 'sync:reqrev']) await db.del('kv', k);
   setStatus({ on: false, live: false, queue: 0, error: '', last: 0 });
+}
+
+/** Keep the phone reachable in the background while a computer is connected (a quiet notification)? */
+export const keepConnected = async () => (await db.get<boolean>('kv', 'sync:keep')) !== false;
+export async function setKeepConnected(on: boolean) {
+  await db.put('kv', 'sync:keep', on);
+  setConnected(on && status.on);
 }

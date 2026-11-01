@@ -31,6 +31,13 @@ let creds: Creds | null = null;
 let key: CryptoKey | null = null;
 let stopListen: (() => void) | null = null;
 
+const markCached = (id: string) => setState((s) => (s.cached[id] ? {} : { cached: { ...s.cached, [id]: true } }));
+/** Starts fetching a document in the background (when the pointer rests on it): clicking it then opens it at once. */
+export function prefetch(id: string) {
+  const d = docById(id);
+  if (!d || getState().cached[id] || d.meta.doc.size > 12 * 1024 * 1024) return;
+  void getFile(id).catch(() => {});
+}
 const busy = (d: number) => setState((s) => ({ sync: { ...s.sync, busy: Math.max(0, s.sync.busy + d) } }));
 const sortDocs = (d: LocalDoc[]) => [...d].sort((a, b) => (b.meta.doc.openedAt || b.meta.doc.addedAt) - (a.meta.doc.openedAt || a.meta.doc.addedAt));
 function putLocal(d: LocalDoc) {
@@ -50,7 +57,9 @@ export async function boot() {
     const c = await db.get<Blob>('covers', d.id);
     if (c) covers[d.id] = URL.createObjectURL(c);
   }
-  setState({ phase: 'ready', docs: sortDocs(docs), covers });
+  const cached: Record<string, boolean> = {};
+  for (const k of await db.keys('files')) cached[k] = true;
+  setState({ phase: 'ready', docs: sortDocs(docs), covers, cached });
   start();
 }
 
@@ -111,7 +120,7 @@ async function lost(why: string) {
   await db.wipe();
   await db.put('kv', 'notice', why);
   Object.values(getState().covers).forEach((u) => URL.revokeObjectURL(u));
-  setState({ phase: 'unpaired', docs: [], covers: {}, notice: why });
+  setState({ phase: 'unpaired', docs: [], covers: {}, cached: {}, notice: why });
 }
 const failed = async (e: unknown) => {
   if (e instanceof SyncError && e.status === 401) return lost('This computer was disconnected from your phone. Connect it again with a new code.');
@@ -135,7 +144,7 @@ export async function pair(code: string, onStage: (s: PairStage) => void) {
     onStage({ stage: 'waiting', emoji: await fingerprint(pub) });
     const until = Date.now() + 3.5 * 60_000;
     while (Date.now() < until) {
-      await new Promise((r) => setTimeout(r, 900));
+      await new Promise((r) => setTimeout(r, 500));
       const w = await call<{ status: string; library?: string; device?: string; token?: string; wrapped?: string; pub?: string }>(cfg, null, 'pair_wait', { pairing: j.pairing, secret: j.secret });
       if (w.status === 'expired') throw new Error('The code ran out of time. Make a new one on your phone.');
       if (w.status !== 'done') continue;
@@ -145,7 +154,7 @@ export async function pair(code: string, onStage: (s: PairStage) => void) {
       await db.put('kv', 'key', key); // a key that can't be read out again, only used
       await db.del('kv', 'notice');
       await db.put('kv', 'rev', 0);
-      setState({ phase: 'ready', docs: [], covers: {}, notice: '' });
+      setState({ phase: 'ready', docs: [], covers: {}, cached: {}, notice: '' });
       onStage({ stage: 'done' });
       start();
       return;
@@ -246,46 +255,53 @@ async function dropLocal(id: string) {
     if (s.covers[id]) URL.revokeObjectURL(s.covers[id]);
     const covers = { ...s.covers };
     delete covers[id];
-    return { docs: s.docs.filter((d) => d.id !== id), covers };
+    const cached = { ...s.cached };
+    delete cached[id];
+    return { docs: s.docs.filter((d) => d.id !== id), covers, cached };
   });
   window.dispatchEvent(new CustomEvent('frogity:gone', { detail: { id } }));
 }
 
 // ---------------------------------------------------------------- the file itself
-const loading = new Map<string, Promise<Blob>>();
-/** The document's file: from this computer's copy, or fetched (and decrypted) once. */
+const loading = new Map<string, { ver: string | null; p: Promise<Blob> }>();
+/**
+ * The document's file: from this computer's copy, or fetched (and decrypted) once. Asking again while it is on its way
+ * (a second click, a hover, a new version number) joins the same transfer — the phone is only ever asked once.
+ */
 export function getFile(id: string): Promise<Blob> {
   const d = docById(id);
   if (!d) return Promise.reject(new Error('not found'));
-  const k = `${id}:${d.fileVer}`;
-  if (!loading.has(k))
-    loading.set(
-      k,
-      (async () => {
-        const cached = await db.get<{ ver: string | null; blob: Blob }>('files', id);
-        if (cached && cached.ver === d.fileVer) return cached.blob;
-        if (!d.fileVer) throw new Error('This document has no file yet — it is still on its way from the phone.');
-        if (cached && cached.ver !== d.fileVer && cached.ver === 'local') return cached.blob; // our own edit, not sent yet
-        busy(1);
-        const progress = (done: number, total: number) => setState((s) => ({ sync: { ...s.sync, asking: undefined, transfer: total > 1 ? { name: d.meta.doc.name, done, total } : undefined } }));
+  const mine = loading.get(id);
+  if (mine) return mine.p;
+  const p = (async () => {
+    const cached = await db.get<{ ver: string | null; blob: Blob }>('files', id);
+    if (cached && (cached.ver === d.fileVer || cached.ver === 'local')) return cached.blob;
+    busy(1);
+    const progress = (done: number, total: number) => setState((s) => ({ sync: { ...s.sync, asking: undefined, transfer: { name: d.meta.doc.name, done, total } } }));
+    const ask = () => relayFetch(cfg, creds!, key!, id, d.meta.doc.mime, (secs) => setState((s) => ({ sync: { ...s.sync, asking: { name: d.meta.doc.name, secs } } })), progress);
+    try {
+      // small files are kept (sealed) on the server; anything else — big files, files the phone has not sent yet, or one
+      // that did not come — is asked of the phone, which answers at once and puts this document first
+      let blob: Blob;
+      if (d.fileStored !== false && d.fileVer && d.fileParts > 0) {
         try {
-          // small files are kept (encrypted) on the server; big ones come straight from the phone, once
-          const blob =
-            d.fileStored !== false
-              ? await downloadFile(cfg, creds!, key!, { id, file_ver: d.fileVer, file_parts: d.fileParts }, d.meta.doc.mime, progress)
-              : await relayFetch(cfg, creds!, key!, id, d.meta.doc.mime, (secs) => setState((s) => ({ sync: { ...s.sync, asking: { name: d.meta.doc.name, secs } } })), progress);
-          await db.put('files', id, { ver: d.fileVer, blob });
-          return blob;
-        } finally {
-          busy(-1);
-          setState((s) => ({ sync: { ...s.sync, transfer: undefined, asking: undefined } }));
+          blob = await downloadFile(cfg, creds!, key!, { id, file_ver: d.fileVer, file_parts: d.fileParts }, d.meta.doc.mime, progress);
+        } catch {
+          blob = await ask();
         }
-      })().catch((e) => {
-        loading.delete(k);
-        throw e;
-      }),
-    );
-  return loading.get(k)!;
+      } else blob = await ask();
+      await db.put('files', id, { ver: d.fileVer, blob });
+      markCached(id);
+      return blob;
+    } finally {
+      busy(-1);
+      setState((s) => ({ sync: { ...s.sync, transfer: undefined, asking: undefined } }));
+    }
+  })();
+  loading.set(id, { ver: d.fileVer, p });
+  const done = () => loading.get(id)?.p === p && loading.delete(id);
+  p.then(done, done);
+  return p;
 }
 
 // ---------------------------------------------------------------- sending
@@ -359,12 +375,13 @@ export async function saveFile(id: string, blob: Blob, patch: Partial<SyncMeta['
   const d = docById(id);
   if (!d) return;
   await db.put('files', id, { ver: 'local', blob });
+  markCached(id);
   if (cover) {
     await db.put('kv', `cover:${id}`, { blob: cover });
     await db.put('covers', id, cover);
     setState((s) => ({ covers: { ...s.covers, [id]: URL.createObjectURL(cover) } }));
   }
-  loading.delete(`${id}:${d.fileVer}`);
+  loading.delete(id);
   await db.del('text', id);
   await putLocal({ ...d, fileVer: 'local', meta: { ...d.meta, doc: { ...d.meta.doc, size: blob.size, ...patch }, t: Date.now() }, dirty: true, fileDirty: true });
   schedulePush(id, 50);
@@ -396,6 +413,7 @@ export async function importFiles(files: File[] | { name: string; blob: Blob }[]
       t: now,
     };
     await db.put('files', id, { ver: 'local', blob });
+    markCached(id);
     await db.put('kv', `cover:${id}`, { blob: cover });
     await db.put('covers', id, cover);
     setState((s) => ({ covers: { ...s.covers, [id]: URL.createObjectURL(cover!) } }));

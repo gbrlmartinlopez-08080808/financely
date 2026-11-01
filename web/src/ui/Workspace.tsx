@@ -3,6 +3,7 @@ import { docById, useStore } from '../lib/store';
 import { KIND_LABEL } from '../lib/kinds';
 import { getFile } from '../sync/engine';
 import { formatSize } from './bits';
+import { Mark, PixelBar, PixelLoader } from './px';
 import { downloadOriginal } from './actions';
 import { Icon } from './Icon';
 
@@ -12,7 +13,7 @@ const Viewers = { epub: lazy(() => import('./Viewers').then((m) => ({ default: m
 
 const Spinner = () => (
   <div className="loading">
-    <i className="spin" />
+    <PixelLoader grid={3} size={7} />
   </div>
 );
 
@@ -21,6 +22,7 @@ export function Workspace({ id, secondary }: { id: string; secondary?: boolean }
   const doc = useStore((s) => s.docs.find((d) => d.id === id));
   const transfer = useStore((s) => s.sync.transfer);
   const asking = useStore((s) => s.sync.asking);
+  const covers = useStore((s) => s.covers);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [err, setErr] = useState('');
   const [ver, setVer] = useState(0);
@@ -54,36 +56,42 @@ export function Workspace({ id, secondary }: { id: string; secondary?: boolean }
         </div>
       </div>
     );
-  if (!blob)
+  if (!blob) {
+    const cover = covers[id];
+    const pct = transfer && transfer.name === doc.meta.doc.name ? Math.round((transfer.done / transfer.total) * 100) : null;
     return (
-      <div className="loading">
-        <div style={{ textAlign: 'center' }}>
-          <i className="spin" style={{ margin: '0 auto 12px' }} />
-          {transfer ? (
-            `Bringing it over · ${Math.round((transfer.done / transfer.total) * 100)}%`
-          ) : asking ? (
-            <>
-              Bringing it from your phone…
-              {asking.secs > 6 && (
-                <>
-                  <br />
-                  <small className="muted">Big files come straight from the phone: open Frogity on it (and keep it online) and this continues by itself.</small>
-                </>
-              )}
-            </>
-          ) : (
-            'Opening…'
-          )}
+      <div className="arriving" aria-busy>
+        {cover && <div className="bg" style={{ backgroundImage: `url(${cover})` }} />}
+        <div className="sheet">
+          {cover ? <img src={cover} alt="" /> : <Mark size={120} />}
+          <div className="label">
+            <b style={{ font: '400 24px var(--serif)' }}>{doc.meta.doc.name}</b>
+            {pct !== null ? (
+              <PixelBar value={pct / 100} cells={20} />
+            ) : (
+              <PixelLoader grid={3} size={7} />
+            )}
+            <small className="mono">
+              {pct !== null
+                ? `coming over from your phone · ${pct}%`
+                : asking && asking.secs > 5
+                  ? 'your phone is slow to answer — open Frogity on it and keep it online'
+                  : asking
+                    ? 'asking your phone for it…'
+                    : 'opening…'}
+            </small>
+          </div>
         </div>
       </div>
     );
+  }
   const k = doc.meta.doc.kind;
   const d = docById(id) ?? doc;
   return (
     <Suspense fallback={<Spinner />}>
       {k === 'pdf' || (k === 'scan' && doc.meta.doc.mime === 'application/pdf') ? (
         <PdfWorkspace key={doc.fileVer ?? 'x'} doc={d} blob={blob} secondary={secondary} />
-      ) : ['markdown', 'text', 'html', 'docx', 'code', 'rtf'].includes(k) ? (
+      ) : ['fr', 'markdown', 'text', 'html', 'docx', 'code', 'rtf'].includes(k) ? (
         <TextWorkspace key={ver} doc={d} blob={blob} secondary={secondary} />
       ) : k === 'epub' ? (
         <Viewers.epub doc={d} blob={blob} />

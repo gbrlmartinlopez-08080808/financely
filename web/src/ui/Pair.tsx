@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { pair, type PairStage } from '../sync/engine';
 import { useStore } from '../lib/store';
-import { Frog } from './bits';
+import { Ascii, Mark } from './px';
 
 /** The only "sign in" there is: the four digits the phone shows. */
 export function Pair() {
@@ -48,7 +48,7 @@ export function Pair() {
     <div className="pair">
       <div className="pair-l">
         <div className="brand">
-          <Frog size={26} /> FROGITY · FOR THE COMPUTER
+          <Mark size={44} light /> FROGITY · FOR THE COMPUTER
         </div>
         <div style={{ position: 'relative', zIndex: 1 }}>
           <h1>
@@ -63,8 +63,15 @@ export function Pair() {
             <li>edits sync both ways, almost instantly</li>
           </ul>
         </div>
-        <div className="mono" style={{ fontSize: 12, color: '#77766f', position: 'relative', zIndex: 1 }}>
-          Made for computers · works offline once loaded
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <Ascii art="plug" />
+          <div className="trail" style={{ marginTop: 18 }} aria-hidden>
+            {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+              <span key={i} style={{ animationDelay: `${i * 0.18}s` }}>
+                @
+              </span>
+            ))}
+          </div>
         </div>
       </div>
       <div className="pair-r">

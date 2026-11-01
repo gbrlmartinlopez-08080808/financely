@@ -1,6 +1,7 @@
 import type { DocKind } from '../types';
 
 const EXT: Record<string, DocKind> = {
+  fr: 'fr',
   pdf: 'pdf',
   epub: 'epub',
   docx: 'docx',
@@ -97,6 +98,7 @@ export function looksLikeText(bytes: Uint8Array) {
 }
 
 export const KIND_LABEL: Record<DocKind, string> = {
+  fr: 'note',
   pdf: 'pdf',
   epub: 'epub',
   docx: 'word',

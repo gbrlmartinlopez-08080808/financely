@@ -6,7 +6,7 @@ import { getUi, openDoc, setUi } from './state';
 import { commandsOf, type Command } from './commands';
 import { Icon } from './Icon';
 import { pickFiles } from './bits';
-import { exportMarks, newDocument } from './actions';
+import { exportMarks, importNotes, newFrDoc, pasteFromDocs } from './actions';
 
 interface Row {
   key: string;
@@ -38,7 +38,9 @@ export function Palette() {
     const ok = (s: string) => words.every((w) => s.toLowerCase().includes(w));
     const here: Command[] = docById(active) ? commandsOf(active) : [];
     const global: Row[] = [
-      { key: 'g-new', group: 'Actions', label: 'New document', hint: '⌘⌥N', icon: 'edit', run: () => void newDocument() },
+      { key: 'g-new', group: 'Actions', label: 'New note', hint: '⌘⌥N', icon: 'edit', run: () => void newFrDoc() },
+      { key: 'g-paste', group: 'Actions', label: 'Paste from Google Docs or Word into a new note', icon: 'edit', run: () => void pasteFromDocs() },
+      { key: 'g-import', group: 'Actions', label: 'Import notes (Word, Google Docs, Markdown, text)', icon: 'upload', run: () => void pickFiles('.docx,.doc,.md,.markdown,.txt,.html,.htm,.fr').then(async (f) => void (f.length && (await importNotes(f)))) },
       { key: 'g-add', group: 'Actions', label: 'Add files from this computer', hint: '⌘O', icon: 'plus', run: () => void pickFiles().then((f) => (f.length ? importFiles(f) : [])) },
       { key: 'g-lib', group: 'Actions', label: 'Go to the library', hint: '⌘1', icon: 'grid', run: () => setUi({ active: 'library' }) },
       { key: 'g-marks', group: 'Actions', label: 'All highlights and notes', icon: 'hl', run: () => setUi({ active: 'marks' }) },

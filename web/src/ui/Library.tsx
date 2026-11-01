@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore, type LocalDoc } from '../lib/store';
 import { KIND_LABEL } from '../lib/kinds';
 import { indexLibrary, searchText, type Hit } from '../lib/search';
-import { importFiles } from '../sync/engine';
+import { importFiles, prefetch } from '../sync/engine';
 import { openDoc, setUi } from './state';
 import { Icon } from './Icon';
+import { Ascii, Pixel, hasPixel } from './px';
+import { KIND_PIXEL } from '../lib/pixels';
 import { ago, formatSize, pickFiles, showMenu } from './bits';
-import { deleteDocs, downloadOriginal, exportMarks, mergePdfs, newDocument, renameDoc, setFinished } from './actions';
+import { convertToFr, deleteDocs, downloadOriginal, exportMarks, importNotes, mergePdfs, newFrDoc, pasteFromDocs, renameDoc, setFinished } from './actions';
 
 type Sort = 'recent' | 'added' | 'title' | 'size' | 'progress';
 const FILTERS: [string, string][] = [
@@ -33,11 +35,18 @@ const matches = (d: LocalDoc, f: string) => {
 export function Library() {
   const docs = useStore((s) => s.docs);
   const covers = useStore((s) => s.covers);
+  const cached = useStore((s) => s.cached);
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState(() => localStorage.getItem('frogity-filter') ?? 'all');
   const [sort, setSort] = useState<Sort>(() => (localStorage.getItem('frogity-sort') as Sort) ?? 'recent');
   const [view, setView] = useState<'grid' | 'list'>(() => (localStorage.getItem('frogity-view') as 'grid' | 'list') ?? 'grid');
   const [sel, setSel] = useState<string[]>([]);
+  const hov = useRef(0);
+  const hover = (id: string) => {
+    clearTimeout(hov.current);
+    hov.current = window.setTimeout(() => prefetch(id), 280);
+  };
+  const unhover = () => clearTimeout(hov.current);
   const [hits, setHits] = useState<Hit[]>([]);
   const [indexed, setIndexed] = useState<{ done: number; total: number } | null>(null);
   useEffect(() => {
@@ -97,6 +106,7 @@ export function Library() {
       { label: 'Rename', icon: <Icon name="edit" size={15} />, run: () => renameDoc(d.id), hidden: many },
       { label: d.meta.doc.finished ? 'Mark as not finished' : 'Mark as finished', icon: <Icon name="check" size={15} />, run: () => ids.forEach((id) => setFinished(id, !d.meta.doc.finished)) },
       { label: `Merge ${ids.length} PDFs into one`, icon: <Icon name="merge" size={15} />, run: () => mergePdfs(ids), hidden: !many },
+      { label: 'Make an editable Frogity copy (.fr)', icon: <Icon name="edit" size={15} />, run: () => void convertToFr(d.id).then((n) => n && openDoc(n)), hidden: many || !['docx', 'markdown', 'html', 'text'].includes(d.meta.doc.kind) },
       { label: 'Download original', icon: <Icon name="download" size={15} />, run: () => ids.forEach(downloadOriginal) },
       { label: 'Export highlights (Markdown)', icon: <Icon name="hl" size={15} />, run: () => exportMarks(ids) },
       { sep: true },
@@ -134,8 +144,21 @@ export function Library() {
         <h1>
           Library<small>{docs.length} documents</small>
         </h1>
-        <button className="btn ghost" onClick={() => newDocument()}>
-          <Icon name="edit" size={15} /> New document
+        <button className="btn ghost" onClick={() => newFrDoc()}>
+          <Icon name="edit" size={15} /> New note
+        </button>
+        <button
+          className="btn ghost"
+          onClick={async () => {
+            const f = await pickFiles('.docx,.doc,.md,.markdown,.txt,.html,.htm,.fr');
+            if (f.length) await importNotes(f);
+          }}
+          title="Notes from Word, Google Docs (File → Download → Word), Markdown or text become editable Frogity notes"
+        >
+          <Pixel name="note" size={14} /> Import notes
+        </button>
+        <button className="btn ghost" onClick={() => pasteFromDocs()} title="Copy from Google Docs or Word, paste into a new note">
+          <Pixel name="plus" size={14} /> Paste from Docs
         </button>
         <button
           className="btn"
@@ -205,8 +228,9 @@ export function Library() {
 
       {docs.length === 0 ? (
         <div className="empty">
+          <Ascii art="shelf" />
           <h2>Your library is on its way</h2>
-          <p>Documents from your phone appear here as they arrive. You can also drop files anywhere on this page.</p>
+          <p>Documents from your phone appear here, covers first, as they arrive. You can also drop files anywhere on this page.</p>
         </div>
       ) : shown.length === 0 && !hits.length ? (
         <div className="empty">
@@ -217,9 +241,21 @@ export function Library() {
         <div className="grid">
           {shown.map((d) => (
             <button key={d.id} className={`card${sel.includes(d.id) ? ' sel' : ''}`} onClick={(e) => click(e, d.id)} onContextMenu={(e) => menu(e, d)} title={d.meta.doc.name}>
-              <div className="cv" style={covers[d.id] ? { backgroundImage: `url(${covers[d.id]})` } : undefined}>
-                {!covers[d.id] && <span className="kind">{KIND_LABEL[d.meta.doc.kind] ?? 'File'}</span>}
-                {(!d.fileVer || d.fileDirty) && <i className="spin wait" title={d.fileDirty ? 'Uploading' : 'On its way from the phone'} />}
+              <div className="cv" style={covers[d.id] ? { backgroundImage: `url(${covers[d.id]})` } : undefined} onMouseEnter={() => hover(d.id)} onMouseLeave={unhover}>
+                {!covers[d.id] && (
+                  <span className="kind">
+                    <Pixel name={KIND_PIXEL[d.meta.doc.kind] ?? 'block'} size={11} /> {KIND_LABEL[d.meta.doc.kind] ?? 'File'}
+                  </span>
+                )}
+                {d.fileDirty ? (
+                  <span className="away loading" title="Sending to your phone">
+                    <Pixel name="eject" size={13} />
+                  </span>
+                ) : !cached[d.id] && (d.fileStored === false || !d.fileVer) ? (
+                  <span className="away" title="On your phone — opens when you click it">
+                    <Pixel name="plug" size={13} />
+                  </span>
+                ) : null}
                 {d.meta.doc.progress > 0.005 && <span className="prog" style={{ width: `${Math.min(100, d.meta.doc.progress * 100)}%` }} />}
               </div>
               <div className="t">{d.meta.doc.name}</div>

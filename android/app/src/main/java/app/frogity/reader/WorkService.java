@@ -26,6 +26,8 @@ public class WorkService extends Service {
     static volatile int progress = 0;
     static volatile int max = 100;
     static volatile boolean running = false;
+    /** only keeping the phone reachable for a connected computer: no progress bar and no wake lock */
+    static volatile boolean idle = false;
 
     private PowerManager.WakeLock wake;
 
@@ -53,7 +55,7 @@ public class WorkService extends Service {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setProgress(max, progress, false)
+            .setProgress(idle ? 0 : max, idle ? 0 : progress, false)
             .build();
     }
 
@@ -64,12 +66,15 @@ public class WorkService extends Service {
             running = true;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
             else startForeground(ID, n);
-            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
-            wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "frogity:work");
-            wake.acquire(4 * 60 * 60 * 1000L); // never longer than four hours, whatever happens
         } else {
             ((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE)).notify(ID, n);
         }
+        // the CPU is held awake only while there is real work (never when just staying reachable)
+        if (!idle && (wake == null || !wake.isHeld())) {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "frogity:work");
+            wake.acquire(4 * 60 * 60 * 1000L); // never longer than four hours, whatever happens
+        } else if (idle && wake != null && wake.isHeld()) wake.release();
         return START_NOT_STICKY;
     }
 

@@ -57,6 +57,9 @@ export function speechText(raw: string): string {
     .replace(/\bEq\./g, 'Equation')
     .replace(/\bcf\./gi, 'compare')
     .replace(/\u00ad/g, '')
+    .replace(/^\s*\d+(?:\.\d+)*\.?\s+(?=\p{Lu}\p{Ll})/u, '') // "2.3 Method" is read as "Method"
+    .replace(/\s*\((?:see\s+)?(?:Fig(?:ure)?|Table|Eq(?:uation)?|Section|Sec)\.?\s*[\dA-Z][\d.a-z]*\)/g, '') // "(Figure 3)"
+    .replace(/[\u00b9\u00b2\u00b3\u2070-\u2079]+/g, '') // superscript footnote marks
     .replace(/\s[—–]\s/g, ', ')
     .replace(/\s+/g, ' ')
     .trim();

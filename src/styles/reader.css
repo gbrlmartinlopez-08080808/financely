@@ -1403,3 +1403,213 @@
 .listen-scrub2 {
   padding: 8px 2px 6px;
 }
+
+/* the voice sheet: languages, weights, samples */
+.vnow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  margin-bottom: 8px;
+}
+.vnow b {
+  font-size: 16px;
+}
+.vlang {
+  border-top: 1px solid var(--line);
+}
+.vlang-h {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 2px;
+  text-align: left;
+}
+.vlang-h b {
+  font-size: 15.5px;
+}
+.vlang-h small {
+  margin-left: auto;
+}
+.vtag {
+  font: 600 9.5px var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--pill);
+  color: var(--pill-ink);
+  margin-left: 8px;
+  vertical-align: middle;
+}
+.vtier {
+  padding-bottom: 6px;
+}
+.voice-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.voice-row .action {
+  flex: 1;
+  min-width: 0;
+}
+.vplay {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+/* ------------------------------------------------------------------ pages that flip (instead of one long scroll) */
+.reader-scroll.paged {
+  overflow: hidden;
+  touch-action: pan-y;
+}
+.flow.paged {
+  max-width: none;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  box-sizing: border-box;
+  padding: calc(var(--safe-t) + 58px) var(--r-margin) calc(var(--safe-b) + 92px);
+  column-width: calc(100vw - 2 * var(--r-margin));
+  column-gap: calc(2 * var(--r-margin));
+  column-fill: auto;
+  overflow: visible;
+}
+.flow.paged p,
+.flow.paged li,
+.flow.paged h1,
+.flow.paged h2,
+.flow.paged h3,
+.flow.paged h4,
+.flow.paged blockquote,
+.flow.paged pre,
+.flow.paged table,
+.flow.paged figure {
+  content-visibility: visible;
+}
+.flow.paged figure,
+.flow.paged h1,
+.flow.paged h2,
+.flow.paged h3,
+.flow.paged h4 {
+  break-inside: avoid;
+}
+.flow.paged h1,
+.flow.paged h2,
+.flow.paged h3,
+.flow.paged h4 {
+  break-after: avoid;
+}
+.flow.paged img {
+  max-height: calc(100vh - 220px);
+  object-fit: contain;
+}
+.flow.paged .lq-status-wrap {
+  display: none;
+}
+/* the page being turned casts a little shadow on the next one */
+.reader-scroll.paged.flipping::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 18px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.1), transparent);
+  pointer-events: none;
+  z-index: 3;
+}
+/* while the position bar is held, the controls step aside so the page can be seen */
+.reader.scrubbing .r-top,
+.reader.scrubbing .r-dock > *:not(.scrub):not(.listen),
+.reader.scrubbing .listen > *:not(.scrub),
+.reader.scrubbing .r-fade {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+.reader.scrubbing .r-dock,
+.reader.scrubbing .listen {
+  background: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.reader-scroll.paged ~ .r-fade { display: none; }
+
+/* editing a Frogity note */
+.fr-ed {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  background: var(--r-bg, var(--bg));
+  color: var(--r-ink, var(--ink));
+  padding-top: var(--safe-t);
+}
+.fr-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+}
+.fr-title {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font: 600 19px var(--sans);
+  color: inherit;
+  outline: none;
+}
+.fr-state {
+  font-size: 11px;
+  opacity: 0.55;
+  padding-right: 8px;
+}
+.fr-page.flow {
+  flex: 1;
+  overflow-y: auto;
+  max-width: 680px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 8px var(--r-margin) 40px;
+  outline: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.fr-page.flow:empty::before {
+  content: 'Write something…';
+  opacity: 0.35;
+}
+.fr-bar {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  padding: 6px 8px calc(var(--safe-b) + 6px);
+  border-top: 1px solid var(--line, rgba(128, 128, 128, 0.2));
+  background: var(--r-bg, var(--bg));
+  scrollbar-width: none;
+}
+.fr-bar button {
+  min-width: 42px;
+  height: 40px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  font-size: 16px;
+}
+.fr-bar button:active {
+  background: var(--line, rgba(128, 128, 128, 0.2));
+}

@@ -8,6 +8,8 @@ import { buildPdf, formFields, shownSize, type Ann, type Model, type PageRef, ty
 import { PageView, type Tool, type ToolOpts } from './PageView';
 import { Glance, Thumb } from './Glance';
 import { Icon } from '../Icon';
+import { Pixel, PixelLoader } from '../px';
+import { WebListen } from '../WebListen';
 import { Dialog, download, pickFiles, prompt } from '../bits';
 import { registerCommands, dropCommands } from '../commands';
 import { getUi, openDoc, setUi } from '../state';
@@ -517,7 +519,7 @@ export function PdfWorkspace({ doc, blob, secondary }: { doc: LocalDoc; blob: Bl
   if (!model)
     return (
       <div className="loading">
-        <i className="spin" />
+        <PixelLoader grid={3} size={7} />
       </div>
     );
 
@@ -1017,6 +1019,8 @@ function ReadView({ doc, onPage }: { doc: LocalDoc; onPage: (n: number) => void 
   const [pages, setPages] = useState<string[] | null>(null);
   const [t, setT] = useState(() => localStorage.getItem('frogity-read-theme') ?? 'paper');
   const [size, setSize] = useState(() => Number(localStorage.getItem('frogity-read-size')) || 20);
+  const [listening, setListening] = useState(false);
+  const col = useRef<HTMLDivElement>(null);
   useEffect(() => {
     void textOf(doc).then(setPages, () => setPages([]));
   }, [doc.id, doc.fileVer]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1027,7 +1031,7 @@ function ReadView({ doc, onPage }: { doc: LocalDoc; onPage: (n: number) => void 
   if (!pages)
     return (
       <div className="loading">
-        <i className="spin" />
+        <PixelLoader grid={3} size={7} />
       </div>
     );
   const paras = (s: string) =>
@@ -1044,6 +1048,9 @@ function ReadView({ doc, onPage }: { doc: LocalDoc; onPage: (n: number) => void 
             {x}
           </button>
         ))}
+        <button className={`chip${listening ? ' on' : ''}`} onClick={() => setListening((l) => !l)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Pixel name="ear" size={13} /> Listen
+        </button>
         <button className="chip" onClick={() => setSize((s) => Math.max(14, s - 1))}>
           A−
         </button>
@@ -1051,7 +1058,7 @@ function ReadView({ doc, onPage }: { doc: LocalDoc; onPage: (n: number) => void 
           A+
         </button>
       </div>
-      <div className="column" style={{ fontSize: size }}>
+      <div className="column" style={{ fontSize: size }} ref={col}>
         {empty && <p className="muted">This PDF is made of pictures, so it has no text to show here. The phone reads scans by itself; once it has, their text appears here.</p>}
         {pages.map((pg, i) => (
           <div key={i}>
@@ -1064,6 +1071,7 @@ function ReadView({ doc, onPage }: { doc: LocalDoc; onPage: (n: number) => void 
           </div>
         ))}
       </div>
+      {listening && <WebListen getRoot={() => col.current} onClose={() => setListening(false)} />}
     </div>
   );
 }

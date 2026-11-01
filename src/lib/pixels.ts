@@ -72,6 +72,7 @@ export function drawPixel(ctx: CanvasRenderingContext2D, name: PixelName, x: num
 }
 
 export const KIND_PIXEL: Record<string, PixelName> = {
+  fr: 'note',
   pdf: 'page',
   epub: 'book',
   docx: 'lines',

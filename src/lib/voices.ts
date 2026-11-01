@@ -1,7 +1,7 @@
 // The reading language, and the natural voice that goes with it: chosen from the phone's own language (no extra
 // question), downloaded in the background right after the introduction, and made the default. Fast phone voices in
 // other accents remain one tap away in the Voice sheet.
-import { NEURAL_PREFIX, NEURAL_VOICES, neuralDownload, neuralStored, neuralSupported, sharedEngine, neuralId, isNeural, type NeuralVoice } from './neural';
+import { NEURAL_PREFIX, NEURAL_VOICES, neuralDownload, neuralStored, neuralSupported, recommendedFor, isNeural, type NeuralVoice } from './neural';
 import { getState, updateSettings } from './store';
 import { reportJob } from './scan';
 import * as db from './db';
@@ -27,7 +27,7 @@ export function naturalVoiceFor(lang: string): NeuralVoice | undefined {
   const loc = (navigator.languages?.[0] ?? navigator.language ?? '').toLowerCase();
   const pick = (id: string) => NEURAL_VOICES.find((v) => v.id === id);
   if (lang === 'en') return /^en-(gb|au|nz|ie|in|za)/.test(loc) ? pick('en_GB-alba-medium') : pick('en_US-hfc_female-medium');
-  return NEURAL_VOICES.find((v) => v.lang.slice(0, 2) === lang);
+  return recommendedFor(lang);
 }
 
 let busy = false;
@@ -50,18 +50,23 @@ export async function ensureNaturalVoice(lang = getState().settings.lang || dete
   busy = true;
   const jobId = 'voice';
   try {
-    const have = (await neuralStored()).includes(v.id);
     await db.put('kv', 'voice:auto', 'pending');
-    if (!have) {
-      reportJob(jobId, `Your reading voice · ${v.label}`, 'voice', 0, 100);
-      await neuralDownload(v.id, (f) => reportJob(jobId, `Your reading voice · ${v.label}`, 'voice', Math.round(f * 100), 100));
+    // the voice for the reading language first (it becomes the default), then a general English one for the books in English
+    const wanted = [v, ...(lang !== 'en' && lang !== 'other' ? [naturalVoiceFor('en')] : [])].filter((x): x is NeuralVoice => !!x);
+    for (const w of wanted) {
+      if ((await neuralStored()).includes(w.id)) continue;
+      reportJob(jobId, `Reading voice · ${w.label}`, 'voice', 0, 100);
+      await neuralDownload(w.id, (f) => reportJob(jobId, `Reading voice · ${w.label}`, 'voice', Math.round(f * 100), 100));
+      if (w === v) {
+        const cur = getState().settings.ttsVoice;
+        // make it the default unless the reader picked something else on purpose
+        if (!cur || (isNeural(cur) && !NEURAL_VOICES.find((x) => NEURAL_PREFIX + x.id === cur)?.lang.startsWith(lang))) await updateSettings({ ttsVoice: NEURAL_PREFIX + v.id });
+        window.dispatchEvent(new CustomEvent('frogity:voice', { detail: { id: v.id } }));
+      }
     }
     const cur = getState().settings.ttsVoice;
-    // make it the default unless the reader picked something else on purpose
-    if (!cur || (isNeural(cur) && !NEURAL_VOICES.find((x) => NEURAL_PREFIX + x.id === cur)?.lang.startsWith(lang))) await updateSettings({ ttsVoice: NEURAL_PREFIX + v.id });
+    if (!cur) await updateSettings({ ttsVoice: NEURAL_PREFIX + v.id });
     await db.put('kv', 'voice:auto', 'done');
-    window.dispatchEvent(new CustomEvent('frogity:voice', { detail: { id: v.id } }));
-    void warmVoice();
   } catch (e) {
     console.warn('voice download failed', e);
     await db.put('kv', 'voice:auto', 'failed');
@@ -74,26 +79,8 @@ export async function ensureNaturalVoice(lang = getState().settings.lang || dete
   }
 }
 
-/** Loads the chosen natural voice and says a word silently, so the first real sentence is not slow. */
-let warmed = '';
-export async function warmVoice() {
-  const sel = getState().settings.ttsVoice;
-  if (!isNeural(sel) || !neuralSupported()) return;
-  const id = neuralId(sel);
-  if (warmed === id) return;
-  try {
-    if (!(await neuralStored()).includes(id)) return;
-    await sharedEngine.init(id);
-    await sharedEngine.say('Ready.', 1); // first run compiles the model's kernels; this pays for it now
-    warmed = id;
-  } catch (e) {
-    console.warn('voice warm-up failed', e);
-  }
-}
-
-/** On start: finish a download that was interrupted, and warm the voice while the app is quiet. */
+/** On start: finish a download that was interrupted. (The voice itself is loaded only when you listen, so the app starts light.) */
 export async function resumeVoice() {
   const st = await db.get<string>('kv', 'voice:auto');
   if (st === 'pending' || st === 'failed') await ensureNaturalVoice();
-  else void warmVoice();
 }
