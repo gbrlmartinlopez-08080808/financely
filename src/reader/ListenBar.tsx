@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { bestVoice, listVoices, openVoiceInstall, speak, speechText, stopSpeaking, ttsAvailable, guessLang, type Voice } from '../lib/tts';
-import { NEURAL_PREFIX, NEURAL_VOICES, NeuralPlayer, sharedEngine, isNeural, neuralDownload, neuralId, neuralRemove, neuralStored, neuralSupported } from '../lib/neural';
+import { NEURAL_PREFIX, NEURAL_VOICES, NeuralPlayer, enginePool, sharedEngine, warmSecond, isNeural, neuralDownload, neuralId, neuralRemove, neuralStored, neuralSupported } from '../lib/neural';
+import { Scrub } from './Scrub';
 import { firstVisibleSentence, markSaying, sentenceAtPoint, sentenceRaw, sentenceText, wrapSentences } from './dom';
 import { updateSettings, useStore } from '../lib/store';
 import { isNative, mediaStart, mediaStop, mediaUpdate, onMediaAction, tap } from '../lib/native';
@@ -102,7 +103,8 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
   useEffect(() => {
     const v = settings.ttsVoice;
     if (!isNeural(v) || !neuralSupported() || neuralBroken.current) return;
-    sharedEngine.init(neuralId(v)).catch(() => {});
+    // the first engine first, then the helper (so the first one never competes for the phone while it loads)
+    sharedEngine.init(neuralId(v)).then(() => warmSecond(neuralId(v)), () => {});
   }, [settings.ttsVoice]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -153,10 +155,10 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
    */
   const runNeural = async (from: number, my: number, sel: string, n: number, offset: number) => {
     if (!root) return;
-    const eng = sharedEngine;
     setBusy(true);
+    let engines: Awaited<ReturnType<typeof enginePool>>;
     try {
-      await eng.init(neuralId(sel));
+      engines = await enginePool(neuralId(sel), (e) => my === token.current && !engines.includes(e) && engines.push(e));
     } catch (e) {
       console.warn('studio voice failed to load', e);
       setBusy(false);
@@ -167,8 +169,10 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
     }
     if (my !== token.current) return;
     const rate = opts.current.ttsRate;
+    const say = Math.min(rate, 2);
     const tempo = rate > 2 ? rate / 2 : 1; // beyond 2× the voice itself stops getting faster: speed up playback a little
-    const pl = (player.current = new NeuralPlayer(tempo));
+    // starts the moment the first (short) piece is ready; the next ones are made while it plays
+    const pl = (player.current = new NeuralPlayer(tempo, 0.3));
     let shown = -1;
     let finished = false;
     const watch = () => {
@@ -195,39 +199,100 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
       requestAnimationFrame(watch);
     };
     requestAnimationFrame(watch);
+
+    // A pipeline: up to one piece per engine is being made at any moment, and pieces are played in order. The first
+    // piece is a short phrase (it is heard within about a second), the second a little longer, then whole runs of
+    // sentences sized so each is ready long before the speech in hand runs out.
+    type Job = { ch: NonNullable<ReturnType<typeof buildChunk>>; p: Promise<{ samples: Float32Array; rate: number }> };
+    const jobs: Job[] = [];
     let at = from;
     let off = offset;
-    let first = true;
-    let rtf = 0.45; // how long the voice takes per second of speech (measured as we go)
-    while (at < n) {
-      if (my !== token.current) return;
-      // a short first chunk so the voice starts quickly, longer ones after that for a smoother flow
-      // each chunk is sized so it is ready before the audio already in hand runs out: short at the start, longer as the buffer grows
-      const room = Math.round((pl.buffered() * 0.75 * 14 * Math.min(rate, 2)) / rtf);
-      const ch = buildChunk(at, n, off, first ? 60 : Math.max(60, Math.min(260, room)));
-      off = 0;
-      if (!ch) break;
-      at = ch.next;
-      // keep about half a minute of speech ready, no more
-      while (pl.ahead() > 30 && my === token.current) await new Promise((r) => setTimeout(r, 250));
-      if (my !== token.current) return;
-      try {
+    let made = 0;
+    let turn = 0;
+    let rtf = 0.5; // seconds of work per second of speech, per engine (measured as we go)
+    // how many characters may the next piece have, so it is ready before the speech ahead of it has been heard?
+    const CPS = 14; // characters per second of speech at 1×
+    const size = () => {
+      if (made === 0) return 22;
+      const ahead = pl.buffered() + jobs.reduce((x, j) => x + j.ch.text.length / (CPS * say), 0);
+      const budget = Math.round(((ahead * CPS * say) / rtf) * 0.55);
+      // grow gently at the start, then up to whole runs of sentences
+      return Math.max(30, Math.min(made < 3 ? 40 * 2 ** made : 340, budget));
+    };
+    /** The next piece: whole sentences when they fit, otherwise the next phrase of a long sentence. */
+    const piece = (target: number) => {
+      const ch = buildChunk(at, n, off, target);
+      if (!ch || !root || ch.text.length <= target * 1.15) return ch;
+      const first = ch.parts[0];
+      if (ch.parts.length > 1) {
+        // several sentences and too long: keep only those that fit
+        const keep = ch.parts.filter((p) => p.at + p.w <= target * 1.15);
+        if (keep.length) {
+          const last = keep[keep.length - 1];
+          return { text: ch.text.slice(0, last.at + last.w), parts: keep, next: last.i + 1 };
+        }
+      }
+      // one long sentence: up to its first natural break after a little while (or a space)
+      const startOff = first.i === at ? off : 0;
+      const raw = sentenceRaw(root, first.i).slice(startOff);
+      const lo = Math.min(made === 0 ? 12 : 20, raw.length);
+      const hi = Math.max(lo + 10, Math.round(target * 1.1));
+      const m = raw.slice(lo, hi).search(/[,;:—–)]\s/);
+      const cut = m >= 0 ? lo + m + 1 : lo + Math.max(0, raw.slice(lo, hi).lastIndexOf(' '));
+      if (cut <= 10 || cut >= raw.length - 8) return ch;
+      const head = speechText(raw.slice(0, cut));
+      if (!head) return ch;
+      return { text: head, parts: [{ i: first.i, at: 0, w: head.length }], next: first.i, off: startOff + cut };
+    };
+    const fill = () => {
+      while (my === token.current && at < n && jobs.length < engines.length + 1 && pl.ahead() < 40) {
+        const ch = piece(size()) as (NonNullable<ReturnType<typeof buildChunk>> & { off?: number }) | null;
+        if (!ch) {
+          at = n;
+          break;
+        }
+        off = ch.off ?? 0;
+        at = ch.next;
+        const eng = engines[turn++ % engines.length];
         const t0 = performance.now();
-        const r = await eng.say(ch.text, Math.min(rate, 2));
+        const p = eng.say(ch.text, say).then((r) => {
+          const secs = r.samples.length / r.rate / say;
+          rtf = rtf * 0.6 + Math.max(0.1, (performance.now() - t0) / 1000 / Math.max(0.4, secs)) * 0.4;
+          return r;
+        });
+        p.catch(() => {});
+        jobs.push({ ch, p });
+        made++;
+      }
+    };
+    while (my === token.current) {
+      fill();
+      const job = jobs.shift();
+      if (!job) break;
+      try {
+        const r = await job.p;
         if (my !== token.current) return;
-        rtf = Math.max(0.15, (performance.now() - t0) / 1000 / Math.max(0.5, (r.samples.length / r.rate) / Math.min(rate, 2)));
-        console.debug(`[studio] ${ch.parts.length} sentence(s): ${Math.round(performance.now() - t0)} ms for ${(r.samples.length / r.rate).toFixed(1)} s of speech, ${pl.ahead().toFixed(1)} s ready ahead`);
-        pl.enqueue(ch.parts.map((p) => ({ i: p.i, w: p.w })), r.samples, r.rate, /[.!?…]["”’)\]]*$/.test(ch.text) ? 0.16 : 0.1);
-        first = false;
+        console.debug(`[studio] ${job.ch.parts.length} sentence(s), ${(r.samples.length / r.rate).toFixed(1)} s of speech · ${pl.ahead().toFixed(1)} s ready ahead · ${engines.length} engine(s) · rtf ${rtf.toFixed(2)}`);
+        // a breath after a full stop, a shorter one after a phrase
+        // pauses like a narrator's: a breath after a sentence, a longer one between paragraphs and after a heading,
+        // a short one at a phrase break inside a sentence
+        const lastI = job.ch.parts[job.ch.parts.length - 1].i;
+        const endsSentence = /[.!?…]["”’)\]]*$/.test(job.ch.text) && job.ch.next > lastI;
+        const blockOf = (i: number) => root.querySelector(`.s[data-i="${i}"]`)?.closest('p, li, h1, h2, h3, h4, h5, h6, blockquote, figcaption, td, pre, dd, dt');
+        const here = endsSentence ? blockOf(lastI) : null;
+        const gap = !endsSentence ? (/[,;:—–]$/.test(job.ch.text) ? 0.08 : 0.02) : here && /^H\d$/.test(here.tagName) ? 0.55 : here && here !== blockOf(lastI + 1) ? 0.42 : 0.17;
+        pl.enqueue(job.ch.parts.map((p) => ({ i: p.i, w: p.w })), r.samples, r.rate, gap);
       } catch (e) {
         if (my !== token.current) return;
         console.warn('studio voice failed', e);
         neuralBroken.current = true;
         pl.stop();
         toast('The studio voice stopped — using the phone’s voice');
-        run(ch.parts[0].i);
+        run(job.ch.parts[0].i);
         return;
       }
+      // keep at most about forty seconds ready
+      while (my === token.current && pl.ahead() > 40) await new Promise((r) => setTimeout(r, 250));
     }
     pl.release();
     finished = true;
@@ -380,6 +445,8 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
   const wpm = 165 * settings.ttsRate;
   const leftWords = root ? Math.round(((total - idx) / Math.max(1, total)) * ((root.textContent ?? '').split(/\s+/).length || 0)) : 0;
   const leftMin = Math.max(1, Math.round(leftWords / wpm));
+  /** the whole track, in minutes (for the scrubber's label) */
+  const leftAll = total ? (leftMin * total) / Math.max(1, total - idx) : 0;
   const nv = isNeural(settings.ttsVoice) ? NEURAL_VOICES.find((v) => NEURAL_PREFIX + v.id === settings.ttsVoice) : undefined;
   const voice = voices.find((v) => v.id === settings.ttsVoice) ?? (nv ? undefined : voices.find((v) => v.id === bestRef.current));
   const docLang = lang.current.slice(0, 2);
@@ -416,9 +483,27 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
         <span className="grow">{busy ? 'preparing the voice…' : playing ? 'reading aloud' : 'paused'} · {idx + 1}/{total || '–'}</span>
         <span>{leftMin} min left</span>
       </div>
-      <div className="listen-scrub" aria-hidden>
-        <i style={{ width: `${total ? ((idx + 1) / total) * 100 : 0}%` }} />
-      </div>
+      <Scrub
+        className="listen-scrub2"
+        ariaLabel="Position in the track"
+        value={total > 1 ? idx / (total - 1) : 0}
+        label={(v) => {
+          const i = Math.round(v * Math.max(0, total - 1));
+          return `${i + 1} / ${total} · ${Math.max(0, Math.round(((total - i) / Math.max(1, total)) * leftAll))} min left`;
+        }}
+        onChange={(v, final) => {
+          const i = Math.round(v * Math.max(0, total - 1));
+          if (!root) return;
+          if (!final) {
+            follow(markSaying(root, i));
+            return;
+          }
+          setIdx(i);
+          localStorage.setItem('listen:' + docId, String(i));
+          if (playing) run(i);
+          else follow(markSaying(root, i));
+        }}
+      />
       <div className="listen-ctrl">
         <button className="sm" onClick={() => skip(-1)} aria-label="Previous sentence">
           <Icon name="rew" size={22} />

@@ -1,3 +1,4 @@
+import { prefetch } from '../lib/pdfCache';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore, removeDoc, patchDoc, streakInfo, dayKey, COUNT_MS } from '../lib/store';
 import { coverUrl, coverInfo, ago, formatSize, getFile, refreshCover } from '../lib/library';
@@ -435,6 +436,7 @@ function ShelfRow({ doc, onOpen, onMenu, picked }: { doc: DocMeta; onOpen: () =>
     <button
       className={`shelf-row${picked !== undefined ? ' choosing' : ''}${picked ? ' picked' : ''}`}
       onClick={onOpen}
+      onPointerDown={() => picked === undefined && prefetch(doc)}
       onContextMenu={(e) => {
         e.preventDefault();
         onMenu();

@@ -33,8 +33,16 @@ async function load(id: string) {
   ort.env.wasm.proxy = false;
   ort.env.wasm.wasmPaths = { 'ort-wasm-simd.wasm': ortWasm, 'ort-wasm-simd-threaded.wasm': ortWasm } as never;
   const bytes = new Uint8Array(await (await file('piper', `${id}.onnx`)).arrayBuffer());
-  session = await ort.InferenceSession.create(bytes, { executionProviders: ['wasm'] });
+  session = await ort.InferenceSession.create(bytes, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
   loadedId = id;
+  // the very first run of a model is several times slower than the rest (memory, compiled code): do it now, on a
+  // word nobody hears, so the first sentence the reader asks for comes out at full speed
+  try {
+    phon ??= await newPhonemizer();
+    await say('Ready.', 1);
+  } catch {
+    /* warming up is only a nicety */
+  }
 }
 
 async function newPhonemizer() {

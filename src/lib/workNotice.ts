@@ -19,7 +19,7 @@ export const workFree = async () => (isNative ? (await Work.battery().catch(() =
 /** Opens the phone's own question: may Frogity keep working in the background? */
 export const askWorkFree = () => (isNative ? Work.askBattery().catch(() => {}) : Promise.resolve());
 
-export const kindLabel = (k: ScanJob['kind']) => (k === 'scan' ? 'Reading the scan' : k === 'liquid' ? 'Preparing Liquid mode' : k === 'voice' ? 'Downloading your voice' : 'Reading the pictures');
+export const kindLabel = (k: ScanJob['kind']) => (k === 'scan' ? 'Reading the scan' : k === 'liquid' ? 'Preparing Liquid mode' : k === 'voice' ? 'Downloading your voice' : k === 'sync' ? 'Sending to your computer' : 'Reading the pictures');
 export const left = (j: ScanJob) => (j.total ? `${Math.max(0, j.total - j.done)} left` : '…');
 
 let started = false;

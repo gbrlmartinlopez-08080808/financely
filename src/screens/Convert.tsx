@@ -57,7 +57,7 @@ async function offscreenRoot(doc: DocMeta, onProgress: (p: number) => void): Pro
     const cached = await db.get<{ blocks: import('../lib/formats/liquidPdf').LBlock[] }>('cache', `${doc.id}:lq8`);
     if (cached) div.innerHTML = blocksToHtml(cached.blocks, urls);
     else {
-      const res = await pdfToLiquid(c.data, (_, p) => onProgress(p.page / p.pages));
+      const res = await pdfToLiquid(c.blob, (_, p) => onProgress(p.page / p.pages));
       await db.put('cache', `${doc.id}:lq8`, { blocks: res.blocks, scanned: res.scannedPages });
       div.innerHTML = blocksToHtml(res.blocks, urls);
     }

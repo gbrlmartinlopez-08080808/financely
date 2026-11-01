@@ -95,6 +95,8 @@ interface Item {
   file_ver: string | null;
   file_parts: number;
   file_size: number;
+  /** false: the file itself is not kept here (it is big); a computer asks the phone for it when it needs it */
+  file_stored?: boolean;
   cover_ver: string | null;
   updated_at: string;
   updated_by: string | null;
@@ -107,6 +109,10 @@ const P = {
   pairing: (id: string) => `meta/pairings/${id}.json`,
   code: (code: string) => `meta/codes/${code}.json`,
   files: (lib: string, id: string) => `files/${lib}/${enc(id)}`,
+  // documents asked for by a computer, waiting for the phone to hand them over (and the handing-over place)
+  reqs: (lib: string) => `meta/libs/${lib}/requests`,
+  reqHead: (lib: string) => `meta/libs/${lib}/reqhead.json`,
+  relay: (lib: string, req: string) => `relay/${lib}/${req}`,
 };
 
 async function auth(req: Request): Promise<Device> {
@@ -257,13 +263,114 @@ const actions: Record<string, (req: Request, b: Body) => Promise<unknown>> = {
   async wait(req, b) {
     const d = await auth(req);
     const since = Number(b.since ?? 0) || 0;
+    // the phone also waits for computers asking for a document
+    const reqSince = d.kind === 'phone' ? Number(b.reqSince ?? 0) || 0 : -1;
     const until = Date.now() + 20_000;
     while (Date.now() < until) {
-      const head = await read<{ rev: number }>(P.head(d.library));
+      const [head, rh] = await Promise.all([read<{ rev: number }>(P.head(d.library)), reqSince >= 0 ? read<{ rev: number }>(P.reqHead(d.library)) : null]);
+      if (rh && rh.rev > reqSince) return { changed: !!head && head.rev > since, rev: head?.rev, requests: true, reqRev: rh.rev };
       if (head && head.rev > since) return { changed: true, rev: head.rev };
-      await new Promise((r) => setTimeout(r, 700));
+      await new Promise((r) => setTimeout(r, 600));
     }
     return { changed: false };
+  },
+
+  // ---------------------------------------------------------------- big files: straight from the phone, on demand
+  /** A computer wants a document whose file is not kept here: the phone is asked to hand it over. */
+  async fetch_request(req, b) {
+    const d = await auth(req);
+    const id = str(b, 'id', 120);
+    const item = await read<Item>(P.item(d.library, id));
+    if (!item || item.deleted) throw new Http(404, 'This document is gone.');
+    // old requests nobody finished go (after half an hour)
+    for (const f of await list(P.reqs(d.library))) {
+      const r = await read<{ at: number; id: string }>(`${P.reqs(d.library)}/${f.name}`);
+      if (!r || Date.now() - r.at > 30 * 60_000) {
+        await remove([`${P.reqs(d.library)}/${f.name}`]);
+        await removeFolder(P.relay(d.library, f.name.replace(/\.json$/, '')));
+      }
+    }
+    const rid = randomUUID();
+    await write(`${P.reqs(d.library)}/${rid}.json`, { id, ver: item.file_ver, at: Date.now(), by: d.id, status: 'waiting' });
+    await write(P.reqHead(d.library), { rev: nextRev() });
+    return { req: rid };
+  },
+  /** The phone: what computers are waiting for. */
+  async requests(req) {
+    const d = await auth(req);
+    const out: { req: string; id: string; ver: string | null }[] = [];
+    for (const f of await list(P.reqs(d.library))) {
+      const r = await read<{ id: string; ver: string | null; at: number; status: string }>(`${P.reqs(d.library)}/${f.name}`);
+      if (r && r.status === 'waiting' && Date.now() - r.at < 30 * 60_000) out.push({ req: f.name.replace(/\.json$/, ''), id: r.id, ver: r.ver });
+    }
+    return { requests: out };
+  },
+  /** The phone: where to put the (sealed) parts of the file for one request. */
+  async relay_upload_urls(req, b) {
+    const d = await auth(req);
+    const rid = str(b, 'req', 64);
+    const parts = Math.max(1, Math.min(5000, Number(b.parts) || 1));
+    const urls: string[] = new Array(parts);
+    await mapLimit(Array.from({ length: parts }, (_, i) => i), 8, async (i) => {
+      const { data, error } = await store().createSignedUploadUrl(`${P.relay(d.library, rid)}/${i}`, { upsert: true });
+      if (error) throw new Error(error.message);
+      urls[i] = data.signedUrl;
+    });
+    return { urls };
+  },
+  /** The phone: one more piece is there (so the computer can start fetching before the whole file is sent). */
+  async relay_part(req, b) {
+    const d = await auth(req);
+    const rid = str(b, 'req', 64);
+    const path = `${P.reqs(d.library)}/${rid}.json`;
+    const r = await read<Record<string, unknown>>(path);
+    if (!r) throw new Http(404, 'gone');
+    if (r.status === 'ready') return { ok: true };
+    await write(path, { ...r, status: 'sending', parts: Math.max(1, Number(b.parts) || 1), got: Math.max(Number(r.got) || 0, Number(b.got) || 0) });
+    return { ok: true };
+  },
+  async relay_ready(req, b) {
+    const d = await auth(req);
+    const rid = str(b, 'req', 64);
+    const path = `${P.reqs(d.library)}/${rid}.json`;
+    const r = await read<Record<string, unknown>>(path);
+    if (!r) throw new Http(404, 'gone');
+    await write(path, { ...r, status: 'ready', parts: Math.max(1, Number(b.parts) || 1), size: Number(b.size) || 0, ver: typeof b.ver === 'string' ? b.ver : r.ver });
+    return { ok: true };
+  },
+  /** The computer: is it there yet? When it is, links to fetch it. */
+  async relay_status(req, b) {
+    const d = await auth(req);
+    const rid = str(b, 'req', 64);
+    const r = await read<{ status: string; parts?: number; got?: number; size?: number; ver?: string }>(`${P.reqs(d.library)}/${rid}.json`);
+    if (!r) return { status: 'gone' };
+    const from = Math.max(0, Number(b.from) || 0);
+    const got = r.status === 'ready' ? (r.parts ?? 1) : r.status === 'sending' ? (r.got ?? 0) : 0;
+    if (got <= from) return { status: r.status, parts: r.parts, got };
+    // links for the pieces that are there and not fetched yet
+    const names = Array.from({ length: got - from }, (_, k) => `${P.relay(d.library, rid)}/${from + k}`);
+    const { data, error } = await store().createSignedUrls(names, 900);
+    if (error) throw new Error(error.message);
+    return { status: r.status, parts: r.parts, got, from, urls: (data ?? []).map((x) => x.signedUrl), size: r.size, ver: r.ver };
+  },
+  /** The computer has it: the handing-over place is cleared at once. */
+  async relay_done(req, b) {
+    const d = await auth(req);
+    const rid = str(b, 'req', 64);
+    await removeFolder(P.relay(d.library, rid));
+    await remove([`${P.reqs(d.library)}/${rid}.json`]);
+    return { ok: true };
+  },
+  /** The phone has a big new version (made on a computer): the copy kept here goes; computers ask the phone from now on. */
+  async release_file(req, b) {
+    const d = await auth(req);
+    const id = str(b, 'id', 120);
+    const path = P.item(d.library, id);
+    const item = await read<Item>(path);
+    if (!item || item.file_ver !== b.ver) return { ok: false };
+    await write(path, { ...item, file_stored: false });
+    await removeFolder(P.files(d.library, id), (n) => n.startsWith('cover.'));
+    return { ok: true };
   },
   async put(req, b) {
     const d = await auth(req);
@@ -278,18 +385,20 @@ const actions: Record<string, (req: Request, b: Body) => Promise<unknown>> = {
       file_ver: cur?.file_ver ?? null,
       file_parts: cur?.file_parts ?? 0,
       file_size: cur?.file_size ?? 0,
+      file_stored: cur?.file_stored,
       cover_ver: cur?.cover_ver ?? null,
       updated_at: now(),
       updated_by: d.id,
     };
     if (b.file && typeof b.file === 'object') {
-      const f = b.file as { ver: string; parts: number; size: number };
+      const f = b.file as { ver: string; parts: number; size: number; stored?: boolean };
       row.file_ver = String(f.ver).slice(0, 40);
       row.file_parts = Math.max(0, Math.min(5000, Number(f.parts) || 0));
       row.file_size = Number(f.size) || 0;
+      row.file_stored = f.stored !== false;
     }
     if (typeof b.cover === 'string') row.cover_ver = b.cover.slice(0, 40);
-    if (row.deleted) Object.assign(row, { file_ver: null, file_parts: 0, file_size: 0, cover_ver: null });
+    if (row.deleted) Object.assign(row, { file_ver: null, file_parts: 0, file_size: 0, file_stored: false, cover_ver: null });
     await write(path, row);
     await touchHead(d.library, row.rev);
     // old versions of the file and cover go (all of them for a deleted document)

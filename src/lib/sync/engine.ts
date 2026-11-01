@@ -17,7 +17,9 @@ import {
   listen,
   mergeMeta,
   newLibraryKey,
+  relaySend,
   sealJson,
+  STORE_MAX,
   SyncError,
   unsealJson,
   uploadFile,
@@ -92,23 +94,25 @@ function run() {
   // highlights and bookmarks are written straight to the database: a quiet look every half minute, and on leaving
   const iv = window.setInterval(() => void push(), 30_000);
   // without live pings: one request waits at the server until something changes (news within about a second)
+  // also while the app is in the background: a computer may be waiting for a big file only this phone has
   let watching = true;
-  if (!SYNC.rt)
-    void (async () => {
-      while (watching && creds) {
-        if (document.hidden) {
-          await new Promise((r) => setTimeout(r, 3000));
-          continue;
+  void (async () => {
+    while (watching && creds) {
+      try {
+        const since = (await db.get<number>('kv', 'sync:rev')) ?? 0;
+        const reqSince = (await db.get<number>('kv', 'sync:reqrev')) ?? 0;
+        const r = await call<{ changed: boolean; requests?: boolean; reqRev?: number }>(SYNC, creds, 'wait', { since, reqSince });
+        if (r.requests) {
+          await answerRequests();
+          if (r.reqRev) await db.put('kv', 'sync:reqrev', r.reqRev);
         }
-        try {
-          const since = (await db.get<number>('kv', 'sync:rev')) ?? 0;
-          const r = await call<{ changed: boolean }>(SYNC, creds, 'wait', { since });
-          if (r.changed) await pull();
-        } catch {
-          await new Promise((r) => setTimeout(r, 5000));
-        }
+        if (r.changed && !SYNC.rt) await pull();
+      } catch (e) {
+        if (e instanceof SyncError && e.status === 401) return void failed(e);
+        await new Promise((r) => setTimeout(r, 5000));
       }
-    })();
+    }
+  })();
   const vis = () => (document.hidden ? void push() : void pull().then(push));
   document.addEventListener('visibilitychange', vis);
   stop = () => {
@@ -219,7 +223,9 @@ async function pushOnce() {
       if (!blob) continue; // a linked file that can't be read right now: next time
       setStatus({ sending: d.name });
       const coverBlob = d.coverId ? ((await db.get<Blob>('blobs', d.coverId)) ?? null) : null;
-      const up = await uploadFile(SYNC, creds, key, d.id, blob, coverBlob);
+      // small files are kept (encrypted) on the server, so they open even with the phone off; big ones stay here and
+      // are handed over when a computer opens them
+      const up = await uploadFile(SYNC, creds, key, d.id, blob, coverBlob, undefined, blob.size <= STORE_MAX);
       file = up.file;
       cover = up.cover;
     }
@@ -275,6 +281,7 @@ async function apply(it: RemoteItem) {
     // a document added on the computer
     const blob = await downloadFile(SYNC, creds!, key!, it, remote.doc.mime);
     await db.put('files', it.id, blob);
+    if (blob.size > STORE_MAX && it.file_ver) void call(SYNC, creds!, 'release_file', { id: it.id, ver: it.file_ver }).catch(() => {});
     const coverId = `${it.id}:cover:${it.cover_ver ?? 'g'}`;
     const cover = it.cover_ver ? await downloadCover(SYNC, creds!, key!, it).catch(() => null) : null;
     await db.put('blobs', coverId, cover ?? (await generatedCover(remote.doc.name, remote.doc.kind as DocKind, remote.doc.author)));
@@ -309,6 +316,8 @@ async function apply(it: RemoteItem) {
     for (const k of ['liquid', 'scan', 'plan', 'lqmeta', 'lqv', 'figs', 'formoffer', 'scanfail']) await db.del('kv', `${k}:${it.id}`);
     Object.assign(patch, { size: blob.size, modified: Date.now(), uri: undefined, folder: undefined });
     sig = `${blob.size}:${patch.modified}`;
+    // a big file is not kept on the server once the phone has it: computers ask the phone for it from now on
+    if (blob.size > STORE_MAX && it.file_ver) void call(SYNC, creds!, 'release_file', { id: it.id, ver: it.file_ver }).catch(() => {});
   }
   if (it.cover_ver && it.cover_ver !== m?.coverVer) {
     const cover = await downloadCover(SYNC, creds!, key!, it).catch(() => null);
@@ -324,6 +333,33 @@ async function apply(it: RemoteItem) {
   if (patch.modified) import('../scan').then((s) => s.queueScan(now));
   mirror[it.id] = { h: hash({ doc: docPart(now), marks: merged.marks, gone: merged.gone }), fileVer: it.file_ver, coverVer: it.cover_ver, sig, marks: [...merged.marks.h, ...merged.marks.b].map((x) => x.id) };
   await saveMirror();
+}
+
+/** Computers waiting for a file only this phone has: hand each one over (sealed), with a notification meanwhile. */
+let answering: Promise<void> | null = null;
+function answerRequests(): Promise<void> {
+  answering ??= (async () => {
+    try {
+      const { reportJob } = await import('../scan');
+      const r = await call<{ requests: { req: string; id: string; ver: string | null }[] }>(SYNC, creds!, 'requests');
+      for (const q of r.requests) {
+        const d = getState().docs.find((x) => x.id === q.id);
+        const blob = d ? await getFile(d.id).catch(() => undefined) : undefined;
+        if (!d || !blob) continue;
+        reportJob('sync:' + q.req, d.name, 'sync', 0, 1);
+        try {
+          await relaySend(SYNC, creds!, key!, q.req, blob, mirror[d.id]?.fileVer ?? q.ver, (done, total) => reportJob('sync:' + q.req, d.name, 'sync', done, total));
+        } finally {
+          reportJob('sync:' + q.req, d.name, 'sync', 1, 1, true);
+        }
+      }
+    } catch (e) {
+      console.warn('handing a file over failed', e);
+    } finally {
+      answering = null;
+    }
+  })();
+  return answering;
 }
 
 async function writeMarks(id: string, marks: SyncMeta['marks'], gone: string[]) {

@@ -8,6 +8,8 @@ export interface LocalDoc {
   rev: number;
   fileVer: string | null;
   fileParts: number;
+  /** false: a big file that is not kept on the server — it is fetched from the phone when it is opened */
+  fileStored?: boolean;
   coverVer: string | null;
   /** changed here and not yet sent */
   dirty?: boolean;
@@ -22,6 +24,8 @@ export interface SyncState {
   last: number;
   /** a transfer in progress, for the status line */
   transfer?: { name: string; done: number; total: number };
+  /** waiting for the phone to hand a document over (seconds so far) */
+  asking?: { name: string; secs: number };
 }
 
 export interface State {

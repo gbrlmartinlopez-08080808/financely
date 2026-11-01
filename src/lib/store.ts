@@ -97,6 +97,7 @@ export async function removeDoc(id: string) {
   for (const p of cur?.scanPages ?? []) await db.del('blobs', p);
   await db.delPrefix('cache', id + ':');
   await db.delPrefix('marks', id + ':');
+  void import('./pdfCache').then((m) => m.forget(id));
   set({ docs: state.docs.filter((d) => d.id !== id) });
 }
 

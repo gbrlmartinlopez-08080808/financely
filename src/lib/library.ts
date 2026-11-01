@@ -5,7 +5,7 @@ import { saveDoc, getState } from './store';
 import type { DocKind, DocMeta, LiquidDoc } from './types';
 
 export type Content =
-  | { type: 'pdf'; data: ArrayBuffer }
+  | { type: 'pdf'; blob: Blob }
   | { type: 'flow'; liquid: LiquidDoc }
   | { type: 'sheet'; sheets: { name: string; rows: string[][] }[] }
   | { type: 'image'; url: string; blob: Blob }
@@ -349,11 +349,11 @@ export async function coverUrl(meta: DocMeta): Promise<string | undefined> {
 export async function loadContent(meta: DocMeta): Promise<Content> {
   const blob = await getFile(meta.id);
   if (!blob) throw new Error('The file for this document is missing.');
+  // a PDF is not read here at all: pdf.js reads just the parts it needs, straight from the file
+  if (meta.kind === 'pdf') return { type: 'pdf', blob };
   const buf = await blob.arrayBuffer();
   const f = await import('./formats/flow');
   switch (meta.kind) {
-    case 'pdf':
-      return { type: 'pdf', data: buf };
     case 'epub':
       return { type: 'flow', liquid: await f.epubToLiquid(buf) };
     case 'docx':

@@ -75,6 +75,8 @@ export interface RemoteItem {
   file_ver: string | null;
   file_parts: number;
   file_size: number;
+  /** false: the file is not kept on the server (it is big) — it is fetched from the phone when needed */
+  file_stored?: boolean;
   cover_ver: string | null;
   updated_at: string;
   updated_by: string | null;
@@ -193,11 +195,19 @@ export async function call<T = Record<string, unknown>>(cfg: SyncConfig, creds: 
 // ---------------------------------------------------------------- files, in sealed parts
 const PART = 16 * 1024 * 1024;
 
-/** Seals a file (and a cover) and uploads it in parts. Returns what the item row needs. */
-export async function uploadFile(cfg: SyncConfig, creds: Creds, key: CryptoKey, id: string, file: Blob | null, cover?: Blob | null, onPart?: (done: number, total: number) => void) {
+/** Files up to this size are kept on the server (encrypted), so they open even when the phone is off. */
+export const STORE_MAX = 4 * 1024 * 1024;
+
+/**
+ * Seals a file (and a cover) and uploads it in parts. Returns what the item row needs. With `store` false only the
+ * cover goes up: the file stays on the phone and is handed over when a computer asks for it.
+ */
+export async function uploadFile(cfg: SyncConfig, creds: Creds, key: CryptoKey, id: string, file: Blob | null, cover?: Blob | null, onPart?: (done: number, total: number) => void, store = true) {
   const ver = file ? newId() : undefined;
-  const parts = file ? Math.max(1, Math.ceil(file.size / PART)) : 0;
+  const allParts = file ? Math.max(1, Math.ceil(file.size / PART)) : 0;
+  const parts = store ? allParts : 0;
   const coverVer = cover ? newId() : undefined;
+  if (!parts && !coverVer) return { file: file ? { ver: ver!, parts: allParts, size: file.size, stored: false } : undefined, cover: undefined };
   const { urls } = await call<{ urls: Record<string, string> }>(cfg, creds, 'upload_urls', { id, ver, parts, cover: coverVer });
   const put = async (url: string, data: Uint8Array) => {
     for (let attempt = 0; ; attempt++) {
@@ -213,7 +223,64 @@ export async function uploadFile(cfg: SyncConfig, creds: Creds, key: CryptoKey, 
     onPart?.(i + 1, parts);
   }
   if (cover && coverVer) await put(urls[`cover.${coverVer}`], await seal(key, new Uint8Array(await cover.arrayBuffer())));
-  return { file: file ? { ver: ver!, parts, size: file.size } : undefined, cover: coverVer };
+  return { file: file ? { ver: ver!, parts: allParts, size: file.size, stored: store } : undefined, cover: coverVer };
+}
+
+async function putBytes(url: string, data: Uint8Array) {
+  for (let attempt = 0; ; attempt++) {
+    const r = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/octet-stream', 'x-upsert': 'true' }, body: data as BodyInit }).catch(() => null);
+    if (r?.ok) return;
+    if (attempt >= 3) throw new SyncError(r?.status ?? 0, 'upload failed');
+    await new Promise((res) => setTimeout(res, 800 * 2 ** attempt));
+  }
+}
+
+/** The phone: hands one file over for a computer that asked for it (sealed, through a place that is cleared after). */
+const RELAY_PART = 4 * 1024 * 1024; // small pieces: the computer fetches each one while the phone sends the next
+
+export async function relaySend(cfg: SyncConfig, creds: Creds, key: CryptoKey, req: string, file: Blob, ver: string | null, onPart?: (done: number, total: number) => void) {
+  const parts = Math.max(1, Math.ceil(file.size / RELAY_PART));
+  const { urls } = await call<{ urls: string[] }>(cfg, creds, 'relay_upload_urls', { req, parts });
+  for (let i = 0; i < parts; i++) {
+    await putBytes(urls[i], await seal(key, new Uint8Array(await file.slice(i * RELAY_PART, (i + 1) * RELAY_PART).arrayBuffer())));
+    onPart?.(i + 1, parts);
+    // (not waited for: the next piece is already on its way)
+    if (i + 1 < parts) void call(cfg, creds, 'relay_part', { req, parts, got: i + 1 }).catch(() => {});
+  }
+  await call(cfg, creds, 'relay_ready', { req, parts, size: file.size, ver });
+}
+
+/**
+ * The computer: asks the phone for a document's file and waits for it (the phone must be online with Frogity).
+ * `onWait` is told how long it has been waiting, so the screen can say what is going on.
+ */
+export async function relayFetch(cfg: SyncConfig, creds: Creds, key: CryptoKey, id: string, mime: string, onWait?: (secs: number) => void, onPart?: (done: number, total: number) => void, signal?: { stop: boolean }): Promise<Blob> {
+  const { req } = await call<{ req: string }>(cfg, creds, 'fetch_request', { id });
+  const t0 = Date.now();
+  const out: Uint8Array[] = [];
+  let started = false;
+  for (;;) {
+    if (signal?.stop) throw new SyncError(0, 'stopped');
+    // pieces are fetched as soon as the phone has sent them
+    const r = await call<{ status: string; parts?: number; got?: number; urls?: string[] }>(cfg, creds, 'relay_status', { req, from: out.length });
+    if (r.status === 'gone') throw new SyncError(404, 'The request ran out — try again.');
+    if (r.urls?.length) {
+      started = true;
+      for (const u of r.urls) {
+        const res = await fetch(u);
+        if (!res.ok) throw new SyncError(res.status, 'download failed');
+        out.push(await unseal(key, new Uint8Array(await res.arrayBuffer())));
+        onPart?.(out.length, r.parts ?? out.length);
+      }
+    }
+    if (r.status === 'ready' && out.length >= (r.parts ?? 1)) {
+      void call(cfg, creds, 'relay_done', { req }).catch(() => {});
+      return new Blob(out as BlobPart[], { type: mime });
+    }
+    if (Date.now() - t0 > 10 * 60_000) throw new SyncError(408, 'Your phone did not answer.');
+    if (!started) onWait?.(Math.round((Date.now() - t0) / 1000));
+    if (!r.urls?.length) await new Promise((res) => setTimeout(res, started ? 250 : 600));
+  }
 }
 
 async function fetchParts(cfg: SyncConfig, creds: Creds, key: CryptoKey, id: string, names: string[], onPart?: (done: number, total: number) => void): Promise<Uint8Array[]> {

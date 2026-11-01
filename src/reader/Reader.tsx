@@ -3,12 +3,14 @@ import * as db from '../lib/db';
 import { addReading, patchDoc, removeDoc, useStore, updateSettings } from '../lib/store';
 import { loadContent, getFile, importFile, type Content } from '../lib/library';
 import type { Bookmark, DocMeta, Highlight, TocEntry } from '../lib/types';
-import { openPdf, pdfOutline, type PDFDocumentProxy } from '../lib/formats/pdf';
+import { pdfOutline, type PDFDocumentProxy } from '../lib/formats/pdf';
 import { blocksToHtml, pdfToLiquid, type LBlock } from '../lib/formats/liquidPdf';
 import { onBack, setStatusBar, shareFile, shareText, tap } from '../lib/native';
 import { ConfirmSheet } from '../ui/Confirm';
 import { LiquidIntro, LiquidStatus, ViewButton } from './LiquidStatus';
 import { foldSources } from './sources';
+import { openCached } from '../lib/pdfCache';
+import { Scrub } from './Scrub';
 import { Icon, TypeGlyph } from '../ui/Icon';
 import { PixelBar, PixelLoader, Segmented, Sheet, toast } from '../ui/kit';
 import { PdfView, type PdfViewHandle } from './PdfView';
@@ -121,8 +123,8 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
         if (!alive) return;
         setContent(c);
         if (c.type === 'pdf') {
-          const p = await openPdf(c.data);
-          if (!alive) return p.loadingTask.destroy();
+          const p = await openCached(doc, c.blob);
+          if (!alive) return;
           setPdf(p);
           pdfOutline(p).then((o) => alive && o.length && setToc(o.map((x, i) => ({ title: x.title, anchor: `page-${x.page}`, level: x.level, page: x.page, i }))));
         } else if (c.type === 'flow') {
@@ -142,12 +144,7 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
     };
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(
-    () => () => {
-      pdf?.loadingTask.destroy();
-    },
-    [pdf],
-  );
+  // (the PDF stays open in the little cache of recent books: coming back to it is instant)
   useEffect(
     () => () => {
       urls.current.forEach((u) => URL.revokeObjectURL(u));
@@ -1213,6 +1210,37 @@ export function Reader({ doc, onClose, onConvert }: { doc: DocMeta; onClose: () 
           <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
             <ListenBar root={flowRef.current} scroller={scroller} startAt={listenFrom} onPlaying={setListening} docId={id} title={doc.name} coverId={doc.coverId} key={flowReady} />
           </div>
+        )}
+        {!listen && (liquid || isPdf) && content?.type !== 'sheet' && content?.type !== 'image' && (
+          <Scrub
+            ariaLabel="Position in the book"
+            value={isPdf && !liquid ? ((page - 1) / Math.max(1, (doc.pages ?? 1) - 1)) : progress}
+            label={(v) => {
+              if (isPdf && !liquid) return `Page ${Math.round(v * Math.max(1, (doc.pages ?? 1) - 1)) + 1} of ${doc.pages ?? '?'}`;
+              const left = Math.max(1, Math.round((words * (1 - v)) / settings.wpm));
+              // a Liquid view of a PDF: which page that spot belongs to
+              const pg = (() => {
+                if (!scroller || !isPdf) return '';
+                const y = v * (scroller.scrollHeight - scroller.clientHeight);
+                let n = '';
+                for (const el of Array.from(flowRef.current?.querySelectorAll<HTMLElement>('.pg[data-page]') ?? [])) {
+                  if (el.offsetTop > y + 40) break;
+                  n = el.dataset.page ?? n;
+                }
+                return n ? `page ${n} · ` : '';
+              })();
+              return `${pg}${Math.round(v * 100)}% · ${left} min left`;
+            }}
+            onChange={(v, final) => {
+              if (isPdf && !liquid) {
+                const n = Math.round(v * Math.max(1, (doc.pages ?? 1) - 1)) + 1;
+                if (final || n !== page) pdfRef.current?.goTo(n);
+              } else if (scroller) {
+                scroller.scrollTop = v * (scroller.scrollHeight - scroller.clientHeight);
+                if (final) setProgress(v);
+              }
+            }}
+          />
         )}
         <div className="r-dock-row compact">
           <button className="timechip" onClick={() => setClockMode((m) => (m === 'time' ? 'left' : 'time'))} aria-label="Clock / time left">

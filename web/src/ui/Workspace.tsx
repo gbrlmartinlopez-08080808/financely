@@ -20,6 +20,7 @@ const Spinner = () => (
 export function Workspace({ id, secondary }: { id: string; secondary?: boolean }) {
   const doc = useStore((s) => s.docs.find((d) => d.id === id));
   const transfer = useStore((s) => s.sync.transfer);
+  const asking = useStore((s) => s.sync.asking);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [err, setErr] = useState('');
   const [ver, setVer] = useState(0);
@@ -58,7 +59,21 @@ export function Workspace({ id, secondary }: { id: string; secondary?: boolean }
       <div className="loading">
         <div style={{ textAlign: 'center' }}>
           <i className="spin" style={{ margin: '0 auto 12px' }} />
-          {transfer ? `Bringing it over · ${Math.round((transfer.done / transfer.total) * 100)}%` : 'Opening…'}
+          {transfer ? (
+            `Bringing it over · ${Math.round((transfer.done / transfer.total) * 100)}%`
+          ) : asking ? (
+            <>
+              Bringing it from your phone…
+              {asking.secs > 6 && (
+                <>
+                  <br />
+                  <small className="muted">Big files come straight from the phone: open Frogity on it (and keep it online) and this continues by itself.</small>
+                </>
+              )}
+            </>
+          ) : (
+            'Opening…'
+          )}
         </div>
       </div>
     );

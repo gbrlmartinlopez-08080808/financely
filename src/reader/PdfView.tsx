@@ -23,12 +23,22 @@ const devPx = () => Math.min(window.devicePixelRatio || 1, 3.5);
 const snap = (css: number) => Math.round(css * devPx()) / devPx();
 const MAX_HI_PIXELS = 3_600_000; // zoomed-in detail tile budget
 
+/** Soft page pictures stay with the open document (it stays open a while, see pdfCache): a book opened again shows every page at once. */
+const previewStore = new WeakMap<PDFDocumentProxy, Map<number, HTMLCanvasElement>>();
+const previewsOf = (pdf: PDFDocumentProxy) => {
+  let m = previewStore.get(pdf);
+  if (!m) previewStore.set(pdf, (m = new Map()));
+  return m;
+};
+
 export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, scroller, initialPage = 1, thumbs, onPage, onProgress, onTap }, ref) {
   const n = pdf.numPages;
   const [sizes, setSizes] = useState<{ w: number; h: number }[]>([]);
   const [zoom, setZoom] = useState(1);
   const [vw, setVw] = useState(() => window.innerWidth);
   const [cur, setCur] = useState(initialPage);
+  const curRef = useRef(initialPage);
+  curRef.current = cur;
   const wrap = useRef<HTMLDivElement>(null);
   const pageEls = useRef<(HTMLDivElement | null)[]>([]);
   const done = useRef(new Map<number, number>()); // page index -> scale already rendered at
@@ -39,6 +49,10 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
   const busy = useRef(false);
   const findQ = useRef('');
   const tasks = useRef(new Set<{ cancel: () => void }>()); // renders in flight (so a new gesture can stop them at once)
+  /** quick, soft pictures of pages (kept for many pages around you, so flipping back and forth is instant) */
+  const previews = useRef(previewsOf(pdf));
+  /** a fast flick is under way: only previews are drawn until it slows down */
+  const flinging = useRef(false);
   const gesturing = useRef(false); // true while fingers are pinching: no canvas work, so the gesture stays at 60fps
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
@@ -128,9 +142,52 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
     }
   };
 
+  /** A soft picture of the page, drawn at a fraction of the cost: what you see while the sharp one is made. */
+  const drawPreview = async (i: number) => {
+    const el = pageEls.current[i];
+    if (!el || !sizes[i]) return;
+    let pv = previews.current.get(i);
+    if (!pv) {
+      const page = await pdf.getPage(i + 1);
+      if (!alive.current || !pageEls.current[i]) return;
+      const scale = Math.max(0.25, Math.min(0.7, 250 / sizes[i].w)); // ~250 px wide: enough to recognise the page, quick to draw
+      const viewport = page.getViewport({ scale });
+      pv = document.createElement('canvas');
+      pv.className = 'pv';
+      pv.width = Math.round(viewport.width);
+      pv.height = Math.round(viewport.height);
+      const task = page.render({ canvas: pv, canvasContext: pv.getContext('2d', { alpha: false })!, viewport });
+      tasks.current.add(task);
+      try {
+        await task.promise;
+      } catch {
+        return;
+      } finally {
+        tasks.current.delete(task);
+      }
+      previews.current.set(i, pv);
+      // previews of pages far away are let go (memory)
+      if (previews.current.size > Math.max(60, Math.min(n, 130))) {
+        for (const k of previews.current.keys()) {
+          if ([...visible.current].every((v) => Math.abs(v - k) > 25)) previews.current.delete(k);
+          if (previews.current.size <= Math.max(50, Math.min(n, 120))) break;
+        }
+      }
+    }
+    if (!el.querySelector('canvas')) el.prepend(pv);
+  };
+
   const draw = async (i: number) => {
     const el = pageEls.current[i];
     if (!el || !sizes[i] || !visible.current.has(i)) return;
+    // nothing on the page yet: the soft picture first (instant), the sharp one next
+    if (!el.querySelector('canvas:not(.pv):not(.hi)')) {
+      await drawPreview(i);
+      if (flinging.current) {
+        queue.current.add(i); // sharpened once the page stops flying past
+        return;
+      }
+    }
     // When zoomed in, the full page is drawn at "fit width" sharpness only; detail tiles (below) carry the zoom.
     // So zooming never means re-drawing whole pages, and zooming out never re-draws anything.
     const zoomedIn = zoomRef.current > 1.15;
@@ -159,7 +216,7 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
       }
       if (!alive.current || !pageEls.current[i] || !visible.current.has(i)) return;
       const old = el.querySelector('canvas:not(.hi)');
-      if (old) old.replaceWith(canvas);
+      if (old) old.replaceWith(canvas); // (a preview goes back to its store and can be shown again later)
       else el.prepend(canvas);
       done.current.set(i, scale);
       hiDone.current.delete(i);
@@ -277,6 +334,41 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
   const pumpRef = useRef(pump);
   pumpRef.current = pump;
 
+  // Soft pictures of the pages around you are made ahead of time, in the quiet moments (the whole book when it is
+  // short), so a page that flies into view already shows something — never a blank sheet.
+  useEffect(() => {
+    if (!sizes.length) return;
+    let stop = false;
+    const idle = () => new Promise<void>((r) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(() => r(), { timeout: 300 }) : setTimeout(r, 30)));
+    (async () => {
+      await new Promise((r) => setTimeout(r, 700)); // the page you opened on goes first
+      for (;;) {
+        if (stop || !alive.current) return;
+        if (busy.current || gesturing.current) {
+          await new Promise((r) => setTimeout(r, 120));
+          continue;
+        }
+        const here = curRef.current - 1;
+        const span = n <= 120 ? n : 30;
+        let next = -1;
+        for (let d = 0; d <= span && next < 0; d++)
+          for (const i of [here + d, here - d]) if (i >= 0 && i < n && !previews.current.has(i)) {
+            next = i;
+            break;
+          }
+        if (next < 0) {
+          await new Promise((r) => setTimeout(r, 800)); // all done around here: look again when the reader has moved
+          continue;
+        }
+        await drawPreview(next);
+        await idle();
+      }
+    })();
+    return () => {
+      stop = true;
+    };
+  }, [sizes.length, pdf]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // visibility tracking: only pages near the viewport are kept rendered
   useEffect(() => {
     if (!scroller || !sizes.length) return;
@@ -293,8 +385,11 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
             const el = pageEls.current[i];
             const far = [...visible.current].every((v) => Math.abs(v - i) > 3);
             if (el && far) {
-              el.querySelectorAll('canvas').forEach((c) => c.remove());
+              // the sharp picture goes (memory); the soft one stays, so coming back shows the page at once
+              el.querySelectorAll('canvas:not(.pv)').forEach((c) => c.remove());
               el.querySelector('.textLayer')?.remove();
+              const pv = previews.current.get(i);
+              if (pv && !el.contains(pv)) el.prepend(pv);
               done.current.delete(i);
               hiDone.current.delete(i);
               hiQueue.current.delete(i);
@@ -303,7 +398,7 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
         }
         pumpRef.current();
       },
-      { root: scroller, rootMargin: '60% 0px' },
+      { root: scroller, rootMargin: '140% 0px' },
     );
     pageEls.current.forEach((el) => el && io.observe(el));
     return () => io.disconnect();
@@ -363,7 +458,23 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
     let raf = 0;
     let lastPage = 0;
     let idle = 0;
+    let lastY = scroller.scrollTop;
+    let lastT = performance.now();
+    let calm = 0;
     const on = () => {
+      // how fast are the pages going by? past ~2.5 screens a second, only soft pictures are drawn
+      const t = performance.now();
+      const v = Math.abs(scroller.scrollTop - lastY) / Math.max(1, t - lastT);
+      lastY = scroller.scrollTop;
+      lastT = t;
+      if (v * 1000 > scroller.clientHeight * 2.5) flinging.current = true;
+      clearTimeout(calm);
+      calm = window.setTimeout(() => {
+        if (!flinging.current) return;
+        flinging.current = false;
+        visible.current.forEach((i) => queue.current.add(i));
+        pumpRef.current();
+      }, 120);
       clearTimeout(idle);
       idle = window.setTimeout(() => {
         if (zoomRef.current <= 1.01 && !hiDone.current.size) return;
@@ -398,6 +509,7 @@ export const PdfView = forwardRef<PdfViewHandle, Props>(function PdfView({ pdf, 
       scroller.removeEventListener('scroll', on);
       cancelAnimationFrame(raf);
       clearTimeout(idle);
+      clearTimeout(calm);
     };
   }, [scroller, onPage, onProgress]);
 

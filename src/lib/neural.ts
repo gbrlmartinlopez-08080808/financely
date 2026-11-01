@@ -13,6 +13,9 @@ export interface NeuralVoice {
 }
 
 export const NEURAL_VOICES: NeuralVoice[] = [
+  { id: 'en_US-lessac-high', label: 'Lessac HD', note: 'most natural · audiobook · US · needs a recent phone', lang: 'en-US', mb: 114 },
+  { id: 'en_US-ryan-high', label: 'Ryan HD', note: 'most natural · narrator · US man · recent phone', lang: 'en-US', mb: 121 },
+  { id: 'en_GB-cori-high', label: 'Cori HD', note: 'most natural · British woman · recent phone', lang: 'en-GB', mb: 114 },
   { id: 'en_US-hfc_female-medium', label: 'Ava', note: 'warm, clear · US woman', lang: 'en-US', mb: 63 },
   { id: 'en_US-ryan-medium', label: 'Ryan', note: 'steady narrator · US man', lang: 'en-US', mb: 63 },
   { id: 'en_US-lessac-medium', label: 'Lessac', note: 'audiobook style · US', lang: 'en-US', mb: 63 },
@@ -21,6 +24,8 @@ export const NEURAL_VOICES: NeuralVoice[] = [
   { id: 'es_ES-davefx-medium', label: 'Dave', note: 'español · hombre', lang: 'es-ES', mb: 63 },
   { id: 'fr_FR-siwis-medium', label: 'Siwis', note: 'français · femme', lang: 'fr-FR', mb: 63 },
   { id: 'de_DE-thorsten-medium', label: 'Thorsten', note: 'Deutsch · Mann', lang: 'de-DE', mb: 63 },
+  { id: 'de_DE-thorsten-high', label: 'Thorsten HD', note: 'Deutsch · Mann · am natürlichsten', lang: 'de-DE', mb: 114 },
+  { id: 'es_MX-claude-high', label: 'Claude HD', note: 'español (México) · hombre · más natural', lang: 'es-MX', mb: 63 },
   { id: 'it_IT-riccardo-x_low', label: 'Riccardo', note: 'italiano · uomo · compact', lang: 'it-IT', mb: 28 },
   { id: 'pt_BR-faber-medium', label: 'Faber', note: 'português · homem', lang: 'pt-BR', mb: 63 },
 ];
@@ -94,7 +99,7 @@ async function save(d: FileSystemDirectoryHandle, name: string, url: string, onB
 
 export async function neuralDownload(id: VoiceId, onProgress: (fraction: number) => void): Promise<void> {
   const needRt = !(await runtimeReady());
-  const total = (needRt ? 29_300_000 : 0) + 63_000_000;
+  const total = (needRt ? 29_300_000 : 0) + (NEURAL_VOICES.find((v) => v.id === id)?.mb ?? 63) * 1_000_000;
   let got = 0;
   const bump = (n: number) => onProgress(Math.min(0.99, (got += n) / total));
   if (needRt) {
@@ -152,10 +157,20 @@ export class NeuralEngine {
       this.worker().postMessage({ ...msg, id });
     });
   }
+  private loading: { voice: string; p: Promise<void> } | null = null;
   async init(voice: VoiceId) {
     if (this.voice === voice) return;
-    await this.call<void>({ type: 'init', voice });
-    this.voice = voice;
+    // asked again while it is loading: wait for the same load
+    if (this.loading?.voice === voice) return this.loading.p;
+    const p = this.call<void>({ type: 'init', voice }).then(() => {
+      this.voice = voice;
+    });
+    this.loading = { voice, p };
+    try {
+      await p;
+    } finally {
+      if (this.loading?.p === p) this.loading = null;
+    }
   }
   say(text: string, rate: number) {
     return this.call<{ samples: Float32Array; rate: number }>({ type: 'say', text, rate });
@@ -164,6 +179,7 @@ export class NeuralEngine {
     this.w?.terminate();
     this.w = null;
     this.voice = '';
+    this.loading = null;
     this.waits.forEach((t) => t.fail(new Error('stopped')));
     this.waits.clear();
   }
@@ -171,6 +187,23 @@ export class NeuralEngine {
 
 /** One engine for the whole app: the voice stays loaded (and warm) between books, so Listen starts at once. */
 export const sharedEngine = new NeuralEngine();
+/**
+ * A second engine on phones with the cores and memory for it: the two voice alternate chunks, so the next one is
+ * always ready before the last one ends — no gaps, even on the bigger HD voices.
+ */
+const cores = navigator.hardwareConcurrency ?? 4;
+const mem = (navigator as unknown as { deviceMemory?: number }).deviceMemory ?? 4;
+const secondEngine = cores >= 4 && mem >= 3 ? new NeuralEngine() : null;
+/**
+ * The engines to use for `voice`: the first one loaded and warm; `onJoin` is called when the second one is ready too
+ * (it starts helping from that moment, nobody waits for it).
+ */
+export async function enginePool(voice: VoiceId, onJoin: (e: NeuralEngine) => void): Promise<NeuralEngine[]> {
+  await sharedEngine.init(voice);
+  if (secondEngine) secondEngine.init(voice).then(() => onJoin(secondEngine), () => {});
+  return [sharedEngine];
+}
+export const warmSecond = (voice: VoiceId) => void secondEngine?.init(voice).catch(() => {});
 
 // ------------------------------------------------------------------ gapless playback
 interface Slot {
@@ -193,6 +226,7 @@ export class NeuralPlayer {
   private held: { parts: Part[]; buf: AudioBuffer; gap: number }[] = [];
   private heldSecs = 0;
   private released = false;
+  private born = performance.now();
   constructor(
     private tempo = 1,
     private prebuffer = 1.4, // seconds of speech to have in hand before starting, so the first words never run dry
@@ -239,6 +273,8 @@ export class NeuralPlayer {
     src.playbackRate.value = this.tempo;
     src.connect(this.ctx.destination);
     const at = Math.max(this.nextAt, this.ctx.currentTime + 0.05);
+    if (this.nextAt && at - this.nextAt > 0.02) console.debug(`[studio] gap ${(at - this.nextAt).toFixed(2)} s (the next piece was not ready in time)`);
+    if (!this.nextAt) console.debug(`[studio] first sound at +${Math.round(performance.now() - this.born)} ms`);
     const dur = buf.duration / this.tempo;
     src.start(at);
     // the highlight moves through the chunk's sentences in proportion to how much text each holds

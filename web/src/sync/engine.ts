@@ -8,6 +8,7 @@ import {
   downloadCover,
   downloadFile,
   fingerprint,
+  relayFetch,
   listen,
   mergeMeta,
   newId,
@@ -214,6 +215,7 @@ async function apply(it: RemoteItem) {
     rev: it.rev,
     fileVer: have?.fileDirty ? have.fileVer : it.file_ver,
     fileParts: have?.fileDirty ? have.fileParts : it.file_parts,
+    fileStored: have?.fileDirty ? have.fileStored : it.file_stored !== false,
     coverVer: it.cover_ver,
     dirty: changedHere,
     fileDirty: have?.fileDirty,
@@ -263,16 +265,20 @@ export function getFile(id: string): Promise<Blob> {
         const cached = await db.get<{ ver: string | null; blob: Blob }>('files', id);
         if (cached && cached.ver === d.fileVer) return cached.blob;
         if (!d.fileVer) throw new Error('This document has no file yet — it is still on its way from the phone.');
+        if (cached && cached.ver !== d.fileVer && cached.ver === 'local') return cached.blob; // our own edit, not sent yet
         busy(1);
+        const progress = (done: number, total: number) => setState((s) => ({ sync: { ...s.sync, asking: undefined, transfer: total > 1 ? { name: d.meta.doc.name, done, total } : undefined } }));
         try {
-          const blob = await downloadFile(cfg, creds!, key!, { id, file_ver: d.fileVer, file_parts: d.fileParts }, d.meta.doc.mime, (done, total) =>
-            setState((s) => ({ sync: { ...s.sync, transfer: total > 1 ? { name: d.meta.doc.name, done, total } : undefined } })),
-          );
+          // small files are kept (encrypted) on the server; big ones come straight from the phone, once
+          const blob =
+            d.fileStored !== false
+              ? await downloadFile(cfg, creds!, key!, { id, file_ver: d.fileVer, file_parts: d.fileParts }, d.meta.doc.mime, progress)
+              : await relayFetch(cfg, creds!, key!, id, d.meta.doc.mime, (secs) => setState((s) => ({ sync: { ...s.sync, asking: { name: d.meta.doc.name, secs } } })), progress);
           await db.put('files', id, { ver: d.fileVer, blob });
           return blob;
         } finally {
           busy(-1);
-          setState((s) => ({ sync: { ...s.sync, transfer: undefined } }));
+          setState((s) => ({ sync: { ...s.sync, transfer: undefined, asking: undefined } }));
         }
       })().catch((e) => {
         loading.delete(k);
@@ -297,7 +303,7 @@ async function push(id: string) {
     if (!d || !creds || !key) return;
     busy(1);
     try {
-      let file: { ver: string; parts: number; size: number } | undefined;
+      let file: { ver: string; parts: number; size: number; stored?: boolean } | undefined;
       let cover: string | undefined;
       if (d.fileDirty) {
         const local = await db.get<{ ver: string | null; blob: Blob }>('files', id);
@@ -313,7 +319,7 @@ async function push(id: string) {
       const meta = await sealJson(key, d.meta);
       const r = await call<{ rev: number }>(cfg, creds, 'put', { id, meta, file, cover });
       const now = docById(id);
-      if (now) await putLocal({ ...now, rev: r.rev, dirty: now.meta !== d.meta ? now.dirty : false, fileDirty: false, fileVer: file?.ver ?? now.fileVer, fileParts: file?.parts ?? now.fileParts, coverVer: cover ?? now.coverVer });
+      if (now) await putLocal({ ...now, rev: r.rev, dirty: now.meta !== d.meta ? now.dirty : false, fileDirty: false, fileVer: file?.ver ?? now.fileVer, fileParts: file?.parts ?? now.fileParts, fileStored: file ? file.stored !== false : now.fileStored, coverVer: cover ?? now.coverVer });
       setState((s) => ({ sync: { ...s.sync, error: '', last: Date.now(), transfer: undefined } }));
     } catch (e) {
       await failed(e);

@@ -55,6 +55,8 @@ export async function indexLibrary(onProgress?: (done: number, total: number) =>
     const todo: LocalDoc[] = [];
     for (const d of getState().docs) {
       if (!d.fileVer || d.meta.doc.size > 80 * 1024 * 1024) continue;
+      // a big file that lives only on the phone is not fetched just to search it: it is searched once it has been opened
+      if (d.fileStored === false && (await db.get<{ ver: string | null }>('files', d.id))?.ver !== d.fileVer) continue;
       if (!['pdf', 'docx', 'epub', 'html', 'markdown', 'text', 'code', 'sheet', 'rtf'].includes(d.meta.doc.kind)) continue;
       const have = await db.get<TextEntry>('text', d.id);
       if (!have || have.ver !== d.fileVer) todo.push(d);

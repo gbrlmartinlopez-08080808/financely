@@ -1341,3 +1341,65 @@
   font-family: var(--mono);
   font-size: 12.5px;
 }
+
+/* a bar to move through the book (or the track) with a finger */
+.scrub {
+  width: 100%;
+  padding: 10px 6px 8px;
+  touch-action: none;
+  cursor: pointer;
+  outline: none;
+}
+.r-dock > .scrub {
+  max-width: 520px;
+  margin: 0 auto 6px;
+  padding-left: 14px;
+  padding-right: 14px;
+}
+.scrub-track {
+  position: relative;
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--r-ink) 16%, transparent);
+}
+.scrub-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+  background: var(--r-ink);
+}
+.scrub-thumb {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: var(--r-ink);
+  box-shadow: 0 0 0 3px var(--r-bg);
+  transition: transform 0.12s var(--ease);
+}
+.scrub.held .scrub-thumb {
+  transform: scale(1.35);
+}
+.scrub.held .scrub-track {
+  height: 6px;
+  margin-top: -1px;
+}
+.scrub-tip {
+  position: absolute;
+  bottom: 18px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--r-ink);
+  color: var(--r-bg);
+  pointer-events: none;
+}
+.listen-scrub2 {
+  padding: 8px 2px 6px;
+}
