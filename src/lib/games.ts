@@ -35,7 +35,7 @@ export interface SlingCfg {
   gap: number; // the usual distance between flies
 }
 export const slingLevel = (n: number): SlingCfg => ({
-  goal: Math.min(5000, 1500 + (n - 1) * 200),
+  goal: Math.min(7500, 3300 + (n - 1) * 260),
   hold: Math.max(2.2, 3.4 - n * 0.12),
   bees: n < 4 ? 0 : Math.min(0.3, 0.07 * (n - 3)),
   drift: 16 + n * 3,
@@ -47,4 +47,4 @@ export interface DeepCfg {
   seconds: number; // per prompt
   slack: number; // answers Froggy cannot place that are forgiven
 }
-export const deepLevel = (n: number): DeepCfg => ({ goal: 230 + (n - 1) * 60, seconds: Math.max(18, 34 - n), slack: 3 });
+export const deepLevel = (n: number): DeepCfg => ({ goal: Math.min(900, 420 + (n - 1) * 70), seconds: Math.max(18, 34 - n), slack: 3 });

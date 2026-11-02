@@ -5,7 +5,7 @@ import { onBack } from '../lib/native';
 import { Icon } from '../ui/Icon';
 import { Froggy } from '../ui/Froggy';
 import { toast } from '../ui/kit';
-import { Deep, Sling } from './Climb';
+import { Deep, Pick, Sling } from './Climb';
 
 /**
  * The five blocks on the way to a freeze day, drawn the way the streak calendar draws a day: an `@` for each block won, and the
@@ -27,17 +27,12 @@ export function Blocks({ n, big = false, fresh = -1 }: { n: number; big?: boolea
   );
 }
 
-const WAYS: { id: Variant; title: string; sub: string }[] = [
-  { id: 'sling', title: 'Sling', sub: 'Pull back, let go: the tongue flies the other way. Catch a fly and swing from one to the next — miss, and Froggy falls.' },
-  { id: 'deep', title: 'Deep cuts', sub: 'Name something rare. The rarer the answer, the higher the tongue soars, and Froggy follows it up to a new lily.' },
-];
-
-/** The Play tab: the blocks, the freeze day, and the one climb with its two ways up. */
+/** The Play tab: the blocks, the freeze day, and the one climb (the way up is chosen from the lily itself). */
 export function Play() {
   const freeze = useStore((s) => s.freeze);
   const fz = freezeStatus(freeze);
   const [levels, setLv] = useState({ sling: 1, deep: 1 });
-  const [run, setRun] = useState<Variant | null>(null);
+  const [run, setRun] = useState(false);
   useEffect(() => {
     getLevels().then(setLv);
   }, [run]);
@@ -69,39 +64,37 @@ export function Play() {
         <pre className="game-art" aria-hidden>{`       \\ | /\n       -(*)-\n   x       (_____)\n  \\x/\n     (@) (@)\n     (  v  )  ~~~`}</pre>
         <span className="tag mono">the climb · try as often as you like</span>
         <h3>Froggy has to get up</h3>
-        <p>It starts on a lily pad in the water. Choose how it climbs. It can fall either way, and only the top counts.</p>
-        <ul className="ways2">
-          {WAYS.map((w) => (
-            <li key={w.id}>
-              <button onClick={() => setRun(w.id)}>
-                <span>
-                  <b>{w.title}</b>
-                  <small className="mono">level {levels[w.id]}</small>
-                </span>
-                <em>{w.sub}</em>
-                <Icon name="right" size={16} />
-              </button>
-            </li>
-          ))}
-        </ul>
+        <p>It waits on a lily pad, looking up at two ways to climb: sling its tongue from fly to fly, or name rare things and let the tongue soar. It can fall either way, and only the top counts.</p>
+        <button className="pill" onClick={() => setRun(true)}>
+          Start the climb
+        </button>
+        <small className="mono climb-lv">
+          sling level {levels.sling} · deep cuts level {levels.deep}
+        </small>
       </div>
       <p className="int-foot mono">· · ·{'\n'}unlimited tries · the top is the only way to a block, one a day</p>
-      {run && <Run variant={run} onClose={() => setRun(null)} />}
+      {run && <Run onClose={() => setRun(false)} />}
     </div>
   );
 }
 
-function Run({ variant, onClose }: { variant: Variant; onClose: () => void }) {
+function Run({ onClose }: { onClose: () => void }) {
+  const [variant, setVariant] = useState<Variant | null>(null);
+  const [all, setAll] = useState({ sling: 1, deep: 1 });
   const [lv, setLv] = useState<number | null>(null);
   const [round, setRound] = useState(0);
   const [result, setResult] = useState<null | { win: boolean; text: string; block?: string; fresh: number; freeze: boolean }>(null);
   useEffect(() => {
-    getLevels().then((l) => setLv(l[variant]));
+    getLevels().then((l) => {
+      setAll(l);
+      if (variant) setLv(l[variant]);
+    });
   }, [variant]);
   useEffect(() => onBack(() => (onClose(), true)), [onClose]);
 
   const finish = useCallback(
     async (win: boolean, text: string) => {
+      if (!variant) return;
       let block: string | undefined;
       let fresh = -1;
       let freeze = false;
@@ -123,6 +116,11 @@ function Run({ variant, onClose }: { variant: Variant; onClose: () => void }) {
     },
     [variant],
   );
+  const other = () => {
+    setResult(null);
+    setVariant(null);
+    setLv(null);
+  };
   const again = () => {
     setResult(null);
     setRound((n) => n + 1);
@@ -133,12 +131,11 @@ function Run({ variant, onClose }: { variant: Variant; onClose: () => void }) {
         <button className="game-x" onClick={onClose} aria-label="Close the game">
           <Icon name="back" size={22} />
         </button>
-        <b>{variant === 'sling' ? 'Sling' : 'Deep cuts'}</b>
-        <span className="mono">
-          level {lv ?? 1}
-        </span>
+        <b>{variant === 'sling' ? 'Sling' : variant === 'deep' ? 'Deep cuts' : 'The climb'}</b>
+        <span className="mono">{variant ? `level ${lv ?? 1}` : ''}</span>
       </header>
-      {lv !== null && !result && (variant === 'sling' ? <Sling key={round} level={lv} onEnd={finish} /> : <Deep key={round} level={lv} onEnd={finish} />)}
+      {!variant && !result && <Pick levels={all} onPick={setVariant} />}
+      {variant && lv !== null && !result && (variant === 'sling' ? <Sling key={round} level={lv} onEnd={finish} /> : <Deep key={round} level={lv} onEnd={finish} />)}
       {result && (
         <div className="game-end">
           <Froggy mood={result.win ? 'bigSmile' : 'sad'} size="lg" />
@@ -151,6 +148,9 @@ function Run({ variant, onClose }: { variant: Variant; onClose: () => void }) {
           <div className="det-act" style={{ justifyContent: 'center' }}>
             <button className="pill" onClick={again}>
               {result.win ? 'Climb again' : 'Try again'}
+            </button>
+            <button className="pill ghost" onClick={other}>
+              Other way
             </button>
             <button className="pill ghost" onClick={onClose}>
               Done

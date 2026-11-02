@@ -426,6 +426,21 @@ export function usePager(sc: HTMLElement | null, on: boolean) {
       sc.scrollLeft = pageIndex(sc) * width(sc);
     };
     // new text arriving (a book still being prepared) changes how many pages there are
+    let touching = false;
+    const down = () => (touching = true);
+    const lift = () => (touching = false);
+    sc.addEventListener('touchstart', down, { passive: true });
+    window.addEventListener('touchend', lift, { passive: true });
+    window.addEventListener('touchcancel', lift, { passive: true });
+    const watchdog = window.setInterval(() => {
+      if (touching || run || sc.classList.contains('flipping')) return;
+      const w = width(sc);
+      const off = sc.scrollLeft - Math.round(sc.scrollLeft / w) * w;
+      if (Math.abs(off) > 1.5) {
+        mode = ''; // a drag that never ended must not keep the page from settling
+        sc.scrollLeft = Math.round(sc.scrollLeft / w) * w;
+      }
+    }, 450);
     const flow = flowOf(sc);
     const mo = flow ? new MutationObserver(() => requestAnimationFrame(() => pageCount(sc))) : null;
     if (flow) mo?.observe(flow, { childList: true, subtree: true });
@@ -450,6 +465,10 @@ export function usePager(sc: HTMLElement | null, on: boolean) {
       mo?.disconnect();
       clearTimeout(settle);
       clearTimeout(warm);
+      clearInterval(watchdog);
+      sc.removeEventListener('touchstart', down);
+      window.removeEventListener('touchend', lift);
+      window.removeEventListener('touchcancel', lift);
       if (run && run.sc === sc) endCurl(run, true);
       cancelSlide(sc);
       const c = curls.get(sc);

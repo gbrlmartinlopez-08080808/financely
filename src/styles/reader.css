@@ -1732,3 +1732,10 @@
 .reader-scroll.paged.flipping::after {
   display: none;
 }
+
+/* the browser must never "help" by shifting a page to keep something in view: pages move only by whole pages */
+.reader-scroll.paged,
+.flow.paged,
+.flow.paged * {
+  overflow-anchor: none;
+}

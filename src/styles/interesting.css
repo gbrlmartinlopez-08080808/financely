@@ -2130,3 +2130,135 @@ button.tcard:active {
 .game-end .blockmsg {
   margin: 0;
 }
+
+/* ---- the climb, round 6: two cards above Froggy on the first lily, and the coloured answer rank */
+.stage-hint {
+  white-space: pre-line;
+}
+.pickcards {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 12%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.pickcard {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  text-align: center;
+  padding: 14px 10px 12px;
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow);
+  transition: transform 0.2s var(--ease);
+  animation: rise 0.4s var(--ease) backwards;
+}
+.pickcard:nth-child(2) {
+  margin-top: 34px;
+  animation-delay: 0.08s;
+}
+.pickcard:active {
+  transform: scale(0.97);
+}
+.pickcard pre {
+  margin: 0 0 4px;
+  font-size: 12px;
+  line-height: 1.25;
+  color: var(--ink-2);
+  min-height: 3.75em;
+}
+.pickcard b {
+  font: 600 17px var(--serif);
+}
+.pickcard small {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--muted);
+}
+.pickcard span {
+  margin-top: 4px;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.climb-card .pill {
+  justify-self: start;
+}
+.climb-lv {
+  color: var(--muted);
+  font-size: 11px;
+}
+.rank {
+  --tc: var(--muted);
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--tc) 9%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tc) 35%, transparent);
+  animation: rise 0.35s var(--ease);
+}
+.rank-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.rank-name {
+  font: 600 20px/1.2 var(--serif);
+  color: var(--tc);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rank-chip {
+  flex: none;
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 99px;
+  color: #fff;
+  background: var(--tc);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.rank-meter {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 38px;
+}
+.rank-meter i {
+  flex: 1;
+  min-width: 0;
+  border-radius: 2px;
+  background: var(--line-2);
+}
+.rank-meter i.pre {
+  background: color-mix(in srgb, var(--tc) 28%, var(--line-2));
+}
+.rank-meter i.on {
+  background: var(--tc);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--tc) 30%, transparent);
+}
+.rank-axis,
+.rank-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.rank-row {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.rank-row b {
+  color: var(--tc);
+  font-size: 15px;
+}
+.rank p {
+  margin: 0;
+  font: 400 13.5px/1.35 var(--serif);
+  color: var(--ink-2);
+}
