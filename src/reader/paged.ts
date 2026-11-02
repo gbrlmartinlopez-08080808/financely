@@ -14,9 +14,16 @@ import { tap } from '../lib/native';
 
 const flowOf = (sc: HTMLElement) => sc.querySelector<HTMLElement>('.flow.paged');
 const width = (sc: HTMLElement) => Math.max(1, sc.clientWidth);
+/** the page width in whole pixels, written where the text and its copy can both read it (so page k is never k fractions of a pixel off) */
+function fitWidth(sc: HTMLElement) {
+  const root = sc.parentElement;
+  const w = `${width(sc)}px`;
+  if (root && root.style.getPropertyValue('--pw') !== w) root.style.setProperty('--pw', w);
+}
 
 /** Number of pages. Also pads the scroller so the last page can be reached exactly (columns end a margin short). */
 export function pageCount(sc: HTMLElement): number {
+  fitWidth(sc);
   const f = flowOf(sc);
   const w = width(sc);
   const n = Math.max(1, Math.ceil(((f ? f.scrollWidth : sc.scrollWidth) - 2) / w));
@@ -232,6 +239,7 @@ interface Run {
   y0: number;
   raf: number;
   end: number;
+  draw?: number;
 }
 let run: Run | null = null;
 
@@ -262,6 +270,7 @@ function startCurl(sc: HTMLElement, forward: boolean, y0: number): Run | null {
 }
 function endCurl(r: Run, complete: boolean) {
   cancelAnimationFrame(r.raf);
+  if (r.draw) cancelAnimationFrame(r.draw);
   clearTimeout(r.end);
   const W = width(r.sc);
   // the leaf (page `leafPage`) covers everything when t = 0, and nothing when t = 1: put the real reader where the eye already is
@@ -280,13 +289,13 @@ function settleCurl(r: Run, complete: boolean, speed = 0) {
   const target = (r.forward ? complete : !complete) ? 1 : 0;
   const from = r.t;
   const dist = Math.abs(target - from);
-  const dur = Math.max(150, Math.min(360, 140 + dist * 260 - Math.min(120, Math.abs(speed) * 80)));
+  const dur = Math.max(190, Math.min(420, 170 + dist * 290 - Math.min(110, Math.abs(speed) * 70)));
   const t0 = performance.now();
   const fin = () => endCurl(r, complete);
   const step = (now: number) => {
     const k = Math.min(1, (now - t0) / dur);
-    const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; // ease in-out: lifts, then settles
-    r.t = from + (target - from) * (dist > 0.7 ? e : 1 - Math.pow(1 - k, 3));
+    const e = dist > 0.7 ? (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2) : 1 - Math.pow(1 - k, 4); // a whole turn eases in and out; a finish glides to rest
+    r.t = from + (target - from) * e;
     drawCurl(r.sc, r.c, r.t, r.y0);
     if (k < 1) r.raf = requestAnimationFrame(step);
     else fin();
@@ -313,6 +322,7 @@ export function goPage(sc: HTMLElement, i: number, animate = true) {
 export function usePager(sc: HTMLElement | null, on: boolean) {
   useEffect(() => {
     if (!sc || !on) return;
+    fitWidth(sc);
     sc.scrollLeft = Math.round(sc.scrollLeft / width(sc)) * width(sc);
     pageCount(sc);
     let x0 = 0;
@@ -374,7 +384,14 @@ export function usePager(sc: HTMLElement | null, on: boolean) {
         const W = width(sc);
         const p = Math.max(0, Math.min(1, Math.abs(dx) / (W * 0.7)));
         r.t = r.forward ? (dx < 0 ? p : 0) : dx > 0 ? 1 - p : 1;
-        drawCurl(sc, r.c, r.t, r.y0);
+        // drawn once per frame, however many touch events arrive
+        if (!r.draw) {
+          const rr = r;
+          rr.draw = requestAnimationFrame(() => {
+            rr.draw = 0;
+            drawCurl(sc, rr.c, rr.t, rr.y0);
+          });
+        }
         return;
       }
       // sliding (no curl available, or at the first / last page): the page follows the finger, with a little give at the ends
@@ -471,6 +488,7 @@ export function usePager(sc: HTMLElement | null, on: boolean) {
         curls.delete(sc);
       }
       sc.querySelector(':scope > .pg-pad')?.remove();
+      sc.parentElement?.style.removeProperty('--pw');
       sc.scrollLeft = 0;
     };
   }, [sc, on]);

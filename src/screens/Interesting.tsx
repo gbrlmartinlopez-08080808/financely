@@ -68,6 +68,9 @@ function Photo({ src, w, h, fill = false, className = '' }: { src?: string; w?: 
   );
 }
 
+/** a summary that was cut mid-sentence ends with an ellipsis, not mid-word */
+const tidy = (t: string) => (/[.!?…”")]$/.test(t.trim()) ? t : t.replace(/\s+\S*$/, '') + '…');
+
 /** an outlet's logo (from the feed), or its first letter when there is none */
 function Logo({ o, size = 22 }: { o: Pick<Outlet, 'name' | 'logo'>; size?: number }) {
   const [bad, setBad] = useState(false);
@@ -379,7 +382,7 @@ function ReadRow({ r, d, onOpen }: { r: Read; d: Daily; onOpen: () => void }) {
           {o?.name ?? ''} · {r.kind === 'long' ? 'long read' : r.kind === 'curious' ? 'curious' : 'article'}
         </span>
         <b>{r.title}</b>
-        <small>{r.summary}</small>
+        <small>{tidy(r.summary)}</small>
       </span>
     </button>
   );
@@ -456,7 +459,7 @@ function Reels({ d, stories, setDetail }: { d: Daily; stories: Story[]; setDetai
                   </span>
                 </div>
                 <h2>{s.title}</h2>
-                <p>{s.summary}</p>
+                <p>{tidy(s.summary)}</p>
                 <div className="reel-act">
                   <button className="pill" onClick={() => setDetail({ kind: 'story', story: s })}>
                     Read more
@@ -824,7 +827,7 @@ function ReadDetail({ r, d, setDetail, onAsk }: { r: Read; d: Daily; setDetail: 
         </span>
       </div>
       <h3>{r.title}</h3>
-      {!art && state !== 'loading' && <p>{r.summary}</p>}
+      {!art && state !== 'loading' && <p>{tidy(r.summary)}</p>}
       {!art && state === 'idle' && (
         <button className="pill wide" onClick={open}>
           Read it here
@@ -974,7 +977,7 @@ function StoryDetail({ s, start, d, setDetail, onAsk }: { s: Story; start?: numb
       {!src && (
         <>
           <p>
-            <Linked text={s.summary} terms={s.terms} onWiki={wiki} />
+            <Linked text={tidy(s.summary)} terms={s.terms} onWiki={wiki} />
           </p>
           <button className="pill wide" onClick={() => read(0)}>
             Read the full story

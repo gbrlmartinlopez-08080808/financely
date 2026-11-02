@@ -1479,7 +1479,7 @@
   margin: 0;
   box-sizing: border-box;
   padding: calc(var(--safe-t) + 58px) var(--r-margin) calc(var(--safe-b) + 92px);
-  column-width: calc(100vw - 2 * var(--r-margin));
+  column-width: calc(var(--pw, 100vw) - 2 * var(--r-margin));
   column-gap: calc(2 * var(--r-margin));
   column-fill: auto;
   overflow: visible;
@@ -1657,7 +1657,7 @@
   display: none;
 }
 .curl-flapwrap {
-  filter: drop-shadow(-3px 1px 5px rgba(0, 0, 0, 0.22));
+  filter: none;
 }
 .curl-flap {
   transform-origin: 0 0;
@@ -1695,4 +1695,19 @@
 .curl-under,
 .curl-flapwrap {
   border-radius: 0;
+}
+
+/* smoother turning: the layers are kept ready on the GPU, and are never re-laid-out while they move */
+.curl-front,
+.curl-under,
+.curl-flapwrap,
+.curl-flap,
+.curl-desk {
+  contain: strict;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.curl-front .leaf {
+  will-change: transform;
+  transform: translateZ(0);
 }
