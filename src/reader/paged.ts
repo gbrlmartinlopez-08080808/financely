@@ -100,10 +100,11 @@ const MAX_NODES = 24000; // a book bigger than this slides instead (a copy of it
 interface Curl {
   root: HTMLElement; // the overlay
   host: HTMLElement; // the copy of the text (the page being turned)
+  fw: HTMLElement; // the part of the page that has not turned yet (a window onto the copy)
   front: HTMLElement;
+  lshade: HTMLElement; // the page darkens a little as it curves toward the fold
   under: HTMLElement; // shade cast on the page beneath
-  flapWrap: HTMLElement;
-  flap: HTMLElement;
+  flap: HTMLElement; // the back of the page, a narrow rolled strip
   desk: HTMLElement;
   src: HTMLElement;
   stale: boolean;
@@ -122,7 +123,7 @@ function makeCurl(sc: HTMLElement): Curl | null {
   const root = document.createElement('div');
   root.className = 'curl';
   root.setAttribute('aria-hidden', 'true');
-  root.innerHTML = '<div class="curl-front"></div><div class="curl-under"></div><div class="curl-flapwrap"><div class="curl-flap"></div></div><div class="curl-desk"><i></i></div>';
+  root.innerHTML = '<div class="curl-fw"><div class="curl-front"></div><i class="curl-lshade"></i></div><i class="curl-under"></i><i class="curl-flap"></i><div class="curl-desk"><i></i></div>';
   const front = root.querySelector<HTMLElement>('.curl-front')!;
   const host = document.createElement('div');
   host.className = 'reader-scroll paged leaf';
@@ -131,9 +132,10 @@ function makeCurl(sc: HTMLElement): Curl | null {
   const c: Curl = {
     root,
     host,
+    fw: root.querySelector<HTMLElement>('.curl-fw')!,
     front,
+    lshade: root.querySelector<HTMLElement>('.curl-lshade')!,
     under: root.querySelector<HTMLElement>('.curl-under')!,
-    flapWrap: root.querySelector<HTMLElement>('.curl-flapwrap')!,
     flap: root.querySelector<HTMLElement>('.curl-flap')!,
     desk: root.querySelector<HTMLElement>('.curl-desk')!,
     src,
@@ -179,54 +181,25 @@ const curlFor = (sc: HTMLElement) => {
 const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 /**
- * Draws the page curl at `t` (0 = the page lies flat, 1 = turned away). `y0` is where on the page it is held.
- * A small, calm curl: the fold sweeps across the page and only a narrow strip of the page's back is ever seen
- * (a few percent of its width), so the page being turned never covers the one beneath.
+ * Draws the turn at `t` (0 = the page lies flat, 1 = turned away). Nothing here is laid out or repainted: every layer is only
+ * moved (transforms), which is what keeps it smooth on a phone. The page that has not turned is a window onto the copy of the
+ * text, the fold is a narrow rolled strip that sweeps across, and the page beneath is the real reader.
  */
-function drawCurl(sc: HTMLElement, c: Curl, t: number, y0: number) {
+function drawCurl(sc: HTMLElement, c: Curl, t: number, _y0: number) {
   const W = sc.clientWidth;
-  const H = sc.clientHeight;
   t = Math.max(0, Math.min(1, t));
-  if (t <= 0.0005) {
-    c.front.style.clipPath = 'none';
-    c.under.style.display = 'none';
-    c.flapWrap.style.display = 'none';
-    return;
-  }
-  const rect: Pt[] = [
-    { x: 0, y: 0 },
-    { x: W, y: 0 },
-    { x: W, y: H },
-    { x: 0, y: H },
-  ];
-  // the fold is almost upright, tilted a little toward where the page is held
-  const tilt = 0.16 + (Math.max(0, Math.min(H, y0)) / H) * 0.5; // a corner is lifted: the nearer the bottom it is held, the more the fold slants
-  const len = Math.hypot(1, tilt);
-  const n: Pt = { x: 1 / len, y: tilt / len }; // points toward the edge being lifted
-  const edge = n.x * W + Math.max(0, n.y * H); // the fold when the page lies flat: beyond the right edge
-  const far = Math.min(0, n.y * H); // the fold when the page is gone: before the left edge
-  const strip = Math.min(52, W * 0.13) * Math.min(1, t * 6, (1 - t) * 6 + 0.25); // the visible back of the page: small
-  const k = edge + (far - strip - edge) * (t * t * (3 - 2 * t) * 0.3 + t * 0.7);
-  const stay = clipPoly(rect, n, k, false);
-  const lifted = clipPoly(rect, n, k, true);
-  const band = clipPoly(lifted, n, k + strip, false); // the part that curls over (and shows its back)
-  c.front.style.clipPath = css(stay);
-  const ang = (Math.atan2(n.x, -n.y) * 180) / Math.PI;
-  const L = Math.abs(W * Math.sin((ang * Math.PI) / 180)) + Math.abs(H * Math.cos((ang * Math.PI) / 180));
-  const s = k - ((W / 2) * n.x + (H / 2) * n.y);
-  const at = (px: number) => `${(((s + px) / L) * 100 + 50).toFixed(2)}%`;
-  // a soft shadow on the page beneath, just beyond the fold
-  c.under.style.display = 'block';
-  c.under.style.clipPath = css(lifted);
-  c.under.style.background = `linear-gradient(${ang.toFixed(1)}deg, rgba(0,0,0,${(0.2 * (1 - t * 0.6)).toFixed(3)}) ${at(0)}, rgba(0,0,0,0) ${at(46)})`;
-  // the narrow strip of the page's back
-  c.flapWrap.style.display = 'block';
-  const a = 1 - 2 * n.x * n.x;
-  const b = -2 * n.x * n.y;
-  const dd = 1 - 2 * n.y * n.y;
-  c.flap.style.clipPath = css(band);
-  c.flap.style.transform = `matrix(${a.toFixed(5)},${b.toFixed(5)},${b.toFixed(5)},${dd.toFixed(5)},${(2 * k * n.x).toFixed(2)},${(2 * k * n.y).toFixed(2)})`;
-  c.flap.style.background = `linear-gradient(${ang.toFixed(1)}deg, rgba(0,0,0,.14) ${at(0)}, rgba(255,255,255,.18) ${at(strip * 0.45)}, rgba(0,0,0,.05) ${at(strip)}), var(--curl-back)`;
+  const e = t * t * (3 - 2 * t) * 0.35 + t * 0.65;
+  const strip = Math.min(44, W * 0.11) * Math.min(1, t * 8, (1 - t) * 8 + 0.2); // the visible back of the page
+  const xf = W * (1 - e) - 0; // where the fold is
+  const lean = (W - xf) * 0.22; // the page slides a little toward the spine as it is lifted
+  const px = (n: number) => `translate3d(${n.toFixed(1)}px,0,0)`;
+  c.fw.style.transform = px(xf - W);
+  c.front.style.transform = px(W - xf - lean);
+  c.lshade.style.opacity = String(Math.min(1, t * 6));
+  c.flap.style.transform = `translate3d(${xf.toFixed(1)}px,0,0) scaleX(${(strip / 44).toFixed(3)})`;
+  c.flap.style.opacity = t <= 0.001 ? '0' : '1';
+  c.under.style.transform = px(xf + strip);
+  c.under.style.opacity = String(Math.min(1, t * 8) * (1 - t * 0.7));
 }
 
 interface Run {
@@ -248,6 +221,8 @@ function startCurl(sc: HTMLElement, forward: boolean, y0: number): Run | null {
   if (reduced()) return null;
   const c = curlFor(sc);
   if (!c || c.stale) return null;
+  // only when the copy is exactly the page being read (never a stale or half-made one), and not while reading aloud (the text is being rewritten)
+  if (c.src.classList.contains('listening') || c.host.scrollWidth !== c.src.scrollWidth || !c.host.firstElementChild) return null;
   const from = pageIndex(sc);
   const to = from + (forward ? 1 : -1);
   if (to < 0 || to >= pageCount(sc)) return null;
@@ -277,9 +252,6 @@ function endCurl(r: Run, complete: boolean) {
   const land = complete ? r.to : r.from;
   r.sc.scrollLeft = land * W;
   delete r.c.root.dataset.on;
-  r.c.front.style.clipPath = 'none';
-  r.c.under.style.display = 'none';
-  r.c.flapWrap.style.display = 'none';
   r.sc.classList.remove('flipping');
   if (run === r) run = null;
   if (r.c.stale) schedule(r.sc, r.c, 200);

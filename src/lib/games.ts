@@ -1,16 +1,20 @@
-// The game: a frog on a lily pad that has to climb up out of the water, one way or the other — flicking its tongue at passing
-// flies (quick, but a miss can end in a fall), or answering "deep cut" prompts (name something rare, the rarer the higher it goes).
-// A level is won at the top; a win earns a block (one a day). Only two tries a day. Everything is made on the phone.
+// One game, two ways up. Froggy sits on a lily pad in the water and has to climb to the blossom at the top:
+//   • sling — pull the thumb back and let go: the big tongue flies the other way, sticks to a passing fly, and Froggy swings
+//     from fly to fly (a missed grab means falling — into the water, if nothing catches it);
+//   • deep cuts — name something rare: the tongue soars as high as the answer is rare, Froggy follows it and lands on a lily
+//     that floats there for a while (a slip drops it back down).
+// Only reaching the top counts: that is the block. Two tries a day. Everything is made on the phone.
 import * as db from './db';
 import { dayKey } from './store';
 
-export type Levels = { climb: number };
+export type Variant = 'sling' | 'deep';
+export type Levels = Record<Variant, number>;
 
 export async function getLevels(): Promise<Levels> {
-  const l = await db.get<Partial<Levels>>('kv', 'games').catch(() => undefined);
-  return { climb: l?.climb ?? 1 };
+  const l = await db.get<Partial<Levels>>('kv', 'games2').catch(() => undefined);
+  return { sling: l?.sling ?? 1, deep: l?.deep ?? 1 };
 }
-export const setLevels = (l: Levels) => db.put('kv', 'games', l);
+export const setLevels = (l: Levels) => db.put('kv', 'games2', l);
 
 /** two tries a day, whether they were won or lost */
 export const TRIES_PER_DAY = 2;
@@ -37,20 +41,24 @@ export function rng(seed: number) {
   };
 }
 
-export interface Climb {
-  goal: number; // rows to climb
-  grip: number; // misses it can take before falling
-  window: number; // seconds a fly is in reach
-  bees: number; // 0–1: the chance a bee comes with the fly (a bee costs grip)
-  slack: number; // answers the list does not know that are forgiven
+export interface SlingCfg {
+  goal: number; // height of the blossom, in pixels of the playing field
+  hold: number; // seconds a fly stays caught before it wriggles free
+  bees: number; // 0–1: how many of the flies are bees (a bee is a fall)
+  drift: number; // how far the flies wander
+  gap: number; // the usual distance between flies
 }
-export const climbLevel = (n: number): Climb => ({
-  goal: Math.min(96, 14 + n * 4),
-  grip: 3,
-  window: Math.max(1.15, 2.7 - n * 0.13),
-  bees: n < 3 ? 0 : Math.min(0.5, 0.1 * (n - 2)),
-  slack: 3,
+export const slingLevel = (n: number): SlingCfg => ({
+  goal: Math.min(5000, 1500 + (n - 1) * 200),
+  hold: Math.max(2.2, 3.4 - n * 0.12),
+  bees: n < 4 ? 0 : Math.min(0.3, 0.07 * (n - 3)),
+  drift: 16 + n * 3,
+  gap: Math.min(190, 130 + n * 5),
 });
-/** how far a prompt answer lifts the frog */
-export const liftFor = (points: number) => Math.max(1, Math.min(5, 1 + Math.floor(points / 22)));
-export const SLING_LIFT = 3;
+
+export interface DeepCfg {
+  goal: number; // metres to the top
+  seconds: number; // per prompt
+  slack: number; // answers Froggy cannot place that are forgiven
+}
+export const deepLevel = (n: number): DeepCfg => ({ goal: 230 + (n - 1) * 60, seconds: Math.max(18, 34 - n), slack: 3 });

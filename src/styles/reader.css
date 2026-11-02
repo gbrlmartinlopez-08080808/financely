@@ -1626,6 +1626,39 @@
   pointer-events: none;
   visibility: hidden;
 }
+
+
+
+
+
+
+
+
+/* a copy of the text must not look selected, listen, or react */
+
+/* no more strip down the side: the curl draws its own shadows */
+.reader-scroll.paged.flipping::after {
+  display: none;
+}
+
+/* the sheet that turns: a little smaller than the screen, edges and shadow visible */
+
+
+@keyframes deskIn {
+  from {
+    opacity: 0;
+  }
+}
+
+
+/* smoother turning: the layers are kept ready on the GPU, and are never re-laid-out while they move */
+
+
+
+/* ------------------------------------------------------------------ the page that turns (see reader/paged.ts): layers that only ever move */
+.reader {
+  --curl-back: color-mix(in srgb, var(--r-bg) 94%, var(--r-ink) 6%);
+}
 .curl {
   position: absolute;
   inset: 0;
@@ -1637,77 +1670,65 @@
 .curl[data-on] {
   visibility: visible;
 }
-.curl-front,
-.curl-under,
-.curl-flapwrap,
-.curl-flap {
+.curl-fw {
   position: absolute;
   inset: 0;
-  will-change: clip-path, transform;
+  overflow: hidden;
+  will-change: transform;
+  contain: layout paint;
 }
 .curl-front {
+  position: absolute;
+  inset: 0;
   background: var(--r-bg);
+  will-change: transform;
 }
 .curl-front .leaf {
   position: absolute;
   inset: 0;
-}
-.curl-under,
-.curl-flapwrap {
-  display: none;
-}
-.curl-flapwrap {
-  filter: none;
-}
-.curl-flap {
-  transform-origin: 0 0;
-}
-/* a copy of the text must not look selected, listen, or react */
-.curl .flow {
   pointer-events: none;
   user-select: none;
 }
-/* no more strip down the side: the curl draws its own shadows */
-.reader-scroll.paged.flipping::after {
-  display: none;
+.curl-lshade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 38px;
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.1));
+  opacity: 0;
 }
-
-/* the sheet that turns: a little smaller than the screen, edges and shadow visible */
+.curl-flap,
+.curl-under {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  will-change: transform, opacity;
+  opacity: 0;
+}
+.curl-flap {
+  width: 44px;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.18), rgba(255, 255, 255, 0.3) 38%, rgba(0, 0, 0, 0.05) 100%), var(--curl-back);
+}
+.curl-under {
+  width: 52px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.2), transparent);
+}
+/* the sheet: a little smaller than the screen while it turns, with its edges and shadow */
 .curl-desk {
   position: absolute;
   inset: 0;
-  z-index: 5;
-  background: color-mix(in srgb, var(--r-bg) 90%, var(--r-ink) 10%);
-  animation: deskIn 0.18s ease-out backwards;
+  background: color-mix(in srgb, var(--r-bg) 91%, var(--r-ink) 9%);
+  animation: deskIn 0.16s ease-out backwards;
 }
 .curl-desk > i {
   position: absolute;
   inset: 14px;
   border-radius: 22px;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--r-ink) 10%, transparent), 0 8px 24px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--r-ink) 10%, transparent), 0 8px 22px rgba(0, 0, 0, 0.14);
 }
-@keyframes deskIn {
-  from {
-    opacity: 0;
-  }
-}
-.curl-front,
-.curl-under,
-.curl-flapwrap {
-  border-radius: 0;
-}
-
-/* smoother turning: the layers are kept ready on the GPU, and are never re-laid-out while they move */
-.curl-front,
-.curl-under,
-.curl-flapwrap,
-.curl-flap,
-.curl-desk {
-  contain: strict;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-.curl-front .leaf {
-  will-change: transform;
-  transform: translateZ(0);
+.reader-scroll.paged.flipping::after {
+  display: none;
 }
