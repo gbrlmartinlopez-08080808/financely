@@ -28,6 +28,7 @@ import type { DocMeta } from '../lib/types';
 import { AskSheet } from '../reader/Ask';
 import { Froggy } from '../ui/Froggy';
 import { Play } from './Games';
+import { WorldInfo } from './World';
 import { Icon } from '../ui/Icon';
 import { PixelLoader, Segmented, Sheet, toast } from '../ui/kit';
 
@@ -171,6 +172,8 @@ export function Interesting({ docs, onSwitch, onFindBooks }: { docs: DocMeta[]; 
   const [detail, setDetail] = useState<Detail | null>(null);
   const [ask, setAsk] = useState<AskCtx | null>(null);
   const [out, setOut] = useState(false);
+  const [newsView, setNewsView] = useState<'news' | 'world'>('news');
+  const [menu, setMenu] = useState(false);
 
   const load = useCallback((force = false) => {
     setErr(null);
@@ -214,7 +217,11 @@ export function Interesting({ docs, onSwitch, onFindBooks }: { docs: DocMeta[]; 
           className="int-seg"
           light
           value={tab}
-          onChange={setTab}
+          onChange={(t) => {
+            setTab(t);
+            if (t === 'news' && tab !== 'news') setNewsView('news');
+          }}
+          onHold={(t) => t === 'news' && setMenu(true)}
           options={[
             { value: 'today', label: 'Today' },
             { value: 'news', label: 'News' },
@@ -241,10 +248,33 @@ export function Interesting({ docs, onSwitch, onFindBooks }: { docs: DocMeta[]; 
       )}
 
       {daily && tab === 'today' && <Today d={daily.data} offline={daily.offline} mood={mood} setDetail={setDetail} wiki={wiki} onRefresh={() => load(true)} />}
-      {daily && tab === 'news' && <News d={daily.data} setDetail={setDetail} />}
+      {daily && tab === 'news' && newsView === 'news' && <News d={daily.data} setDetail={setDetail} onWorld={() => setNewsView('world')} />}
+      {tab === 'news' && newsView === 'world' && <WorldInfo wiki={wiki} />}
       {tab === 'play' && <Play />}
       {tab === 'you' && <ForYou book={book} d={daily?.data} setDetail={setDetail} wiki={wiki} />}
 
+      <Sheet open={menu} onClose={() => setMenu(false)} title="News">
+        <div className="news-menu">
+          {([
+            ['news', 'News', 'The day’s stories, each with the outlets that cover it and where they sit'],
+            ['world', 'World info', 'Votes, summits, finals and tournaments, the sky: what the world is following'],
+          ] as const).map(([v, t, d]) => (
+            <button
+              key={v}
+              className={newsView === v && tab === 'news' ? 'on' : ''}
+              onClick={() => {
+                tap('select');
+                setNewsView(v);
+                setTab('news');
+                setMenu(false);
+              }}
+            >
+              <b>{t}</b>
+              <small>{d}</small>
+            </button>
+          ))}
+        </div>
+      </Sheet>
       <Sheet open={!!detail} onClose={() => setDetail(null)} className="int-sheet">
         {detail && <DetailBody det={detail} d={daily?.data} setDetail={setDetail} onAsk={askAbout} onFindBooks={(q) => (setDetail(null), onFindBooks(q))} />}
       </Sheet>
@@ -389,7 +419,7 @@ function ReadRow({ r, d, onOpen }: { r: Read; d: Daily; onOpen: () => void }) {
 }
 
 // ------------------------------------------------------------------------------------------------------- news reels
-function News({ d, setDetail }: { d: Daily; setDetail: (x: Detail) => void }) {
+function News({ d, setDetail, onWorld }: { d: Daily; setDetail: (x: Detail) => void; onWorld: () => void }) {
   const [topic, setTopic] = useState<'all' | Topic>('all');
   const topics = useMemo(() => [...new Set(d.news.map((s) => s.topic).filter((x): x is Topic => !!x))], [d]);
   const list = topic === 'all' ? d.news : d.news.filter((s) => s.topic === topic);
@@ -402,6 +432,9 @@ function News({ d, setDetail }: { d: Daily; setDetail: (x: Detail) => void }) {
               {t === 'all' ? 'All' : TOPIC_LABEL[t]}
             </button>
           ))}
+          <button role="tab" aria-selected={false} className="wl" onClick={() => (tap('select'), onWorld())}>
+            World info
+          </button>
         </div>
       )}
       <Reels key={topic} d={d} stories={list} setDetail={setDetail} />

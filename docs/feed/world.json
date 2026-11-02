@@ -1,0 +1,333 @@
+{
+ "v": 1,
+ "note": "Curated by Frogity. Dates can move: check the organisers for the latest.",
+ "events": [
+  {
+   "k": "election",
+   "t": "US midterm elections",
+   "w": "United States",
+   "a": "2026-11-03",
+   "n": "All 435 House seats, 35 Senate seats and 36 governorships are up: the vote that decides who controls Congress for the second half of the presidential term.",
+   "wiki": "2026 United States elections"
+  },
+  {
+   "k": "election",
+   "t": "Taiwan local elections",
+   "w": "Taiwan",
+   "a": "2026-11-28",
+   "n": "Mayors, county magistrates and councils across Taiwan, a test of the parties before the 2028 presidential vote.",
+   "wiki": "2026 Taiwanese local elections"
+  },
+  {
+   "k": "election",
+   "t": "Nigeria general election",
+   "w": "Nigeria",
+   "a": "2027-02-20",
+   "n": "Africa’s most populous country chooses a president and National Assembly.",
+   "wiki": "2027 Nigerian general election",
+   "when": "February 2027"
+  },
+  {
+   "k": "election",
+   "t": "India: state elections in Uttar Pradesh and Punjab",
+   "w": "India",
+   "a": "2027-02-10",
+   "b": "2027-03-10",
+   "n": "Uttar Pradesh, India’s most populous state, votes with Punjab, Uttarakhand, Goa and Manipur: a read on national politics ahead of 2029.",
+   "wiki": "2027 Uttar Pradesh Legislative Assembly election",
+   "when": "February–March 2027"
+  },
+  {
+   "k": "election",
+   "t": "French presidential election",
+   "w": "France",
+   "a": "2027-04-10",
+   "b": "2027-04-24",
+   "n": "Two rounds, the first in April: the race to succeed Emmanuel Macron.",
+   "wiki": "2027 French presidential election",
+   "when": "April 2027"
+  },
+  {
+   "k": "election",
+   "t": "Kenya general election",
+   "w": "Kenya",
+   "a": "2027-08-10",
+   "n": "President, parliament and county governors.",
+   "wiki": "2027 Kenyan general election",
+   "when": "August 2027"
+  },
+  {
+   "k": "election",
+   "t": "Argentina general election",
+   "w": "Argentina",
+   "a": "2027-10-24",
+   "n": "President and Congress.",
+   "wiki": "2027 Argentine general election",
+   "when": "October 2027"
+  },
+  {
+   "k": "election",
+   "t": "US presidential election",
+   "w": "United States",
+   "a": "2028-11-07",
+   "n": "The next presidential election; party primaries run through the first half of 2028.",
+   "wiki": "2028 United States presidential election"
+  },
+  {
+   "k": "summit",
+   "t": "COP31 climate conference",
+   "w": "Antalya, Türkiye",
+   "a": "2026-11-09",
+   "b": "2026-11-20",
+   "n": "The UN climate talks: countries report on cutting emissions and agree finance for the ones hit hardest. Türkiye hosts, Australia leads the negotiations.",
+   "wiki": "2026 United Nations Climate Change Conference"
+  },
+  {
+   "k": "summit",
+   "t": "G20 leaders’ summit",
+   "w": "Miami, United States",
+   "a": "2026-12-14",
+   "b": "2026-12-15",
+   "n": "The 20 largest economies meet under the US presidency.",
+   "wiki": "2026 G20 Miami summit",
+   "when": "mid December 2026"
+  },
+  {
+   "k": "summit",
+   "t": "Nobel Prize ceremonies",
+   "w": "Stockholm and Oslo",
+   "a": "2026-12-10",
+   "n": "The prizes announced in October are handed over on the anniversary of Alfred Nobel’s death.",
+   "wiki": "Nobel Prize"
+  },
+  {
+   "k": "economy",
+   "t": "US Federal Reserve rate decision",
+   "w": "United States",
+   "a": "2026-12-09",
+   "n": "The year’s last FOMC meeting (8–9 December): what happens to interest rates moves mortgages, loans and markets worldwide.",
+   "wiki": "Federal Open Market Committee"
+  },
+  {
+   "k": "summit",
+   "t": "World Economic Forum",
+   "w": "Davos, Switzerland",
+   "a": "2027-01-18",
+   "b": "2027-01-22",
+   "n": "Leaders from business, politics and civil society meet in the Swiss Alps.",
+   "wiki": "World Economic Forum",
+   "when": "January 2027"
+  },
+  {
+   "k": "summit",
+   "t": "COP32 climate conference",
+   "w": "Addis Ababa, Ethiopia",
+   "a": "2027-11-08",
+   "n": "The next UN climate talks, in Africa.",
+   "wiki": "2027 United Nations Climate Change Conference",
+   "when": "November 2027"
+  },
+  {
+   "k": "sport",
+   "t": "Formula 1: season finale",
+   "w": "Abu Dhabi",
+   "a": "2026-12-04",
+   "b": "2026-12-06",
+   "n": "The last race decides the final places in the championship.",
+   "wiki": "2026 Formula One World Championship"
+  },
+  {
+   "k": "sport",
+   "t": "Premier League, 2026–27 season",
+   "w": "England",
+   "a": "2026-08-22",
+   "b": "2027-05-23",
+   "n": "Matches every weekend, with a break for the winter holidays being the busiest stretch of the year.",
+   "wiki": "2026–27 Premier League",
+   "when": "August–May"
+  },
+  {
+   "k": "sport",
+   "t": "La Liga, 2026–27 season — including El Clásico",
+   "w": "Spain",
+   "a": "2026-08-15",
+   "b": "2027-05-23",
+   "n": "Barcelona and Real Madrid meet twice in the league (dates are set by LaLiga): the match the football world stops for.",
+   "wiki": "El Clásico",
+   "when": "August–May"
+  },
+  {
+   "k": "sport",
+   "t": "UEFA Champions League, 2026–27",
+   "w": "Europe",
+   "a": "2026-09-15",
+   "b": "2027-06-05",
+   "n": "League phase through January, knockouts from February; the final is played in Madrid on 5 June.",
+   "wiki": "2026–27 UEFA Champions League"
+  },
+  {
+   "k": "sport",
+   "t": "NBA, 2026–27 season",
+   "w": "United States and Canada",
+   "a": "2026-10-20",
+   "b": "2027-06-20",
+   "n": "Regular season to April, playoffs and the Finals in June.",
+   "wiki": "2026–27 NBA season",
+   "when": "October–June"
+  },
+  {
+   "k": "sport",
+   "t": "NFL, 2026 season",
+   "w": "United States",
+   "a": "2026-09-10",
+   "b": "2027-02-14",
+   "n": "Regular season to January, playoffs to Super Bowl LXI at SoFi Stadium, Los Angeles, on 14 February.",
+   "wiki": "2026 NFL season",
+   "when": "September–February"
+  },
+  {
+   "k": "sport",
+   "t": "Australian Open",
+   "w": "Melbourne, Australia",
+   "a": "2027-01-18",
+   "b": "2027-01-31",
+   "n": "The first tennis Grand Slam of the year.",
+   "wiki": "2027 Australian Open",
+   "when": "January 2027"
+  },
+  {
+   "k": "sport",
+   "t": "Women’s World Cup",
+   "w": "Brazil",
+   "a": "2027-06-24",
+   "b": "2027-07-25",
+   "n": "The first one held in South America.",
+   "wiki": "2027 FIFA Women's World Cup",
+   "when": "June–July 2027"
+  },
+  {
+   "k": "sport",
+   "t": "Tour de France",
+   "w": "France",
+   "a": "2027-07-03",
+   "b": "2027-07-25",
+   "n": "Three weeks of cycling’s biggest race.",
+   "wiki": "2027 Tour de France",
+   "when": "July 2027"
+  },
+  {
+   "k": "sport",
+   "t": "Rugby World Cup",
+   "w": "Australia",
+   "a": "2027-10-01",
+   "b": "2027-11-13",
+   "n": "Held in Australia for the first time since 2003.",
+   "wiki": "2027 Rugby World Cup",
+   "when": "October–November 2027"
+  },
+  {
+   "k": "sport",
+   "t": "Cricket World Cup",
+   "w": "South Africa, Zimbabwe and Namibia",
+   "a": "2027-10-01",
+   "b": "2027-11-30",
+   "n": "The 50-over World Cup comes back to southern Africa.",
+   "wiki": "2027 Cricket World Cup",
+   "when": "October–November 2027"
+  },
+  {
+   "k": "sport",
+   "t": "Euro 2028",
+   "w": "United Kingdom and Ireland",
+   "a": "2028-06-09",
+   "b": "2028-07-09",
+   "n": "The European football championship.",
+   "wiki": "UEFA Euro 2028",
+   "when": "June–July 2028"
+  },
+  {
+   "k": "sport",
+   "t": "Summer Olympics",
+   "w": "Los Angeles, United States",
+   "a": "2028-07-14",
+   "b": "2028-07-30",
+   "n": "LA hosts for the third time; cricket and flag football join the programme.",
+   "wiki": "2028 Summer Olympics"
+  },
+  {
+   "k": "sky",
+   "t": "Leonid meteor shower",
+   "w": "Night sky",
+   "a": "2026-11-17",
+   "b": "2026-11-18",
+   "n": "Fast meteors, best after midnight away from city lights.",
+   "wiki": "Leonids"
+  },
+  {
+   "k": "sky",
+   "t": "Geminid meteor shower",
+   "w": "Night sky",
+   "a": "2026-12-13",
+   "b": "2026-12-14",
+   "n": "Usually the best meteor shower of the year, up to 100 an hour in a dark sky.",
+   "wiki": "Geminids"
+  },
+  {
+   "k": "sky",
+   "t": "Total solar eclipse",
+   "w": "Egypt, Saudi Arabia and Yemen",
+   "a": "2027-08-02",
+   "n": "A rare long total eclipse, up to six minutes over Luxor.",
+   "wiki": "Solar eclipse of August 2, 2027"
+  },
+  {
+   "k": "culture",
+   "t": "Diwali",
+   "w": "India and worldwide",
+   "a": "2026-11-08",
+   "n": "The festival of lights.",
+   "wiki": "Diwali"
+  },
+  {
+   "k": "culture",
+   "t": "Thanksgiving",
+   "w": "United States",
+   "a": "2026-11-26",
+   "n": "Fourth Thursday of November.",
+   "wiki": "Thanksgiving (United States)"
+  },
+  {
+   "k": "culture",
+   "t": "Christmas",
+   "w": "Worldwide",
+   "a": "2026-12-25",
+   "wiki": "Christmas"
+  },
+  {
+   "k": "culture",
+   "t": "Chinese New Year: Year of the Goat",
+   "w": "China and worldwide",
+   "a": "2027-02-06",
+   "n": "The biggest travel week of the year.",
+   "wiki": "Chinese New Year"
+  },
+  {
+   "k": "culture",
+   "t": "Ramadan begins",
+   "w": "Muslim world",
+   "a": "2027-02-08",
+   "n": "The exact day depends on the sighting of the moon.",
+   "wiki": "Ramadan",
+   "when": "around 8 February 2027"
+  },
+  {
+   "k": "culture",
+   "t": "Academy Awards",
+   "w": "Los Angeles, United States",
+   "a": "2027-03-07",
+   "n": "The Oscars.",
+   "wiki": "99th Academy Awards",
+   "when": "March 2027"
+  }
+ ]
+}

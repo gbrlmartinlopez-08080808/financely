@@ -289,3 +289,40 @@ export function wordAt(x: number, y: number): { word: string; rect: DOMRect; ran
   range.setEnd(t, b);
   return { word, rect: range.getBoundingClientRect(), range };
 }
+
+const REF_HEAD =
+  /^(?:(?:chapter\s+)?\d+[.:)\s]+)?(references?(?: list)?|bibliograph(?:y|ie|ía)|selected bibliography|works cited|sources|notes|endnotes|footnotes|literature(?: cited)?|further reading|citations|referencias|notas|bibliografia|références|bibliographie|literatur|quellen|anmerkungen|riferimenti|note|referências)\s*:?$/i;
+/** the bibliography-like shape of one sentence: "Smith, J. A., & Lee, K. (2019). Title. Journal, 12(3), 45–67." */
+const REF_LINE = [
+  /^\[?\d{1,3}\]?[.)]?\s*[\p{Lu}][\p{L}'’.\- ]+,\s*(?:[\p{Lu}]\.\s*){1,4}.*(?:19|20)\d{2}/u,
+  /^[\p{Lu}][\p{L}'’\-]+,\s*(?:[\p{Lu}]\.\s*-?){1,4}(?:,|\s&|\sand|\s\()/u,
+  /\b(?:doi:|arxiv:|doi\.org|pp\.\s*\d|vol\.\s*\d|\d+\(\d+\),\s*\d+)/i,
+  /^(?:ibid|idem|op\.? cit|loc\. cit)\b/i,
+  /^\d{1,3}\s+(?:See|Cf\.?|Compare|Ibid|On this|For more|Quoted|Translation|Author)\b/,
+];
+/**
+ * The stretches of the text nobody wants read aloud: the reference list and notes at the back (and a "Notes" section at the end of a
+ * chapter), anything inside a footnote or endnote container, and single lines that are plainly bibliography entries.
+ */
+export function referenceRanges(root: HTMLElement, total: number): [number, number][] {
+  const first = (el: Element) => {
+    const s = el.matches('.s') ? el : el.querySelector<HTMLElement>('.s');
+    return s ? Number((s as HTMLElement).dataset.i) : -1;
+  };
+  const heads = Array.from(root.querySelectorAll('h1,h2,h3,h4,h5,h6,p.heading,.chapter-title'))
+    .map((h) => ({ i: first(h), ref: REF_HEAD.test((h.textContent ?? '').replace(/\s+/g, ' ').trim()) }))
+    .filter((h) => h.i >= 0)
+    .sort((a, b) => a.i - b.i);
+  const out: [number, number][] = [];
+  heads.forEach((h, k) => {
+    if (!h.ref) return;
+    const late = h.i > total * 0.62;
+    out.push([h.i, late ? total : heads[k + 1]?.i ?? total]);
+  });
+  for (const el of Array.from(root.querySelectorAll('.footnote, .footnotes, .endnotes, .endnote, .references, .bibliography, [role="doc-endnotes"], [role="doc-footnote"], [role="doc-bibliography"], [epub\\:type~="footnote"], [epub\\:type~="endnotes"], [epub\\:type~="bibliography"], aside.note'))) {
+    const a = Array.from(el.querySelectorAll<HTMLElement>('.s')).map((s) => Number(s.dataset.i));
+    if (a.length) out.push([Math.min(...a), Math.max(...a) + 1]);
+  }
+  return out;
+}
+export const isReferenceLine = (t: string) => t.length < 400 && REF_LINE.some((re) => re.test(t));

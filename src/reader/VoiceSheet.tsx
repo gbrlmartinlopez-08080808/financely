@@ -33,7 +33,7 @@ export function VoiceSheet({
 }) {
   const s = useStore((x) => x.settings);
   const mine = VOICE_LANGS.some((l) => l.code === s.lang) ? s.lang : 'en';
-  const order = [...new Set([mine, docLang, ...VOICE_LANGS.map((l) => l.code)])].filter((c) => VOICE_LANGS.some((l) => l.code === c));
+  const order = [...new Set([docLang, mine, ...VOICE_LANGS.map((l) => l.code)])].filter((c) => VOICE_LANGS.some((l) => l.code === c));
   const [openLang, setOpenLang] = useState<string | null>(null);
   const [sys, setSys] = useState(false);
   const [dl, setDl] = useState<{ id: string; p: number } | null>(null);
@@ -147,7 +147,7 @@ export function VoiceSheet({
             <div key={code} className="vlang">
               <button className="vlang-h" onClick={() => setOpenLang(here ? null : code)} aria-expanded={here}>
                 <b>{label}</b>
-                {code === mine && <span className="vtag">your language</span>}
+                {code === docLang ? <span className="vtag">this book</span> : code === mine && <span className="vtag">your language</span>}
                 <small className="mono muted">{installed ? `${installed} installed` : `${list.length} voices`}</small>
                 <Icon name={here ? 'up' : 'down'} size={16} />
               </button>

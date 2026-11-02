@@ -153,13 +153,13 @@ function parseFeed(xml) {
 // compare how different outlets cover a story, never as a verdict. `null` = not a news outlet with a political line.
 const OUTLETS = [
   { id: 'bbc', name: 'BBC News', region: 'UK', domain: 'bbc.com', kind: 'public', lean: 0, about: 'Public broadcaster, funded by the UK licence fee, with a charter requiring impartiality.',
-    feeds: [['https://feeds.bbci.co.uk/news/world/rss.xml', 'world'], ['https://feeds.bbci.co.uk/news/science_and_environment/rss.xml', 'science'], ['https://feeds.bbci.co.uk/news/technology/rss.xml', 'tech'], ['https://feeds.bbci.co.uk/news/health/rss.xml', 'health'], ['https://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml', 'culture'], ['https://feeds.bbci.co.uk/news/business/rss.xml', 'business'], ['https://feeds.bbci.co.uk/sport/rss.xml', 'sport']] },
+    feeds: [['https://feeds.bbci.co.uk/news/world/rss.xml', 'world'], ['https://feeds.bbci.co.uk/news/science_and_environment/rss.xml', 'science'], ['https://feeds.bbci.co.uk/news/technology/rss.xml', 'tech'], ['https://feeds.bbci.co.uk/news/health/rss.xml', 'health'], ['https://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml', 'culture'], ['https://feeds.bbci.co.uk/news/business/rss.xml', 'business'], ['https://feeds.bbci.co.uk/sport/rss.xml', 'sport'], ['https://feeds.bbci.co.uk/sport/football/rss.xml', 'sport']] },
   { id: 'aje', name: 'Al Jazeera', region: 'Qatar', domain: 'aljazeera.com', kind: 'state-funded', lean: -1, about: 'International broadcaster funded by the state of Qatar; strong coverage of the Middle East and the Global South.', feeds: [['https://www.aljazeera.com/xml/rss/all.xml', 'world']] },
   { id: 'dw', name: 'DW', region: 'Germany', domain: 'dw.com', kind: 'public', lean: 0, about: 'Germany’s international public broadcaster, funded by the federal budget, editorially independent.', feeds: [['https://rss.dw.com/rdf/rss-en-all', 'world']] },
   { id: 'npr', name: 'NPR', region: 'USA', domain: 'npr.org', kind: 'public', lean: -1, about: 'US non-profit public radio, funded by member stations, donors and sponsors.',
     feeds: [['https://feeds.npr.org/1001/rss.xml', 'world'], ['https://feeds.npr.org/1007/rss.xml', 'science'], ['https://feeds.npr.org/1128/rss.xml', 'health'], ['https://feeds.npr.org/1008/rss.xml', 'culture'], ['https://feeds.npr.org/1019/rss.xml', 'tech']] },
   { id: 'gdn', name: 'The Guardian', region: 'UK', domain: 'theguardian.com', kind: 'independent', lean: -1.5, about: 'UK newspaper owned by a trust whose purpose is to keep it independent; editorially liberal.',
-    feeds: [['https://www.theguardian.com/world/rss', 'world'], ['https://www.theguardian.com/science/rss', 'science'], ['https://www.theguardian.com/technology/rss', 'tech'], ['https://www.theguardian.com/culture/rss', 'culture'], ['https://www.theguardian.com/environment/rss', 'environment'], ['https://www.theguardian.com/sport/rss', 'sport'], ['https://www.theguardian.com/business/rss', 'business']] },
+    feeds: [['https://www.theguardian.com/world/rss', 'world'], ['https://www.theguardian.com/science/rss', 'science'], ['https://www.theguardian.com/technology/rss', 'tech'], ['https://www.theguardian.com/culture/rss', 'culture'], ['https://www.theguardian.com/environment/rss', 'environment'], ['https://www.theguardian.com/sport/rss', 'sport'], ['https://www.theguardian.com/business/rss', 'business'], ['https://www.theguardian.com/us-news/rss', 'world']] },
   { id: 'f24', name: 'France 24', region: 'France', domain: 'france24.com', kind: 'state-funded', lean: 0, about: 'French international news channel, funded by the French state.', feeds: [['https://www.france24.com/en/rss', 'world']] },
   { id: 'abc', name: 'ABC Australia', region: 'Australia', domain: 'abc.net.au', kind: 'public', lean: 0, about: 'Australia’s public broadcaster, funded by the government at arm’s length.', feeds: [['https://www.abc.net.au/news/feed/2942460/rss.xml', 'world']] },
   { id: 'afn', name: 'Africanews', region: 'Africa', domain: 'africanews.com', kind: 'independent', lean: 0, about: 'Pan-African news channel, part of the Euronews group.', feeds: [['https://www.africanews.com/feed/rss', 'world']] },
@@ -175,6 +175,55 @@ const OUTLETS = [
   { id: 'cnn', name: 'CNN', region: 'USA', domain: 'cnn.com', kind: 'commercial', lean: -1, about: 'US cable news channel; leans left in commentary.', feeds: [['http://rss.cnn.com/rss/edition_world.rss', 'world']] },
   { id: 'cbs', name: 'CBS News', region: 'USA', domain: 'cbsnews.com', kind: 'commercial', lean: -0.5, about: 'US broadcast network news.', feeds: [['https://www.cbsnews.com/latest/rss/world', 'world']] },
   { id: 'hpo', name: 'HuffPost', region: 'USA', domain: 'huffpost.com', kind: 'commercial', lean: -2, about: 'US news site with a progressive editorial line.', feeds: [['https://www.huffpost.com/section/world-news/feed', 'world']] },
+  // more major outlets, so a story is told by as many as possible
+  { id: 'nyt', name: "The New York Times", region: 'USA', domain: 'nytimes.com', kind: 'commercial', lean: -1, about: "US newspaper of record; news pages rated centre-left, opinion section liberal.", feeds: [['https://rss.nytimes.com/services/xml/rss/nyt/World.xml', 'world'], ['https://rss.nytimes.com/services/xml/rss/nyt/Science.xml', 'science'], ['https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml', 'tech'], ['https://rss.nytimes.com/services/xml/rss/nyt/Health.xml', 'health'], ['https://rss.nytimes.com/services/xml/rss/nyt/Arts.xml', 'culture'], ['https://rss.nytimes.com/services/xml/rss/nyt/Climate.xml', 'environment'], ['https://rss.nytimes.com/services/xml/rss/nyt/Business.xml', 'business']] },
+  { id: 'wpo', name: "The Washington Post", region: 'USA', domain: 'washingtonpost.com', kind: 'commercial', lean: -1, about: "US daily, owned by Jeff Bezos; news rated centre-left.", feeds: [['https://feeds.washingtonpost.com/rss/world', 'world'], ['https://feeds.washingtonpost.com/rss/business', 'business']] },
+  { id: 'eco', name: "The Economist", region: 'UK', domain: 'economist.com', kind: 'commercial', lean: 0.5, about: "British weekly with a classical-liberal, free-market outlook; known for analysis across the world.", feeds: [['https://www.economist.com/international/rss.xml', 'world'], ['https://www.economist.com/business/rss.xml', 'business'], ['https://www.economist.com/science-and-technology/rss.xml', 'science'], ['https://www.economist.com/briefing/rss.xml', 'world']] },
+  { id: 'ft', name: "Financial Times", region: 'UK', domain: 'ft.com', kind: 'commercial', lean: 0.3, about: "London business daily, owned by Nikkei; centre-right on economics, internationalist.", feeds: [['https://www.ft.com/world?format=rss', 'world'], ['https://www.ft.com/technology?format=rss', 'tech']] },
+  { id: 'blm', name: "Bloomberg", region: 'USA', domain: 'bloomberg.com', kind: 'commercial', lean: 0, about: "Global business and financial news agency.", feeds: [['https://feeds.bloomberg.com/politics/news.rss', 'world'], ['https://feeds.bloomberg.com/technology/news.rss', 'tech'], ['https://feeds.bloomberg.com/markets/news.rss', 'business']] },
+  { id: 'pol', name: "Politico", region: 'USA', domain: 'politico.com', kind: 'commercial', lean: -0.3, about: "US political news; strongest on Washington.", feeds: [['https://rss.politico.com/politics-news.xml', 'world']] },
+  { id: 'poe', name: "Politico Europe", region: 'Europe', domain: 'politico.eu', kind: 'commercial', lean: 0, about: "Brussels-based coverage of European politics and policy.", feeds: [['https://www.politico.eu/feed/', 'world']] },
+  { id: 'tim', name: "TIME", region: 'USA', domain: 'time.com', kind: 'commercial', lean: -0.5, about: "US news magazine.", feeds: [['https://time.com/feed/', 'world']] },
+  { id: 'usa', name: "USA Today", region: 'USA', domain: 'usatoday.com', kind: 'commercial', lean: -0.3, about: "US national daily.", feeds: [['http://rssfeeds.usatoday.com/usatoday-NewsTopStories', 'world']] },
+  { id: 'abu', name: "ABC News (US)", region: 'USA', domain: 'abcnews.go.com', kind: 'commercial', lean: -0.5, about: "US broadcast network news.", feeds: [['https://abcnews.go.com/abcnews/internationalheadlines', 'world']] },
+  { id: 'nbc', name: "NBC News", region: 'USA', domain: 'nbcnews.com', kind: 'commercial', lean: -1, about: "US broadcast network news.", feeds: [['https://feeds.nbcnews.com/nbcnews/public/world', 'world']] },
+  { id: 'pbs', name: "PBS NewsHour", region: 'USA', domain: 'pbs.org', kind: 'public', lean: -0.3, about: "US public broadcaster’s evening news.", feeds: [['https://www.pbs.org/newshour/feeds/rss/headlines', 'world']] },
+  { id: 'hil', name: "The Hill", region: 'USA', domain: 'thehill.com', kind: 'commercial', lean: 0, about: "US political news; rated close to the centre.", feeds: [['https://thehill.com/feed/', 'world']] },
+  { id: 'con', name: "The Conversation", region: 'Global', domain: 'theconversation.com', kind: 'independent', lean: -0.5, about: "Non-profit news written by academics and researchers.", feeds: [['https://theconversation.com/global/articles.atom', 'world']] },
+  { id: 'cbc', name: "CBC News", region: 'Canada', domain: 'cbc.ca', kind: 'public', lean: -0.5, about: "Canada’s public broadcaster.", feeds: [['https://www.cbc.ca/webfeed/rss/rss-world', 'world'], ['https://www.cbc.ca/webfeed/rss/rss-technology', 'tech'], ['https://www.cbc.ca/webfeed/rss/rss-health', 'health']] },
+  { id: 'glo', name: "The Globe and Mail", region: 'Canada', domain: 'theglobeandmail.com', kind: 'commercial', lean: 0.5, about: "Canada’s national daily; centre-right editorial line.", feeds: [['https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/world/', 'world']] },
+  { id: 'smh', name: "The Sydney Morning Herald", region: 'Australia', domain: 'smh.com.au', kind: 'commercial', lean: -0.3, about: "Sydney daily.", feeds: [['https://www.smh.com.au/rss/world.xml', 'world']] },
+  { id: 'rnz', name: "RNZ", region: 'New Zealand', domain: 'rnz.co.nz', kind: 'public', lean: 0, about: "New Zealand’s public broadcaster.", feeds: [['https://www.rnz.co.nz/rss/world.xml', 'world']] },
+  { id: 'scm', name: "South China Morning Post", region: 'Hong Kong', domain: 'scmp.com', kind: 'commercial', lean: 0.5, about: "Hong Kong daily, owned by Alibaba; strong on China and Asia.", feeds: [['https://www.scmp.com/rss/91/feed', 'world'], ['https://www.scmp.com/rss/36/feed', 'tech']] },
+  { id: 'cna', name: "CNA", region: 'Singapore', domain: 'channelnewsasia.com', kind: 'state-funded', lean: 0.5, about: "Singapore broadcaster owned by Mediacorp, itself state-owned.", feeds: [['https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml&category=6511', 'world']] },
+  { id: 'jpt', name: "The Japan Times", region: 'Japan', domain: 'japantimes.co.jp', kind: 'independent', lean: 0, about: "Japan’s oldest English-language daily.", feeds: [['https://www.japantimes.co.jp/feed/', 'world']] },
+  { id: 'nhk', name: "NHK World", region: 'Japan', domain: 'www3.nhk.or.jp', kind: 'public', lean: 0, about: "Japan’s public broadcaster, international service.", feeds: [['https://www3.nhk.or.jp/rss/news/cat6.xml', 'world']] },
+  { id: 'yon', name: "Yonhap", region: 'South Korea', domain: 'en.yna.co.kr', kind: 'independent', lean: 0, about: "South Korea’s main news agency.", feeds: [['https://en.yna.co.kr/RSS/news.xml', 'world']] },
+  { id: 'kor', name: "The Korea Herald", region: 'South Korea', domain: 'koreaherald.com', kind: 'commercial', lean: 0.5, about: "Seoul English-language daily.", feeds: [['https://www.koreaherald.com/common/rss_xml.php?ct=102', 'world']] },
+  { id: 'ine', name: "The Indian Express", region: 'India', domain: 'indianexpress.com', kind: 'commercial', lean: -0.3, about: "Indian national daily known for investigative reporting.", feeds: [['https://indianexpress.com/section/world/feed/', 'world']] },
+  { id: 'hti', name: "Hindustan Times", region: 'India', domain: 'hindustantimes.com', kind: 'commercial', lean: 0.3, about: "Indian national daily.", feeds: [['https://www.hindustantimes.com/feeds/rss/world-news/rssfeed.xml', 'world']] },
+  { id: 'daw', name: "Dawn", region: 'Pakistan', domain: 'dawn.com', kind: 'commercial', lean: -0.3, about: "Pakistan’s oldest English-language daily.", feeds: [['https://www.dawn.com/feeds/home', 'world']] },
+  { id: 'arn', name: "Arab News", region: 'Saudi Arabia', domain: 'arabnews.com', kind: 'commercial', lean: 0.8, about: "English daily owned by a Saudi publisher; close to the state’s line.", feeds: [['https://www.arabnews.com/rss.xml', 'world']] },
+  { id: 'tnn', name: "The National", region: 'UAE', domain: 'thenationalnews.com', kind: 'state-funded', lean: 0.8, about: "Abu Dhabi newspaper, owned by a state-linked group.", feeds: [['https://www.thenationalnews.com/arc/outboundfeeds/rss/?outputType=xml', 'world']] },
+  { id: 'toi', name: "The Times of Israel", region: 'Israel', domain: 'timesofisrael.com', kind: 'independent', lean: 0.3, about: "Israeli English-language news site.", feeds: [['https://www.timesofisrael.com/feed/', 'world']] },
+  { id: 'hrz', name: "Haaretz", region: 'Israel', domain: 'haaretz.com', kind: 'commercial', lean: -1.5, about: "Israeli daily with a liberal editorial line.", feeds: [['https://www.haaretz.com/srv/haaretz-latest-headlines', 'world']] },
+  { id: 'dmv', name: "Daily Maverick", region: 'South Africa', domain: 'dailymaverick.co.za', kind: 'independent', lean: -0.5, about: "South African news site known for investigative journalism.", feeds: [['https://www.dailymaverick.co.za/dmrss/', 'world']] },
+  { id: 'mng', name: "Mail & Guardian", region: 'South Africa', domain: 'mg.co.za', kind: 'independent', lean: -0.5, about: "South African weekly and news site.", feeds: [['https://mg.co.za/feed/', 'world']] },
+  { id: 'spg', name: "Der Spiegel International", region: 'Germany', domain: 'spiegel.de', kind: 'commercial', lean: -0.3, about: "English edition of the German news magazine.", feeds: [['https://www.spiegel.de/international/index.rss', 'world']] },
+  { id: 'lmo', name: "Le Monde (English)", region: 'France', domain: 'lemonde.fr', kind: 'commercial', lean: -0.3, about: "French newspaper of record, English edition.", feeds: [['https://www.lemonde.fr/en/rss/une.xml', 'world']] },
+  { id: 'elp', name: "EL PAÍS English", region: 'Spain', domain: 'elpais.com', kind: 'commercial', lean: -0.5, about: "Spanish daily, English edition.", feeds: [['https://feeds.elpais.com/mrss-s/pages/ep/site/english.elpais.com/portada', 'world']] },
+  { id: 'rte', name: "RTÉ News", region: 'Ireland', domain: 'rte.ie', kind: 'public', lean: 0, about: "Ireland’s public broadcaster.", feeds: [['https://www.rte.ie/news/rss/news-headlines.xml', 'world']] },
+  { id: 'swi', name: "SWI swissinfo.ch", region: 'Switzerland', domain: 'swissinfo.ch', kind: 'public', lean: 0, about: "Swiss public broadcaster’s international service.", feeds: [['https://www.swissinfo.ch/eng/rss/top-news', 'world']] },
+  { id: 'dip', name: "The Diplomat", region: 'Asia-Pacific', domain: 'thediplomat.com', kind: 'independent', lean: 0, about: "Asia-Pacific politics and security magazine.", feeds: [['https://thediplomat.com/feed/', 'world']] },
+  { id: 'fpo', name: "Foreign Policy", region: 'USA', domain: 'foreignpolicy.com', kind: 'commercial', lean: -0.3, about: "US magazine on international affairs.", feeds: [['https://foreignpolicy.com/feed/', 'world']] },
+  { id: 'nre', name: "National Review", region: 'USA', domain: 'nationalreview.com', kind: 'commercial', lean: 2, about: "US conservative magazine.", feeds: [['https://www.nationalreview.com/feed/', 'world']] },
+  { id: 'wex', name: "Washington Examiner", region: 'USA', domain: 'washingtonexaminer.com', kind: 'commercial', lean: 2, about: "US conservative news site.", feeds: [['https://www.washingtonexaminer.com/feed', 'world']] },
+  { id: 'spe', name: "The Spectator", region: 'UK', domain: 'spectator.co.uk', kind: 'commercial', lean: 1.5, about: "British weekly with a conservative outlook.", feeds: [['https://www.spectator.co.uk/feed', 'world']] },
+  { id: 'vox', name: "Vox", region: 'USA', domain: 'vox.com', kind: 'commercial', lean: -2, about: "US explanatory news site with a progressive outlook.", feeds: [['https://www.vox.com/rss/index.xml', 'world']] },
+  { id: 'mrc', name: "MercoPress", region: 'Uruguay', domain: 'en.mercopress.com', kind: 'independent', lean: 0, about: "South Atlantic and Latin America news agency.", feeds: [['https://en.mercopress.com/rss', 'world']] },
+  { id: 'tmo', name: "The Times (UK)", region: 'UK', domain: 'thetimes.co.uk', kind: 'commercial', lean: 1, about: "British newspaper of record; centre-right.", feeds: [['https://www.thetimes.co.uk/rss/world', 'world']] },
+  { id: 'esp', name: "ESPN", region: 'USA', domain: 'espn.com', kind: 'commercial', lean: null, about: "US sports network.", feeds: [['https://www.espn.com/espn/rss/news', 'sport']] },
+  { id: 'mar', name: "Marca", region: 'Spain', domain: 'marca.com', kind: 'commercial', lean: null, about: "Spanish sports daily.", feeds: [['https://e00-marca.uecdn.es/rss/en/index.xml', 'sport']] },
   // not political: science, technology, good news
   { id: 'nasa', name: 'NASA', region: 'USA', domain: 'nasa.gov', kind: 'agency', lean: null, about: 'The US space agency’s own news.', feeds: [['https://www.nasa.gov/feed/', 'science']] },
   { id: 'sdy', name: 'ScienceDaily', region: 'USA', domain: 'sciencedaily.com', kind: 'independent', lean: null, about: 'Science news compiled from universities and research institutions.', feeds: [['https://www.sciencedaily.com/rss/top.xml', 'science']] },
@@ -237,6 +286,8 @@ const sim = (a, b) => {
   return n / Math.max(1, Math.min(a.size, b.size));
 };
 
+/** the capitalised words in a headline that are not its first: names of people, places, organisations */
+const names = (t) => new Set(t.split(/\s+/).slice(1).map((w) => w.replace(/[^\p{L}\p{N}]/gu, '')).filter((w) => /^\p{Lu}/u.test(w) && w.length > 3).map((w) => w.toLowerCase()));
 async function ogImage(url) {
   try {
     const r = await fetch(url, { headers: { 'User-Agent': UA, Range: 'bytes=0-80000' }, signal: AbortSignal.timeout(12000) });
@@ -279,11 +330,19 @@ async function news() {
   );
   console.log(`  ${ok} feeds read, ${all.length} items`);
   const now = Date.now();
-  const fresh = all.filter((a) => (!a.time || now - a.time < 48 * 3600e3) && !/\b(bulletin|podcast|newsletter|quiz|crossword|horoscope|live blog|watch live|in pictures|live:|as it happened)\b/i.test(a.title));
+  const fresh = all.filter((a) => (!a.time || now - a.time < 48 * 3600e3) && !/\b(bulletin|podcast|newsletter|quiz|crossword|horoscope|live blog|watch live|in pictures|live:|as it happened|editorial|opinion|the guardian view|letters?:|cartoon|obituary)\b/i.test(a.title));
   const clusters = [];
   for (const a of fresh) {
     a.w = words(a.title);
-    const hit = clusters.find((c) => c.items.every((x) => x.src.id !== a.src.id) && c.items.some((x) => sim(x.w, a.w) >= 0.55 && Math.min(x.w.size, a.w.size) >= 3));
+    a.e = names(a.title);
+    const hit = clusters.find((c) => c.items.every((x) => x.src.id !== a.src.id) && c.items.some((x) => {
+      if (Math.min(x.w.size, a.w.size) < 3) return false;
+      const sm = sim(x.w, a.w);
+      if (sm >= 0.55) return true;
+      let shared = 0;
+      for (const w of a.e) if (x.e.has(w)) shared++;
+      return (shared >= 2 && sm >= 0.3) || (shared >= 1 && sm >= 0.42 && a.e.size <= 3);
+    }));
     if (hit) hit.items.push(a);
     else clusters.push({ items: [a] });
   }
@@ -307,14 +366,16 @@ async function news() {
   scored.sort((x, y) => y.score - x.score);
 
   // pictures are checked for the stories in the running, best first, until each topic has what it needs
-  const QUOTA = { world: 16, science: 7, tech: 5, health: 5, culture: 5, environment: 4, sport: 4, business: 4, good: 6 };
+  const QUOTA = { world: 34, science: 10, tech: 8, health: 8, culture: 8, environment: 7, sport: 8, business: 8, good: 8 };
   const take = {};
-  const heavyMax = 15;
+  const heavyMax = 26;
   let heavy = 0;
   const out = [];
   const used = {};
   for (const { c, topic, tone } of scored) {
     if ((take[topic] ?? 0) >= (QUOTA[topic] ?? 1)) continue;
+    // a story told by one outlet only is kept for the topics that are naturally told by one (good news, culture, science)
+    if (c.items.length < (['good', 'culture', 'science'].includes(topic) ? 1 : 2)) continue;
     if (tone === 'heavy' && heavy >= heavyMax) continue;
     const cands = c.items.filter((i) => i.image).sort((a, b) => (b.image.length > 0) - (a.image.length > 0));
     let photo = await bestPhoto(cands.map((i) => ({ image: i.image, from: i.src.name })));
@@ -341,7 +402,7 @@ async function news() {
       tone,
       sources: c.items.map((i) => ({ id: i.src.id, title: i.title, url: i.link })),
     });
-    if (out.length >= 56) break;
+    if (out.length >= 104) break;
   }
   // a good mix, not a block of one kind: topics take turns
   const byTopic = {};

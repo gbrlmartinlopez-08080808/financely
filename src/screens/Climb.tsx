@@ -400,7 +400,7 @@ export function Sling({ level, onEnd }: { level: number; onEnd: (win: boolean, t
           if (s.mode === 'free' && s.started && !s.tongue) {
             const f = s.frog;
             let near: Fly | null = null;
-            let nd = 560;
+            let nd = 380;
             for (const fl of s.flies) {
               if (fl.gone || fl.bee || fl === s.anchor || fl.y < f.y - 30) continue;
               const d2 = Math.hypot(fl.x - f.x, fl.y - f.y - 8);
@@ -414,7 +414,7 @@ export function Sling({ level, onEnd }: { level: number; onEnd: (win: boolean, t
           }
           return;
         }
-        const max = 170 + 330 * power + (s.mode === 'free' ? 80 : 0);
+        const max = 170 + 330 * power + (s.mode === 'free' ? 50 : 0);
         const dir = assist(s, vx / d, -vy / d, max);
         s.tongue = { dx: dir.dx, dy: dir.dy, len: 0, max, out: true };
         tap('medium');
@@ -448,22 +448,22 @@ export function initSling(cfg: ReturnType<typeof slingLevel>, level: number) {
   const leaves: { x0: number; y: number; ph: number; used: number }[] = [];
   let y = 190;
   while (y < cfg.goal + 240) {
-    const n = r() < 0.3 + cfg.bees ? 2 : 1; // bees only ever come as the second fly of a pair: there is always a safe one to catch
+    const n = r() < 0.34 + cfg.bees ? 2 : 1; // bees only ever come as the second fly of a pair: there is always a safe one to catch
     for (let i = 0; i < n; i++) {
       const bee = i > 0 && r() < 0.8;
-      const gold = !bee && i === 0 && r() < 0.1;
+      const gold = !bee && i === 0 && r() < 0.06;
       flies.push({ x0: 0.12 + r() * 0.76, y0: y + i * 40, x: 0, y: y + i * 40, ph: r() * 6, sp: 0.6 + r() * 0.9, amp: cfg.drift * (0.6 + r() * 0.8), bee, gold, gone: 0 });
     }
     // other things to grab or land on: a twig that holds, a dragonfly that sweeps across, a leaf that bounces a fall
-    if (r() < 0.34) {
+    if (r() < 0.2) {
       const ty = y + cfg.gap * (0.35 + r() * 0.3);
       flies.push({ x0: 0.1 + r() * 0.8, y0: ty, x: 0, y: ty, ph: 0, sp: 0, amp: 0, bee: false, gold: false, twig: true, gone: 0 });
     }
-    if (r() < 0.22) {
+    if (r() < 0.16) {
       const dy = y + cfg.gap * (0.2 + r() * 0.6);
       flies.push({ x0: 0.5, y0: dy, x: 0, y: dy, ph: r() * 6, sp: 0.55 + r() * 0.5, amp: 150 + r() * 40, bee: false, gold: false, dragon: true, gone: 0 });
     }
-    if (r() < 0.2) leaves.push({ x0: 0.15 + r() * 0.7, y: y + cfg.gap * (0.5 + r() * 0.3) - 60, ph: r() * 6, used: 0 });
+    if (r() < 0.07) leaves.push({ x0: 0.15 + r() * 0.7, y: y + cfg.gap * (0.5 + r() * 0.3) - 60, ph: r() * 6, used: 0 });
     y += cfg.gap * (0.8 + r() * 0.5);
   }
   return {
@@ -472,7 +472,7 @@ export function initSling(cfg: ReturnType<typeof slingLevel>, level: number) {
     t: 0,
     started: false,
     mode: 'rest' as 'rest' | 'free' | 'rope' | 'won' | 'dead',
-    frog: { x: 180, y: 46, vx: 0, vy: 0 },
+    frog: { x: 180, y: 31, vx: 0, vy: 0 },
     anchor: null as Fly | null,
     L: 0,
     Lt: 0,
@@ -502,7 +502,7 @@ function assist(s: SlingState, dx: number, dy: number, max: number) {
   const ox = f.x;
   const oy = f.y + 8;
   let best: Fly | null = null;
-  let bestA = s.mode === 'free' ? 0.62 : 0.24; // radians
+  let bestA = s.mode === 'free' ? 0.5 : 0.17; // radians
   for (const fl of s.flies) {
     if (fl.gone || fl.bee || fl === s.anchor) continue;
     const vx = fl.x - ox;
@@ -521,6 +521,15 @@ function assist(s: SlingState, dx: number, dy: number, max: number) {
 export const aimTarget = (s: SlingState, dx: number, dy: number, max: number) => assist(s, dx, dy, max).fly;
 
 const G = 1750;
+/** wind: every so often a band of sky (about 190 px high) has a steady wind, one way or the other; 0 outside it */
+export const gust = (s: { t: number }, y: number) => {
+  if (y < 1300) return 0;
+  const band = Math.floor((y - 1300) / 900);
+  const inBand = (y - 1300) % 900 < 190;
+  if (!inBand || band % 2) return 0;
+  const dir = Math.sin(band * 9.7) > 0 ? 1 : -1;
+  return dir * (0.75 + 0.25 * Math.sin(s.t * 1.7 + band));
+};
 /** what the tongue lets go of: a fly wriggles off, a twig just stays where it is */
 const release = (a: Fly) => {
   if (!a.twig) a.gone = 0.01;
@@ -569,7 +578,7 @@ export function stepSling(s: SlingState, cfg: ReturnType<typeof slingLevel>, dtR
       const tx = o.x + tg.dx * tg.len;
       const ty = o.y + tg.dy * tg.len;
       // while Froggy is falling, the tongue is much easier to land
-      const r = s.mode === 'free' ? 1.9 : 1;
+      const r = s.mode === 'free' ? 1.6 : 1;
       // the fly Froggy already hangs from is never in the way of the next shot
       const hit = s.flies.find((fl) => fl.gone === 0 && fl !== s.anchor && Math.hypot(fl.x - tx, fl.y - ty) < (fl.bee ? 20 : (fl.twig ? 30 : 32) * r));
       if (hit) {
@@ -625,7 +634,7 @@ export function stepSling(s: SlingState, cfg: ReturnType<typeof slingLevel>, dtR
     return;
   }
   // physics
-  f.vy -= G * (s.mode === 'free' ? 0.8 : 1) * dt;
+  f.vy -= G * dt;
   if (s.mode === 'rope' && s.anchor) {
     const a = s.anchor;
     s.grab += dt;
@@ -649,6 +658,9 @@ export function stepSling(s: SlingState, cfg: ReturnType<typeof slingLevel>, dtR
       f.vy *= 1 - 0.3 * dt;
     }
   }
+  // gusts: bands of wind that push Froggy sideways while it is in the air
+  const g = gust(s, f.y);
+  if (g) f.vx += g * 300 * dt;
   const py = f.y;
   f.x += f.vx * dt;
   f.y += f.vy * dt;
@@ -738,6 +750,22 @@ function drawSling(c: CanvasRenderingContext2D, k: Ink, s: SlingState, cfg: Retu
       pad(c, k, s.leaf.x, Y(40 - e * 10), 84, 1, undefined, 0.7 + 0.3 * ease.out(Math.min(1, e * 4)));
       c.globalAlpha = 1;
     }
+  }
+  // wind bands
+  for (let by = Math.max(0, Math.floor((s.cam - 1300) / 900)); 1300 + by * 900 < s.cam + H + 200; by++) {
+    if (by % 2) continue;
+    const y0 = 1300 + by * 900;
+    const dir = Math.sin(by * 9.7) > 0 ? 1 : -1;
+    for (let k2 = 0; k2 < 5; k2++) {
+      const yy = Y(y0 + 25 + k2 * 36);
+      if (yy < -20 || yy > H + 20) continue;
+      const x = ((((s.t * 90 * dir + k2 * 83) % (W + 80)) + W + 80) % (W + 80)) - 40;
+      c.globalAlpha = 0.42;
+      text(c, dir > 0 ? '~~~>' : '<~~~', x, yy, CO.blue, mono(13, 500));
+    }
+    c.globalAlpha = 0.55;
+    text(c, dir > 0 ? 'wind →' : '← wind', W - 40, Y(y0 + 190) + 10, k.muted, mono(10, 500));
+    c.globalAlpha = 1;
   }
   // leaves floating in the air: a safety net
   for (const lf of s.leaves) {
@@ -900,7 +928,7 @@ interface Lily {
 }
 type Note =
   | { kind: 'info'; tag: string; line: string }
-  | { kind: 'rank'; name: string; tier: string; rank: number; of: number; points: number; gain: number; rare: string[] };
+  | { kind: 'rank'; streak?: number; name: string; tier: string; rank: number; of: number; points: number; gain: number; rare: string[] };
 
 /** how rare an answer was, as the long tail every list of names has: many bars on the left (the familiar), few on the right; the answer's own bar lit */
 function RankCard({ n }: { n: Extract<Note, { kind: 'rank' }> }) {
@@ -926,7 +954,9 @@ function RankCard({ n }: { n: Extract<Note, { kind: 'rank' }> }) {
         <span>
           #{n.rank} of {n.of}
         </span>
-        <b>+{n.gain} m</b>
+        <b>
+          +{n.gain} m{n.streak ? ` · streak +${n.streak}%` : ''}
+        </b>
       </div>
       <p>Rarest of all: {n.rare.join(', ')}.</p>
     </div>
@@ -939,6 +969,9 @@ export function Deep({ level, onEnd }: { level: number; onEnd: (win: boolean, te
   const [answer, setAnswer] = useState('');
   const [note, setNote] = useState<null | Note>(null);
   const [slack, setSlack] = useState(cfg.slack);
+  const [streak, setStreak] = useState(0);
+  const [hints, setHints] = useState(1);
+  const [hint, setHint] = useState('');
   const [m, setM] = useState(0);
   const used = useRef<string[]>([]);
   const done = useRef(false);
@@ -966,13 +999,14 @@ export function Deep({ level, onEnd }: { level: number; onEnd: (win: boolean, te
     const p = pickPrompt(Math.random, [...used.current, ...recent]);
     used.current.push(p.id);
     try {
-      localStorage.setItem('deep:recent', JSON.stringify([...recent, p.id].slice(-70)));
+      localStorage.setItem('deep:recent', JSON.stringify([...recent, p.id].slice(-600)));
     } catch {
       /* private mode */
     }
     setPrompt(p);
     setAnswer('');
     setNote(null);
+    setHint('');
   };
   useEffect(() => {
     const t = setTimeout(ask, 500);
@@ -1000,14 +1034,17 @@ export function Deep({ level, onEnd }: { level: number; onEnd: (win: boolean, te
       return slip('Froggy could not place that, and the tongue went limp.');
     }
     const top = cfg.goal * PPM;
-    const to = Math.min(top, S.frogY + Math.max(8, r.points) * PPM);
+    // answers that are rare in a row are worth more and more: +20% for each, up to +60%
+    const bonus = streak > 0 ? 1 + 0.2 * Math.min(3, streak) : 1;
+    const to = Math.min(top, S.frogY + Math.round(Math.max(8, r.points) * bonus) * PPM);
+    setStreak(r.points >= 50 ? streak + 1 : 0);
     const gain = Math.round((to - S.frogY) / PPM);
     const col = TIER_COLOR[r.tier] ?? TIER_COLOR.common;
     S.anim = { kind: 'soar', t0: S.t, from: S.frogY, to, apex: to + 150, ok: true, col };
     S.mood = 'bigSmile';
     setPrompt(null);
     tap('medium');
-    setNote({ kind: 'rank', name: r.name ?? answer.trim(), tier: r.tier, rank: r.rank ?? 0, of: r.of, points: r.points, gain, rare: deepestOf(prompt, 3) });
+    setNote({ kind: 'rank', streak: bonus > 1 ? Math.round((bonus - 1) * 100) : 0, name: r.name ?? answer.trim(), tier: r.tier, rank: r.rank ?? 0, of: r.of, points: r.points, gain, rare: deepestOf(prompt, 3) });
   };
 
   const cv = useStage((c, W, H, dt, k) => {
@@ -1150,7 +1187,7 @@ export function Deep({ level, onEnd }: { level: number; onEnd: (win: boolean, te
         <span>
           {m} m of {cfg.goal} m
         </span>
-        <span>{slack < cfg.slack ? `${slack} forgiven left` : ''}</span>
+        <span>{streak > 0 ? `streak ×${streak}` : slack < cfg.slack ? `${slack} forgiven left` : ''}</span>
         <span>{Math.round((m / cfg.goal) * 100)}%</span>
       </div>
       <div className="stage short">
@@ -1174,6 +1211,24 @@ export function Deep({ level, onEnd }: { level: number; onEnd: (win: boolean, te
                 <Icon name="up" size={18} stroke={2.4} />
               </button>
             </form>
+            <div className="deep-help mono">
+              {hint ? (
+                <span>{hint}</span>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!hints}
+                  onClick={() => {
+                    const pick = prompt.a[Math.min(prompt.a.length - 1, Math.floor(prompt.a.length * 0.55))].split('|')[0];
+                    setHint(`something like “${pick[0]}…” (${pick.length} letters)`);
+                    setHints(hints - 1);
+                  }}
+                >
+                  {hints ? 'a hint (one per climb)' : 'no hints left'}
+                </button>
+              )}
+              <span>{used.current.length} questions so far</span>
+            </div>
           </>
         )}
         {note?.kind === 'rank' && <RankCard n={note} />}
@@ -1209,7 +1264,7 @@ export function Pick({ onPick, levels, inline = false }: { onPick: (v: 'sling' |
     reeds(c, k, W, Y(0), H, S.t);
     pad(c, k, W / 2, Y(18), 120);
     const fx = W / 2;
-    const fy = Y(46) + 4;
+    const fy = Y(31) + 4;
     const sh = S.shot;
     const e = sh ? S.t - sh.t0 : 0;
     // the little chevrons that say "look up"

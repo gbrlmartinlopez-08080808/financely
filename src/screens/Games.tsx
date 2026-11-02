@@ -39,7 +39,7 @@ export function Play() {
   const won = freeze.blockDay === dayKey();
   return (
     <div className="int-scroll">
-      <div className="tcard play-hero">
+      <div className="play-hero flat">
         <div className="play-top">
           <Froggy mood={won ? 'smug' : 'happy'} size="sm" />
           <div>
@@ -60,19 +60,55 @@ export function Play() {
         </div>
       </div>
 
-      <div className="tcard pick-card">
-        <span className="tag mono">the climb · try as often as you like</span>
-        <h3>Froggy has to get up</h3>
-        <p>It waits on its lily pad. Tap the way up it should take — it can fall either way, and only the top counts.</p>
-        <Pick key={run ? 1 : 0} inline levels={levels} onPick={setRun} />
-      </div>
+      <Pick key={run ? 1 : 0} inline levels={levels} onPick={setRun} />
       <p className="int-foot mono">· · ·{'\n'}unlimited tries · the top is the only way to a block, one a day</p>
       {run && <Run variant={run} onClose={() => setRun(null)} />}
     </div>
   );
 }
 
+const INTRO: Record<Variant, { title: string; art: string; steps: string[] }> = {
+  sling: {
+    title: 'Sling',
+    art: '   \\x/        /x\\\n     (@) ~~~~~> \\x/\n     (  v  )',
+    steps: ['Put your thumb anywhere and pull back, like a sling. Let go: the tongue flies the other way.', 'Stick to a fly and Froggy swings. Let go and shoot the next one before the fly wriggles free (the ring shows how long).', 'Falling? Just tap: the tongue grabs the nearest thing. Avoid the bees, and look for twigs, leaves, dragonflies and wind.'],
+  },
+  deep: {
+    title: 'Deep cuts',
+    art: '    .--.\n   ( ?? )   ^\n    `--´   /|\\\n   (@) (@)',
+    steps: ['You get a question with many right answers: name a country, a bird, a battle…', 'The rarer your answer, the higher the tongue soars, and Froggy follows it to a new lily. Common answers barely lift it.', 'Wrong or unknown answers are forgiven a few times. Time out and Froggy slips. Rare answers in a row build a streak.'],
+  },
+};
+function Intro({ variant, onGo }: { variant: Variant; onGo: () => void }) {
+  const t = INTRO[variant];
+  return (
+    <div className="game-intro">
+      <pre className="mono" aria-hidden>
+        {t.art}
+      </pre>
+      <h2>{t.title}</h2>
+      <ol>
+        {t.steps.map((x) => (
+          <li key={x}>{x}</li>
+        ))}
+      </ol>
+      <button className="pill" onClick={onGo}>
+        Let’s climb
+      </button>
+    </div>
+  );
+}
+const introKey = (v: Variant) => `game:intro:${v}`;
+const seenIntro = (v: Variant) => {
+  try {
+    return !!localStorage.getItem(introKey(v));
+  } catch {
+    return true;
+  }
+};
+
 function Run({ variant, onClose }: { variant: Variant; onClose: () => void }) {
+  const [intro, setIntro] = useState(() => !seenIntro(variant));
   const [lv, setLv] = useState<number | null>(null);
   const [round, setRound] = useState(0);
   const [result, setResult] = useState<null | { win: boolean; text: string; block?: string; fresh: number; freeze: boolean }>(null);
@@ -117,7 +153,20 @@ function Run({ variant, onClose }: { variant: Variant; onClose: () => void }) {
         <b>{variant === 'sling' ? 'Sling' : 'Deep cuts'}</b>
         <span className="mono">level {lv ?? 1}</span>
       </header>
-      {lv !== null && !result && (variant === 'sling' ? <Sling key={round} level={lv} onEnd={finish} /> : <Deep key={round} level={lv} onEnd={finish} />)}
+      {intro && (
+        <Intro
+          variant={variant}
+          onGo={() => {
+            try {
+              localStorage.setItem(introKey(variant), '1');
+            } catch {
+              /* private mode */
+            }
+            setIntro(false);
+          }}
+        />
+      )}
+      {!intro && lv !== null && !result && (variant === 'sling' ? <Sling key={round} level={lv} onEnd={finish} /> : <Deep key={round} level={lv} onEnd={finish} />)}
       {result && (
         <div className="game-end">
           <Froggy mood={result.win ? 'bigSmile' : 'sad'} size="lg" />

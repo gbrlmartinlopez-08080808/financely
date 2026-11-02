@@ -68,6 +68,9 @@ export function speechText(raw: string, lang = 'en'): string {
     .replace(/(\p{L})[-\u2010\u2011]\s*\n\s*(\p{Ll})/gu, '$1$2') // a word broken at the end of a line
     .replace(/\[\s*\d+(?:\s*[,–-]\s*\d+)*\s*\]/g, '')
     .replace(/\(\s*(?:[A-Z][\p{L}'’.\- ]+(?:,| and | & )[^()]{0,60}?\d{4}[a-z]?;?\s*)+\)/gu, '')
+    .replace(/[(\[]\s*[\p{Lu}][\p{L}'’\-]+(?:\s+(?:and|&|y|et|und|e)\s+[\p{Lu}][\p{L}'’\-]+|\s+et al\.?)?,?\s*(?:19|20)\d{2}[a-z]?(?:\s*[,;:]\s*(?:pp?\.\s*)?[\d–-]+|\s*;\s*[^()\[\]]{0,50}?(?:19|20)\d{2}[a-z]?)*\s*[)\]]/gu, '') // (Smith 2020; Lee et al., 2019, p. 4)
+    .replace(/[(\[]\s*\d{1,3}(?:\s*[,–-]\s*\d{1,3})*\s*[)\]](?=[\s.,;:]|$)/g, '') // (12) [3–5] reference numbers
+    .replace(/([.,;:!?”"’')])\^?\d{1,3}(?=\s+\p{Lu}|\s*$)/gu, '$1') // a footnote number stuck to the word before it
     .replace(/https?:\/\/\S+|www\.\S+/g, 'link')
     .replace(/\b[\w.+-]+@[\w-]+\.[\w.-]+\b/g, 'email address')
     .replace(/\bi\.e\./gi, 'that is')
@@ -200,6 +203,59 @@ export async function speak(text: string, opts: SpeakOpts, onBoundary?: (charInd
       }
     }, 10000);
   });
+}
+
+/** A piece of speech handed to the engine ahead of time: it is spoken the moment the one before it ends, with no gap. */
+export interface Queued {
+  done: Promise<'done' | 'stopped'>;
+  /** start listening for the word being spoken (do this when it is this piece's turn, not before) */
+  on: (cb: (charIndex: number) => void) => void;
+  off: () => void;
+}
+export async function queueSpeak(text: string, opts: SpeakOpts, add: boolean): Promise<Queued> {
+  const voices = await listVoices();
+  const v = voices.find((x) => x.id === opts.voice);
+  let handle: { remove: () => void } | undefined;
+  let cb: ((i: number) => void) | undefined;
+  if (isNative) {
+    const { TextToSpeech } = await loadNative();
+    if (!add) stoppedFlag = false;
+    const done = TextToSpeech.speak({ text, lang: v?.lang ?? opts.lang ?? 'en-US', rate: opts.rate, pitch: opts.pitch, volume: 1, voice: v?.index, category: 'playback', queueStrategy: add ? 1 : 0 }).then(
+      () => (stoppedFlag ? 'stopped' : 'done') as 'done' | 'stopped',
+      () => 'stopped' as const,
+    );
+    return {
+      done,
+      on: (f) => {
+        cb = f;
+        TextToSpeech.addListener('onRangeStart', (e: { start: number }) => cb?.(e.start))
+          .then((h) => {
+            handle = h;
+            if (!cb) h.remove();
+          })
+          .catch(() => {});
+      },
+      off: () => {
+        cb = undefined;
+        handle?.remove();
+      },
+    };
+  }
+  const synth = window.speechSynthesis;
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = opts.rate;
+  u.pitch = opts.pitch;
+  const wv = synth.getVoices().find((x) => x.voiceURI === opts.voice);
+  if (wv) u.voice = wv;
+  else if (opts.lang) u.lang = opts.lang;
+  u.onboundary = (e) => cb?.(e.charIndex);
+  const done = new Promise<'done' | 'stopped'>((resolve) => {
+    u.onend = () => resolve(stoppedFlag ? 'stopped' : 'done');
+    u.onerror = () => resolve('stopped');
+  });
+  if (!add) stoppedFlag = false;
+  synth.speak(u);
+  return { done, on: (f) => (cb = f), off: () => (cb = undefined) };
 }
 
 let stoppedFlag = false;

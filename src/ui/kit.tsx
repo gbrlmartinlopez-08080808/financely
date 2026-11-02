@@ -142,14 +142,18 @@ export function Segmented<T extends string>({
   onChange,
   light,
   className,
+  onHold,
 }: {
   value: T;
   options: { value: T; label: ReactNode; aria?: string }[];
   onChange: (v: T) => void;
   light?: boolean;
   className?: string;
+  /** a long press on a tab (the tap that follows it is ignored) */
+  onHold?: (v: T) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const hold = useRef({ t: 0, fired: false });
   const [thumb, setThumb] = useState<{ x: number; w: number } | null>(null);
   const idx = options.findIndex((o) => o.value === value);
   useLayoutEffect(() => {
@@ -175,7 +179,25 @@ export function Segmented<T extends string>({
           aria-selected={o.value === value}
           aria-label={o.aria}
           className={o.value === value ? 'on' : ''}
+          onPointerDown={() => {
+            if (!onHold) return;
+            hold.current.fired = false;
+            clearTimeout(hold.current.t);
+            hold.current.t = window.setTimeout(() => {
+              hold.current.fired = true;
+              tap('medium');
+              onHold(o.value);
+            }, 480);
+          }}
+          onPointerUp={() => clearTimeout(hold.current.t)}
+          onPointerLeave={() => clearTimeout(hold.current.t)}
+          onPointerCancel={() => clearTimeout(hold.current.t)}
+          onContextMenu={(e) => onHold && e.preventDefault()}
           onClick={() => {
+            if (hold.current.fired) {
+              hold.current.fired = false;
+              return;
+            }
             if (o.value !== value) tap('select');
             onChange(o.value);
           }}

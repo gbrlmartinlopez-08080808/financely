@@ -793,6 +793,14 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
 
   const toggleListen = (v: 'read' | 'listen') => {
     if (v === 'listen') {
+      if (paged) {
+        // Listen follows the text down the page; with turning pages it would have nothing steady to follow
+        toast('Listen works with scrolling. Switch to scrolling →', undefined, () => {
+          updateSettings({ pageFlip: false });
+          setTimeout(() => toggleListen('listen'), 700);
+        });
+        return;
+      }
       if (isPdf && !liq.ready) {
         // Listen reads the whole Liquid view, which is still being made
         toast(liq.error || liq.none ? 'Listen needs the Liquid view, which isn’t available for this PDF' : `Listen opens when Liquid is ready · ${Math.round(liq.progress * 100)}%`);
@@ -855,6 +863,7 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
 
   const listenFromSelection = () => {
     const root = flowRef.current;
+    if (paged) return toast('Listen works with scrolling, not turning pages');
     const sel = window.getSelection();
     if (!root || !sel?.rangeCount) return;
     wrapSentences(root);
@@ -1064,6 +1073,7 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
   const toggleLayout = () => {
     tap('select');
     const next = !settings.pageFlip;
+    if (next && listen) setListen(false); // turning pages and listening do not go together
     updateSettings({ pageFlip: next });
     toast(next ? 'Turning pages' : 'Scrolling');
   };

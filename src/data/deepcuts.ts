@@ -3,6 +3,7 @@
 // the rank, and the score follows Zipf's law (the common answers are crowded at the top, the rare ones trail off in a long tail).
 // Variants of a name are given after "|".
 import { MORE } from './deepcuts2';
+import { MORE2 } from './deepcuts3';
 export interface Prompt {
   id: string;
   q: string;
@@ -94,7 +95,7 @@ const BASE: Prompt[] = [
   },
 ];
 
-export const PROMPTS: Prompt[] = [...BASE, ...MORE];
+export const PROMPTS: Prompt[] = [...BASE, ...MORE, ...MORE2];
 
 const firstLetter = (e: string) => fold(e.split('|')[0]).replace(/[^a-z]/g, '')[0] ?? '';
 /**
@@ -107,7 +108,7 @@ export function pickPrompt(rand: () => number, avoid: string[] = []): Prompt {
     if (rand() < 0.45 && base.a.length >= 30) {
       const count: Record<string, number> = {};
       for (const e of base.a) count[firstLetter(e)] = (count[firstLetter(e)] ?? 0) + 1;
-      const letters = Object.keys(count).filter((c) => c && count[c] >= 6);
+      const letters = Object.keys(count).filter((c) => c && count[c] >= 5);
       if (letters.length) {
         const c = letters[Math.floor(rand() * letters.length)];
         const id = `${base.id}:${c}`;
