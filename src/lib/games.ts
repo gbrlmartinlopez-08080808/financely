@@ -3,9 +3,8 @@
 //     from fly to fly (a missed grab means falling — into the water, if nothing catches it);
 //   • deep cuts — name something rare: the tongue soars as high as the answer is rare, Froggy follows it and lands on a lily
 //     that floats there for a while (a slip drops it back down).
-// Only reaching the top counts: that is the block. Two tries a day. Everything is made on the phone.
+// Only reaching the top counts: that is the block. Unlimited tries (a block is still earned once a day). Everything is made on the phone.
 import * as db from './db';
-import { dayKey } from './store';
 
 export type Variant = 'sling' | 'deep';
 export type Levels = Record<Variant, number>;
@@ -15,19 +14,6 @@ export async function getLevels(): Promise<Levels> {
   return { sling: l?.sling ?? 1, deep: l?.deep ?? 1 };
 }
 export const setLevels = (l: Levels) => db.put('kv', 'games2', l);
-
-/** two tries a day, whether they were won or lost */
-export const TRIES_PER_DAY = 2;
-export async function triesLeft(): Promise<number> {
-  const u = await db.get<{ day: string; n: number }>('kv', 'gtries').catch(() => undefined);
-  return Math.max(0, TRIES_PER_DAY - (u && u.day === dayKey() ? u.n : 0));
-}
-export async function spendTry(): Promise<number> {
-  const u = await db.get<{ day: string; n: number }>('kv', 'gtries').catch(() => undefined);
-  const n = (u && u.day === dayKey() ? u.n : 0) + 1;
-  await db.put('kv', 'gtries', { day: dayKey(), n });
-  return Math.max(0, TRIES_PER_DAY - n);
-}
 
 /** a small seeded random generator: the same level on the same day is the same game, a different level is a different one */
 export function rng(seed: number) {

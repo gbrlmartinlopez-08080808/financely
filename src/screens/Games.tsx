@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { dayKey, earnBlock, freezeStatus, useStore } from '../lib/store';
-import { getLevels, setLevels, spendTry, triesLeft, TRIES_PER_DAY, type Variant } from '../lib/games';
+import { getLevels, setLevels, type Variant } from '../lib/games';
 import { onBack } from '../lib/native';
 import { Icon } from '../ui/Icon';
 import { Froggy } from '../ui/Froggy';
@@ -37,11 +37,9 @@ export function Play() {
   const freeze = useStore((s) => s.freeze);
   const fz = freezeStatus(freeze);
   const [levels, setLv] = useState({ sling: 1, deep: 1 });
-  const [tries, setTries] = useState(TRIES_PER_DAY);
   const [run, setRun] = useState<Variant | null>(null);
   useEffect(() => {
     getLevels().then(setLv);
-    triesLeft().then(setTries);
   }, [run]);
   const won = freeze.blockDay === dayKey();
   return (
@@ -69,13 +67,13 @@ export function Play() {
 
       <div className="tcard climb-card">
         <pre className="game-art" aria-hidden>{`       \\ | /\n       -(*)-\n   x       (_____)\n  \\x/\n     (@) (@)\n     (  v  )  ~~~`}</pre>
-        <span className="tag mono">the climb · {tries > 0 ? `${tries} of ${TRIES_PER_DAY} tries left today` : 'no tries left today — back tomorrow'}</span>
+        <span className="tag mono">the climb · try as often as you like</span>
         <h3>Froggy has to get up</h3>
         <p>It starts on a lily pad in the water. Choose how it climbs. It can fall either way, and only the top counts.</p>
         <ul className="ways2">
           {WAYS.map((w) => (
             <li key={w.id}>
-              <button disabled={tries <= 0} onClick={() => setRun(w.id)}>
+              <button onClick={() => setRun(w.id)}>
                 <span>
                   <b>{w.title}</b>
                   <small className="mono">level {levels[w.id]}</small>
@@ -87,7 +85,7 @@ export function Play() {
           ))}
         </ul>
       </div>
-      <p className="int-foot mono">· · ·{'\n'}two tries a day · the top is the only way to a block</p>
+      <p className="int-foot mono">· · ·{'\n'}unlimited tries · the top is the only way to a block, one a day</p>
       {run && <Run variant={run} onClose={() => setRun(null)} />}
     </div>
   );
@@ -96,18 +94,10 @@ export function Play() {
 function Run({ variant, onClose }: { variant: Variant; onClose: () => void }) {
   const [lv, setLv] = useState<number | null>(null);
   const [round, setRound] = useState(0);
-  const [tries, setTries] = useState(0);
   const [result, setResult] = useState<null | { win: boolean; text: string; block?: string; fresh: number; freeze: boolean }>(null);
-  const spent = useRef(-1);
   useEffect(() => {
     getLevels().then((l) => setLv(l[variant]));
   }, [variant]);
-  // a try is spent the moment a climb starts
-  useEffect(() => {
-    if (lv === null || spent.current === round || result) return;
-    spent.current = round;
-    spendTry().then(setTries);
-  }, [lv, round, result]);
   useEffect(() => onBack(() => (onClose(), true)), [onClose]);
 
   const finish = useCallback(
@@ -133,8 +123,7 @@ function Run({ variant, onClose }: { variant: Variant; onClose: () => void }) {
     },
     [variant],
   );
-  const again = async () => {
-    if ((await triesLeft()) <= 0) return;
+  const again = () => {
     setResult(null);
     setRound((n) => n + 1);
   };
@@ -146,7 +135,7 @@ function Run({ variant, onClose }: { variant: Variant; onClose: () => void }) {
         </button>
         <b>{variant === 'sling' ? 'Sling' : 'Deep cuts'}</b>
         <span className="mono">
-          level {lv ?? 1} · {tries} left today
+          level {lv ?? 1}
         </span>
       </header>
       {lv !== null && !result && (variant === 'sling' ? <Sling key={round} level={lv} onEnd={finish} /> : <Deep key={round} level={lv} onEnd={finish} />)}
@@ -160,8 +149,8 @@ function Run({ variant, onClose }: { variant: Variant; onClose: () => void }) {
           {!result.win && <p className="blockmsg mono">no block — only the top counts</p>}
           <Blocks n={Math.min(4, freezeStatus().blocks)} fresh={result.fresh} big />
           <div className="det-act" style={{ justifyContent: 'center' }}>
-            <button className="pill" onClick={again} disabled={tries <= 0}>
-              {tries > 0 ? (result.win ? 'Climb again' : 'Try again') : 'No tries left today'}
+            <button className="pill" onClick={again}>
+              {result.win ? 'Climb again' : 'Try again'}
             </button>
             <button className="pill ghost" onClick={onClose}>
               Done
