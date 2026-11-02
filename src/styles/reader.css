@@ -1671,3 +1671,28 @@
 .reader-scroll.paged.flipping::after {
   display: none;
 }
+
+/* the sheet that turns: a little smaller than the screen, edges and shadow visible */
+.curl-desk {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: color-mix(in srgb, var(--r-bg) 90%, var(--r-ink) 10%);
+  animation: deskIn 0.18s ease-out backwards;
+}
+.curl-desk > i {
+  position: absolute;
+  inset: 14px;
+  border-radius: 22px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--r-ink) 10%, transparent), 0 8px 24px rgba(0, 0, 0, 0.16);
+}
+@keyframes deskIn {
+  from {
+    opacity: 0;
+  }
+}
+.curl-front,
+.curl-under,
+.curl-flapwrap {
+  border-radius: 0;
+}

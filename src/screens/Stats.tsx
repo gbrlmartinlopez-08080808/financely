@@ -379,7 +379,13 @@ export function StatsBubble({ open, onClose, reward, onRewardDone }: { open: boo
                   <div className="k">freeze day</div>
                   <div className="v mono">
                     {fz.available > 0 ? 'ready' : 'used'}
-                    <small>{fz.bonus > 0 ? `+${fz.bonus} earned` : fz.weekly ? 'resets Monday' : 'back Monday'}</small>
+                    <small>{fz.bonus > 0 ? `+${fz.bonus} won` : fz.weekly ? 'back every 15 days' : `back in ${fz.back} day${fz.back === 1 ? '' : 's'}`}</small>
+                  </div>
+                  <div className="blocks5" aria-label={`${fz.blocks} of 5 blocks toward another freeze day`}>
+                    {[0, 1, 2, 3, 4].map((i) => (
+                      <i key={i} className={i < fz.blocks ? 'on' : ''} />
+                    ))}
+                    <small className="mono">{fz.blocks}/5 · win games for more</small>
                   </div>
                 </div>
               </div>

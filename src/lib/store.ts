@@ -12,11 +12,13 @@ interface State {
   freeze: FreezeState;
 }
 
-/** One free "freeze day" per week keeps a streak alive over a missed day; more can be earned. */
+/** One free "freeze day" (it comes back 15 days after it is used) keeps a streak alive over a missed day; more are won in the games: five blocks make one. */
 export interface FreezeState {
   used: string[]; // days a freeze was spent on (they bridge the streak without adding to it)
   paid?: string[]; // the subset of `used` that was paid for from the bonus
-  bonus: number; // extra freezes earned (e.g. for sending feedback)
+  bonus: number; // extra freezes earned (feedback, or five blocks from the games)
+  blocks?: number; // blocks won toward the next freeze day (0–4)
+  blockDay?: string; // the day the last block was won (one block a day)
 }
 
 let state: State = { ready: false, docs: [], settings: DEFAULT_SETTINGS, days: {}, hours: {}, freeze: { used: [], bonus: 0 } };
@@ -64,7 +66,7 @@ export async function init() {
     settings: merged,
     days: Object.fromEntries(dayEntries),
     hours: hours ?? {},
-    freeze: { used: freeze?.used ?? [], paid: freeze?.paid ?? [], bonus: freeze?.bonus ?? 0 },
+    freeze: { used: freeze?.used ?? [], paid: freeze?.paid ?? [], bonus: freeze?.bonus ?? 0, blocks: freeze?.blocks ?? 0, blockDay: freeze?.blockDay },
   });
   applyFreeze();
 }
@@ -182,11 +184,37 @@ const weekOf = (d: Date) => {
   return dayKey(x);
 };
 
-/** Is this week's own freeze still unspent? Freezes paid for from the earned bonus don't count against it. */
+/** Days a free freeze takes to come back after it was used. */
+export const FREEZE_DAYS = 15;
+const daysBetween = (a: Date, b: Date) => Math.floor((Date.UTC(a.getFullYear(), a.getMonth(), a.getDate()) - Date.UTC(b.getFullYear(), b.getMonth(), b.getDate())) / 864e5);
+
+/**
+ * Is the free freeze day ready? It is used once, and comes back 15 days after that. Freezes paid for from the won bonus
+ * (blocks from the games, feedback) do not count against it.
+ */
 export function freezeStatus(f: FreezeState = state.freeze) {
-  const thisWeek = weekOf(new Date());
-  const weekly = !f.used.some((k) => !(f.paid ?? []).includes(k) && weekOf(parseDay(k)) === thisWeek);
-  return { weekly, bonus: f.bonus, available: (weekly ? 1 : 0) + f.bonus };
+  const own = f.used.filter((k) => !(f.paid ?? []).includes(k)).map(parseDay);
+  const last = own.length ? own.reduce((a, b) => (a > b ? a : b)) : null;
+  const since = last ? daysBetween(new Date(), last) : Infinity;
+  const weekly = since >= FREEZE_DAYS; // (kept under its old name: "the free one is ready")
+  return { weekly, back: weekly ? 0 : FREEZE_DAYS - since, bonus: f.bonus, available: (weekly ? 1 : 0) + f.bonus, blocks: f.blocks ?? 0 };
+}
+
+/**
+ * Winning a game level earns one block (one a day). Five blocks make a freeze day.
+ * Returns what happened, so the screen can say it.
+ */
+export function earnBlock(): { ok: boolean; blocks: number; freeze: boolean; reason?: string } {
+  const f = state.freeze;
+  const today = dayKey();
+  if (f.blockDay === today) return { ok: false, blocks: f.blocks ?? 0, freeze: false, reason: 'You already won today’s block — come back tomorrow for another.' };
+  const blocks = (f.blocks ?? 0) + 1;
+  if (blocks >= 5) {
+    saveFreeze({ ...f, blocks: 0, blockDay: today, bonus: f.bonus + 1 });
+    return { ok: true, blocks: 0, freeze: true };
+  }
+  saveFreeze({ ...f, blocks, blockDay: today });
+  return { ok: true, blocks, freeze: false };
 }
 
 /** If yesterday was missed but the streak was alive before it, spend a freeze on it (once, automatically). */
@@ -205,7 +233,7 @@ export function applyFreeze() {
   if (!st.available) return;
   const next: FreezeState = st.weekly
     ? { ...freeze, used: [...freeze.used, yk] }
-    : { used: [...freeze.used, yk], paid: [...(freeze.paid ?? []), yk], bonus: freeze.bonus - 1 };
+    : { ...freeze, used: [...freeze.used, yk], paid: [...(freeze.paid ?? []), yk], bonus: freeze.bonus - 1 };
   saveFreeze(next);
   // let the screen settle first, so the toast isn't missed
   setTimeout(() => window.dispatchEvent(new CustomEvent('quire:freeze', { detail: { day: yk } })), 1800);

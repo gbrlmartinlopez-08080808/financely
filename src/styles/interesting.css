@@ -78,6 +78,7 @@
   display: grid;
   align-content: start;
   grid-auto-rows: max-content;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   padding: 6px 12px calc(var(--safe-b) + 28px);
 }
@@ -1342,4 +1343,272 @@ button.tcard:active {
 }
 .icard.classic {
   left: calc(50% - 122px);
+}
+
+.int-foot {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  padding: 0 10px;
+}
+.rrow,
+.rtext,
+.tcard {
+  min-width: 0;
+}
+.topics.inline {
+  margin: 0 -12px;
+  padding: 0 12px 4px;
+}
+
+/* ------------------------------------------------------------------ play: blocks, games */
+.blocks5 {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.blocks5 i {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+  transition: background 0.3s, transform 0.3s var(--spring);
+}
+.blocks5 i.on {
+  background: var(--ink-2);
+  transform: scale(1.06);
+}
+.blocks5.big i {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+}
+.blocks5 small {
+  margin-left: 8px;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.tile .blocks5 {
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.play-hero {
+  padding: 18px 18px 16px;
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+.play-top {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.play-top .froggy {
+  padding: 8px 12px 6px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink-2);
+}
+.play-top div {
+  display: grid;
+  gap: 2px;
+}
+.play-top b {
+  font-size: 17px;
+}
+.play-top .mono,
+.play-hero > p {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0;
+}
+.play-freeze {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  width: 100%;
+}
+.play-freeze small {
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.game-card {
+  padding: 16px 18px 16px;
+  display: grid;
+  gap: 6px;
+}
+.game-card h3 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+.game-card p {
+  margin: 0;
+  font: 400 15.5px/1.4 var(--serif);
+  color: var(--ink-2);
+}
+.game-art {
+  margin: 0 0 6px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font: 600 13px/1.2 var(--mono);
+  color: var(--ink-2);
+  overflow: hidden;
+}
+.game {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--safe-t);
+  animation: intIn 0.3s var(--ease);
+}
+.game > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 14px 8px;
+}
+.game > header b {
+  flex: 1;
+  font-size: 17px;
+}
+.game > header .mono {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.game-x {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.game-hud {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--ink-2);
+  padding: 4px 22px 10px;
+}
+.frog-game,
+.mind-game {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: calc(var(--safe-b) + 16px);
+}
+.frog-field {
+  margin: 0 12px;
+  padding: 14px 6px;
+  border-radius: 26px;
+  background: color-mix(in srgb, var(--ink) 4%, var(--surface));
+  box-shadow: inset 0 0 0 1px var(--line);
+  font: 600 min(3.45vw, 14.4px) / 1.28 var(--mono);
+  color: var(--ink-2);
+  text-align: center;
+  touch-action: manipulation;
+  user-select: none;
+  overflow: hidden;
+  flex: none;
+  letter-spacing: 0;
+}
+.game-tip {
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--muted);
+  padding: 12px 24px;
+}
+.mind-q {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+  padding: 6px 22px 12px;
+}
+.mind-q .froggy {
+  padding: 8px 12px 6px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink-2);
+}
+.mind-q h2 {
+  margin: 0;
+  font: 500 24px/1.25 var(--serif);
+  white-space: pre-line;
+  animation: rise 0.35s var(--ease);
+}
+.mind-opts {
+  display: grid;
+  gap: 10px;
+  padding: 6px 16px;
+}
+.mind-opts button {
+  text-align: left;
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow), inset 0 0 0 1px var(--line);
+  font-size: 17px;
+  transition: transform 0.15s, background 0.25s, opacity 0.25s;
+}
+.mind-opts button:active:not(:disabled) {
+  transform: scale(0.985);
+}
+.mind-opts button.right {
+  background: color-mix(in srgb, #3c9d5d 18%, var(--surface));
+}
+.mind-opts button.wrong {
+  background: color-mix(in srgb, #c4503a 16%, var(--surface));
+}
+.mind-opts button.dim {
+  opacity: 0.45;
+}
+.mind-after {
+  padding: 12px 22px;
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+.mind-after p {
+  margin: 0;
+  font: 400 16px/1.4 var(--serif);
+  color: var(--ink-2);
+}
+.game-end {
+  flex: 1;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 14px;
+  padding: 0 30px calc(var(--safe-b) + 30px);
+  text-align: center;
+}
+.game-end .froggy {
+  padding: 14px 24px 10px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink-2);
+}
+.game-end h2 {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+}
+.game-end p {
+  margin: 0;
+  color: var(--ink-2);
+  font: 400 16px/1.4 var(--serif);
+}
+.game-end .blockmsg {
+  font: 600 12px var(--mono);
+  color: var(--ink);
 }

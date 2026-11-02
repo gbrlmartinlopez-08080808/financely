@@ -268,7 +268,7 @@ async function news() {
       o.feeds.map(async ([url, topic]) => {
         try {
           const xml = await (await get(url, 3, 'application/rss+xml, application/xml, text/xml')).text();
-          const items = parseFeed(xml).slice(0, topic === 'world' ? 20 : 12);
+          const items = parseFeed(xml).slice(0, topic === 'world' ? 25 : 16);
           ok++;
           for (const it of items) all.push({ ...it, src: o, topic });
         } catch (e) {
@@ -307,9 +307,9 @@ async function news() {
   scored.sort((x, y) => y.score - x.score);
 
   // pictures are checked for the stories in the running, best first, until each topic has what it needs
-  const QUOTA = { world: 6, science: 3, tech: 2, health: 2, culture: 2, environment: 2, sport: 1, business: 1, good: 3 };
+  const QUOTA = { world: 16, science: 7, tech: 5, health: 5, culture: 5, environment: 4, sport: 4, business: 4, good: 6 };
   const take = {};
-  const heavyMax = 7;
+  const heavyMax = 15;
   let heavy = 0;
   const out = [];
   const used = {};
@@ -324,7 +324,7 @@ async function news() {
     }
     if (!photo) continue;
     const lead = c.items.find((i) => i.src.name === photo.from) ?? c.items[0];
-    if ((used[lead.src.id] ?? 0) >= 4 && c.items.length < 2) continue;
+    if ((used[lead.src.id] ?? 0) >= 8 && c.items.length < 2) continue;
     used[lead.src.id] = (used[lead.src.id] ?? 0) + 1;
     take[topic] = (take[topic] ?? 0) + 1;
     if (tone === 'heavy') heavy++;
@@ -341,7 +341,7 @@ async function news() {
       tone,
       sources: c.items.map((i) => ({ id: i.src.id, title: i.title, url: i.link })),
     });
-    if (out.length >= 24) break;
+    if (out.length >= 56) break;
   }
   // a good mix, not a block of one kind: topics take turns
   const byTopic = {};

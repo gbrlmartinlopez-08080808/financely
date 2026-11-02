@@ -27,10 +27,11 @@ import { onBack, openExternal, tap } from '../lib/native';
 import type { DocMeta } from '../lib/types';
 import { AskSheet } from '../reader/Ask';
 import { Froggy } from '../ui/Froggy';
+import { Play } from './Games';
 import { Icon } from '../ui/Icon';
 import { PixelLoader, Segmented, Sheet, toast } from '../ui/kit';
 
-type Tab = 'today' | 'news' | 'you';
+type Tab = 'today' | 'news' | 'you' | 'play';
 type Chip = { label: string; q: string };
 
 /** Library · Interesting: the two halves of the home screen, switched with the title. */
@@ -215,17 +216,18 @@ export function Interesting({ docs, onSwitch, onFindBooks }: { docs: DocMeta[]; 
             { value: 'today', label: 'Today' },
             { value: 'news', label: 'News' },
             { value: 'you', label: 'For you' },
+            { value: 'play', label: 'Play' },
           ]}
         />
       </header>
 
-      {!daily && !err && (
+      {tab !== 'play' && !daily && !err && (
         <div className="int-wait">
           <Froggy mood="sleepy" size="md" />
           <PixelLoader size={4} gap={2} label="fetching today" />
         </div>
       )}
-      {err && (
+      {tab !== 'play' && err && (
         <div className="int-wait">
           <Froggy mood="worried" size="md" />
           <p>{err}</p>
@@ -237,6 +239,7 @@ export function Interesting({ docs, onSwitch, onFindBooks }: { docs: DocMeta[]; 
 
       {daily && tab === 'today' && <Today d={daily.data} offline={daily.offline} mood={mood} setDetail={setDetail} wiki={wiki} onRefresh={() => load(true)} />}
       {daily && tab === 'news' && <News d={daily.data} setDetail={setDetail} />}
+      {tab === 'play' && <Play />}
       {tab === 'you' && <ForYou book={book} d={daily?.data} setDetail={setDetail} wiki={wiki} />}
 
       <Sheet open={!!detail} onClose={() => setDetail(null)} className="int-sheet">
@@ -478,11 +481,13 @@ function Reels({ d, stories, setDetail }: { d: Daily; stories: Story[]; setDetai
           </button>
         </div>
       </div>
-      <div className="reel-dots" aria-hidden>
-        {stories.slice(0, 24).map((_, i) => (
-          <i key={i} className={i === at ? 'on' : ''} />
-        ))}
-      </div>
+      {stories.length <= 24 && (
+        <div className="reel-dots" aria-hidden>
+          {stories.map((_, i) => (
+            <i key={i} className={i === at ? 'on' : ''} />
+          ))}
+        </div>
+      )}
       <button className="reel-info" onClick={() => setDetail({ kind: 'method' })} aria-label="How stories are chosen">
         <Icon name="info" size={18} />
       </button>

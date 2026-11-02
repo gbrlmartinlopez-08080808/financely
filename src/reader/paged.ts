@@ -97,6 +97,7 @@ interface Curl {
   under: HTMLElement; // shade cast on the page beneath
   flapWrap: HTMLElement;
   flap: HTMLElement;
+  desk: HTMLElement;
   src: HTMLElement;
   stale: boolean;
   mo: MutationObserver;
@@ -114,7 +115,7 @@ function makeCurl(sc: HTMLElement): Curl | null {
   const root = document.createElement('div');
   root.className = 'curl';
   root.setAttribute('aria-hidden', 'true');
-  root.innerHTML = '<div class="curl-front"></div><div class="curl-under"></div><div class="curl-flapwrap"><div class="curl-flap"></div></div>';
+  root.innerHTML = '<div class="curl-front"></div><div class="curl-under"></div><div class="curl-flapwrap"><div class="curl-flap"></div></div><div class="curl-desk"><i></i></div>';
   const front = root.querySelector<HTMLElement>('.curl-front')!;
   const host = document.createElement('div');
   host.className = 'reader-scroll paged leaf';
@@ -127,6 +128,7 @@ function makeCurl(sc: HTMLElement): Curl | null {
     under: root.querySelector<HTMLElement>('.curl-under')!,
     flapWrap: root.querySelector<HTMLElement>('.curl-flapwrap')!,
     flap: root.querySelector<HTMLElement>('.curl-flap')!,
+    desk: root.querySelector<HTMLElement>('.curl-desk')!,
     src,
     stale: true,
     mo: new MutationObserver(() => {
@@ -191,12 +193,12 @@ function drawCurl(sc: HTMLElement, c: Curl, t: number, y0: number) {
     { x: 0, y: H },
   ];
   // the fold is almost upright, tilted a little toward where the page is held
-  const tilt = ((Math.max(0, Math.min(H, y0)) / H) - 0.5) * 0.22;
+  const tilt = 0.16 + (Math.max(0, Math.min(H, y0)) / H) * 0.5; // a corner is lifted: the nearer the bottom it is held, the more the fold slants
   const len = Math.hypot(1, tilt);
   const n: Pt = { x: 1 / len, y: tilt / len }; // points toward the edge being lifted
   const edge = n.x * W + Math.max(0, n.y * H); // the fold when the page lies flat: beyond the right edge
   const far = Math.min(0, n.y * H); // the fold when the page is gone: before the left edge
-  const strip = Math.min(46, W * 0.12) * Math.min(1, t * 6, (1 - t) * 6 + 0.25); // the visible back of the page: small
+  const strip = Math.min(52, W * 0.13) * Math.min(1, t * 6, (1 - t) * 6 + 0.25); // the visible back of the page: small
   const k = edge + (far - strip - edge) * (t * t * (3 - 2 * t) * 0.3 + t * 0.7);
   const stay = clipPoly(rect, n, k, false);
   const lifted = clipPoly(rect, n, k, true);
@@ -248,6 +250,10 @@ function startCurl(sc: HTMLElement, forward: boolean, y0: number): Run | null {
   c.host.scrollLeft = leafPage * W;
   sc.classList.add('flipping');
   sc.scrollLeft = underPage * W;
+  // the page is a sheet: while it turns it is a little smaller than the screen, with rounded corners and a soft shadow, so its edges can be seen
+  const IN = 14;
+  const R = 22;
+  c.desk.style.clipPath = `path(evenodd, 'M0 0H${W}V${sc.clientHeight}H0Z M${IN + R} ${IN}H${W - IN - R}A${R} ${R} 0 0 1 ${W - IN} ${IN + R}V${sc.clientHeight - IN - R}A${R} ${R} 0 0 1 ${W - IN - R} ${sc.clientHeight - IN}H${IN + R}A${R} ${R} 0 0 1 ${IN} ${sc.clientHeight - IN - R}V${IN + R}A${R} ${R} 0 0 1 ${IN + R} ${IN}Z')`;
   c.root.dataset.on = '1';
   const r: Run = { sc, c, from, to, forward, t: forward ? 0 : 1, y0, raf: 0, end: 0 };
   drawCurl(sc, c, r.t, y0);
