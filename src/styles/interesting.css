@@ -2470,3 +2470,394 @@ button.tcard:active {
   font: 400 16px/1.42 var(--serif);
   color: var(--ink-2);
 }
+
+/* ---- World info: pictures, the event page, live panels and diagrams */
+.ico {
+  flex: none;
+  object-fit: contain;
+  border-radius: 8px;
+  display: inline-grid;
+  place-items: center;
+}
+.ico.flag {
+  object-fit: cover;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.ico.logo2 {
+  background: #fff;
+  padding: 2px;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.ico.ph {
+  background: var(--bg);
+  color: var(--ink-2);
+}
+.wev-g {
+  background: none !important;
+  width: 34px !important;
+  height: auto !important;
+}
+.wd {
+  display: grid;
+  gap: 14px;
+  padding: 4px 18px 28px;
+}
+.wd-head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.wd-head h3 {
+  margin: 0 0 3px;
+  font: 600 22px/1.15 var(--serif);
+}
+.wd-head > div {
+  display: grid;
+  min-width: 0;
+}
+.wd-head span {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.wd-when.hot {
+  color: #e2664a;
+  font-weight: 600;
+}
+.wd-note {
+  margin: 0;
+  font: 400 16px/1.45 var(--serif);
+  color: var(--ink-2);
+}
+.wd-clock {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.wd-clock-l {
+  font-size: 11px;
+  color: var(--muted);
+}
+.wd-clock-n {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  text-align: center;
+}
+.wd-clock-n b {
+  display: block;
+  font-size: 26px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.wd-clock-n small {
+  font-size: 10px;
+  color: var(--muted);
+}
+.wd-sec {
+  display: grid;
+  gap: 8px;
+}
+.wd-sec h5,
+.wd-sec h6 {
+  margin: 4px 0 0;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.wd-sec h6 {
+  margin-top: 8px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+.livedot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e2664a;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+.wd-bar {
+  position: relative;
+  display: flex;
+  gap: 3px;
+  height: 22px;
+  align-items: stretch;
+}
+.wd-bar .seg {
+  min-width: 6px;
+  border-radius: 6px;
+  background: var(--line-2);
+}
+.wd-bar .seg.now {
+  background: color-mix(in srgb, #e2664a 50%, var(--line-2));
+}
+.wd-bar .seg.on {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+.wd-bar .solid {
+  flex: 1;
+  border-radius: 6px;
+  background: var(--line-2);
+}
+.wd-bar .today {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 3px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: #e2664a;
+  pointer-events: none;
+}
+.wd-bar-l {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.wd-phase {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.wd-phase span {
+  font-size: 11px;
+  color: var(--muted);
+}
+.wd-sides {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.wd-sides button {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  width: 84px;
+  padding: 10px 4px;
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 11.5px;
+  text-align: center;
+  line-height: 1.2;
+}
+.wd-table {
+  display: grid;
+  font-size: 12px;
+}
+.wd-table .tr {
+  display: grid;
+  grid-template-columns: 20px 22px minmax(0, 1fr) 24px 22px 22px 22px 30px 28px;
+  gap: 4px;
+  align-items: center;
+  padding: 5px 2px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+}
+.wd-table .tr > :nth-child(1),
+.wd-table .tr > :nth-child(3) {
+  text-align: left;
+}
+.wd-table .tn {
+  font-family: var(--sans);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wd-table .th {
+  color: var(--muted);
+  font-size: 10.5px;
+}
+.wd-more {
+  justify-self: start;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  color: var(--ink-2);
+}
+.mlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.mrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 68px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  padding: 7px 0 2px;
+  font-size: 13px;
+}
+.mrow .mt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mrow .mt.home {
+  justify-content: flex-end;
+}
+.mrow .sc {
+  white-space: nowrap;
+  text-align: center;
+  font-size: 13px;
+}
+.mrow .md {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--muted);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+.wd-src,
+.wd-empty {
+  margin: 0;
+  font-size: 10.5px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.wd-seats {
+  width: 100%;
+  max-width: 420px;
+  justify-self: center;
+}
+.wd-seats circle {
+  cursor: pointer;
+  transition: fill 0.2s;
+}
+.wd-seats .seat-n {
+  font: 600 9px var(--sans);
+  fill: var(--ink);
+}
+.wd-seats .seat-s {
+  font: 500 6px var(--mono, monospace);
+  fill: var(--muted);
+}
+.wd-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 12.5px;
+}
+.wd-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.wd-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.wd-legend .win {
+  font-weight: 600;
+}
+.wd-meter {
+  position: relative;
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line-2);
+  overflow: visible;
+}
+.wd-meter span:first-child {
+  border-radius: 4px 0 0 4px;
+}
+.wd-meter em {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--ink);
+}
+.wd-curve {
+  width: 100%;
+}
+.wd-curve .line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.4;
+}
+.wd-curve .fill {
+  fill: color-mix(in srgb, #5f9bd0 20%, transparent);
+}
+.wd-curve circle {
+  fill: var(--surface);
+  stroke: var(--ink);
+  stroke-width: 1;
+  cursor: pointer;
+}
+.wd-curve circle.sel {
+  fill: #e2664a;
+  stroke: none;
+}
+.wd-range {
+  width: 100%;
+  accent-color: var(--ink);
+}
+.wd-read {
+  margin: 0;
+  font-size: 15px;
+}
+.wd-read b {
+  font-size: 26px;
+}
+.wd-read span {
+  font-size: 11px;
+  color: var(--muted);
+}
+.wd-news {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.wd-news button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.wd-news b {
+  font: 600 14px/1.3 var(--sans);
+}
+.wd-news small {
+  color: var(--muted);
+  font-size: 10.5px;
+}
+.wd-wiki {
+  justify-self: start;
+}

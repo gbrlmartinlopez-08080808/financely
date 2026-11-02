@@ -17,6 +17,31 @@ export interface WorldEvent {
   wiki?: string;
   /** shown instead of the exact date when it is not fixed yet */
   when?: string;
+  /** the picture that stands for it: a country flag (ISO code) or the logo from a Wikipedia article */
+  icon?: { cc?: string; wiki?: string };
+  /** who is taking part: parties, teams, countries */
+  sides?: { n: string; wiki?: string; cc?: string }[];
+  /** a sports competition whose standings and fixtures are fetched live */
+  live?: { sport: 'football' | 'nba' | 'nfl' | 'f1'; league: number; season: 'split' | 'year'; h2h?: [string, string] };
+  /** the stages, in order */
+  phases?: { n: string; a: string; b: string; t?: string }[];
+  /** an interactive diagram */
+  chart?: SeatsChart | CurveChart;
+  /** words that find the stories about it in today's news */
+  keys?: string[];
+}
+export interface SeatsChart {
+  type: 'seats';
+  note?: string;
+  chambers: { name: string; total: number; majority: number; parties: { n: string; c: string; s: number }[] }[];
+}
+export interface CurveChart {
+  type: 'curve';
+  peak: string;
+  width: number;
+  max: number;
+  unit: string;
+  note?: string;
 }
 export interface World {
   v: number;

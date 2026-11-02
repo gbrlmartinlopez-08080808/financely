@@ -1,5 +1,5 @@
 {
- "v": 1,
+ "v": 2,
  "note": "Curated by Frogity. Dates can move: check the organisers for the latest.",
  "events": [
   {
@@ -8,7 +8,68 @@
    "w": "United States",
    "a": "2026-11-03",
    "n": "All 435 House seats, 35 Senate seats and 36 governorships are up: the vote that decides who controls Congress for the second half of the presidential term.",
-   "wiki": "2026 United States elections"
+   "wiki": "2026 United States elections",
+   "icon": {
+    "cc": "us"
+   },
+   "sides": [
+    {
+     "n": "Democratic Party",
+     "wiki": "Democratic Party (United States)"
+    },
+    {
+     "n": "Republican Party",
+     "wiki": "Republican Party (United States)"
+    }
+   ],
+   "chart": {
+    "type": "seats",
+    "note": "As elected in 2024; vacancies and special elections not counted. Tap a seat to hand it to the next party and see what the majority would be.",
+    "chambers": [
+     {
+      "name": "House of Representatives",
+      "total": 435,
+      "majority": 218,
+      "parties": [
+       {
+        "n": "Republican",
+        "c": "#d95a4f",
+        "s": 220
+       },
+       {
+        "n": "Democratic",
+        "c": "#4b7fbf",
+        "s": 215
+       }
+      ]
+     },
+     {
+      "name": "Senate",
+      "total": 100,
+      "majority": 51,
+      "parties": [
+       {
+        "n": "Republican",
+        "c": "#d95a4f",
+        "s": 53
+       },
+       {
+        "n": "Democratic (and allies)",
+        "c": "#4b7fbf",
+        "s": 47
+       }
+      ]
+     }
+    ]
+   },
+   "keys": [
+    "midterm",
+    "congress",
+    "senate",
+    "house of representatives",
+    "republican",
+    "democrat"
+   ]
   },
   {
    "k": "election",
@@ -16,7 +77,27 @@
    "w": "Taiwan",
    "a": "2026-11-28",
    "n": "Mayors, county magistrates and councils across Taiwan, a test of the parties before the 2028 presidential vote.",
-   "wiki": "2026 Taiwanese local elections"
+   "wiki": "2026 Taiwanese local elections",
+   "icon": {
+    "cc": "tw"
+   },
+   "sides": [
+    {
+     "n": "Kuomintang",
+     "wiki": "Kuomintang"
+    },
+    {
+     "n": "Democratic Progressive Party",
+     "wiki": "Democratic Progressive Party"
+    },
+    {
+     "n": "Taiwan People's Party",
+     "wiki": "Taiwan People's Party"
+    }
+   ],
+   "keys": [
+    "taiwan"
+   ]
   },
   {
    "k": "election",
@@ -25,7 +106,28 @@
    "a": "2027-02-20",
    "n": "Africa’s most populous country chooses a president and National Assembly.",
    "wiki": "2027 Nigerian general election",
-   "when": "February 2027"
+   "when": "February 2027",
+   "icon": {
+    "cc": "ng"
+   },
+   "sides": [
+    {
+     "n": "All Progressives Congress",
+     "wiki": "All Progressives Congress"
+    },
+    {
+     "n": "Peoples Democratic Party",
+     "wiki": "Peoples Democratic Party (Nigeria)"
+    },
+    {
+     "n": "Labour Party",
+     "wiki": "Labour Party (Nigeria)"
+    }
+   ],
+   "keys": [
+    "nigeria",
+    "tinubu"
+   ]
   },
   {
    "k": "election",
@@ -35,7 +137,61 @@
    "b": "2027-03-10",
    "n": "Uttar Pradesh, India’s most populous state, votes with Punjab, Uttarakhand, Goa and Manipur: a read on national politics ahead of 2029.",
    "wiki": "2027 Uttar Pradesh Legislative Assembly election",
-   "when": "February–March 2027"
+   "when": "February–March 2027",
+   "icon": {
+    "cc": "in"
+   },
+   "sides": [
+    {
+     "n": "BJP",
+     "wiki": "Bharatiya Janata Party"
+    },
+    {
+     "n": "Indian National Congress",
+     "wiki": "Indian National Congress"
+    },
+    {
+     "n": "Samajwadi Party",
+     "wiki": "Samajwadi Party"
+    },
+    {
+     "n": "Aam Aadmi Party",
+     "wiki": "Aam Aadmi Party"
+    }
+   ],
+   "chart": {
+    "type": "seats",
+    "note": "Uttar Pradesh’s Legislative Assembly has 403 seats. Tap seats to give them to a party and see who would reach the 202 needed.",
+    "chambers": [
+     {
+      "name": "Uttar Pradesh Legislative Assembly",
+      "total": 403,
+      "majority": 202,
+      "parties": [
+       {
+        "n": "BJP and allies",
+        "c": "#e8873a",
+        "s": 0
+       },
+       {
+        "n": "Samajwadi Party and allies",
+        "c": "#d95a4f",
+        "s": 0
+       },
+       {
+        "n": "Others",
+        "c": "#8a8a86",
+        "s": 0
+       }
+      ]
+     }
+    ]
+   },
+   "keys": [
+    "uttar pradesh",
+    "punjab",
+    "india"
+   ]
   },
   {
    "k": "election",
@@ -45,7 +201,37 @@
    "b": "2027-04-24",
    "n": "Two rounds, the first in April: the race to succeed Emmanuel Macron.",
    "wiki": "2027 French presidential election",
-   "when": "April 2027"
+   "when": "April 2027",
+   "icon": {
+    "cc": "fr"
+   },
+   "sides": [
+    {
+     "n": "National Rally",
+     "wiki": "National Rally"
+    },
+    {
+     "n": "Renaissance",
+     "wiki": "Renaissance (French political party)"
+    },
+    {
+     "n": "The Republicans",
+     "wiki": "The Republicans (France)"
+    },
+    {
+     "n": "La France Insoumise",
+     "wiki": "La France Insoumise"
+    },
+    {
+     "n": "Socialist Party",
+     "wiki": "Socialist Party (France)"
+    }
+   ],
+   "keys": [
+    "france",
+    "macron",
+    "le pen"
+   ]
   },
   {
    "k": "election",
@@ -54,7 +240,24 @@
    "a": "2027-08-10",
    "n": "President, parliament and county governors.",
    "wiki": "2027 Kenyan general election",
-   "when": "August 2027"
+   "when": "August 2027",
+   "icon": {
+    "cc": "ke"
+   },
+   "sides": [
+    {
+     "n": "United Democratic Alliance",
+     "wiki": "United Democratic Alliance"
+    },
+    {
+     "n": "Orange Democratic Movement",
+     "wiki": "Orange Democratic Movement"
+    }
+   ],
+   "keys": [
+    "kenya",
+    "ruto"
+   ]
   },
   {
    "k": "election",
@@ -63,7 +266,24 @@
    "a": "2027-10-24",
    "n": "President and Congress.",
    "wiki": "2027 Argentine general election",
-   "when": "October 2027"
+   "when": "October 2027",
+   "icon": {
+    "cc": "ar"
+   },
+   "sides": [
+    {
+     "n": "La Libertad Avanza",
+     "wiki": "La Libertad Avanza"
+    },
+    {
+     "n": "Justicialist Party",
+     "wiki": "Justicialist Party"
+    }
+   ],
+   "keys": [
+    "argentina",
+    "milei"
+   ]
   },
   {
    "k": "election",
@@ -71,7 +291,47 @@
    "w": "United States",
    "a": "2028-11-07",
    "n": "The next presidential election; party primaries run through the first half of 2028.",
-   "wiki": "2028 United States presidential election"
+   "wiki": "2028 United States presidential election",
+   "icon": {
+    "cc": "us"
+   },
+   "sides": [
+    {
+     "n": "Democratic Party",
+     "wiki": "Democratic Party (United States)"
+    },
+    {
+     "n": "Republican Party",
+     "wiki": "Republican Party (United States)"
+    }
+   ],
+   "chart": {
+    "type": "seats",
+    "note": "538 electoral votes, 270 to win. Tap to hand votes to a party and build a map of your own.",
+    "chambers": [
+     {
+      "name": "Electoral College",
+      "total": 538,
+      "majority": 270,
+      "parties": [
+       {
+        "n": "Republican",
+        "c": "#d95a4f",
+        "s": 0
+       },
+       {
+        "n": "Democratic",
+        "c": "#4b7fbf",
+        "s": 0
+       }
+      ]
+     }
+    ]
+   },
+   "keys": [
+    "2028",
+    "presidential"
+   ]
   },
   {
    "k": "summit",
@@ -80,7 +340,30 @@
    "a": "2026-11-09",
    "b": "2026-11-20",
    "n": "The UN climate talks: countries report on cutting emissions and agree finance for the ones hit hardest. Türkiye hosts, Australia leads the negotiations.",
-   "wiki": "2026 United Nations Climate Change Conference"
+   "wiki": "2026 United Nations Climate Change Conference",
+   "icon": {
+    "cc": "tr"
+   },
+   "sides": [
+    {
+     "n": "Türkiye (host)",
+     "cc": "tr"
+    },
+    {
+     "n": "Australia (negotiations)",
+     "cc": "au"
+    },
+    {
+     "n": "United Nations",
+     "wiki": "United Nations"
+    }
+   ],
+   "keys": [
+    "cop31",
+    "climate",
+    "emissions",
+    "antalya"
+   ]
   },
   {
    "k": "summit",
@@ -90,7 +373,47 @@
    "b": "2026-12-15",
    "n": "The 20 largest economies meet under the US presidency.",
    "wiki": "2026 G20 Miami summit",
-   "when": "mid December 2026"
+   "when": "mid December 2026",
+   "icon": {
+    "cc": "us"
+   },
+   "sides": [
+    {
+     "n": "United States (host)",
+     "cc": "us"
+    },
+    {
+     "n": "China",
+     "cc": "cn"
+    },
+    {
+     "n": "India",
+     "cc": "in"
+    },
+    {
+     "n": "Brazil",
+     "cc": "br"
+    },
+    {
+     "n": "Germany",
+     "cc": "de"
+    },
+    {
+     "n": "Japan",
+     "cc": "jp"
+    },
+    {
+     "n": "United Kingdom",
+     "cc": "gb"
+    },
+    {
+     "n": "France",
+     "cc": "fr"
+    }
+   ],
+   "keys": [
+    "g20"
+   ]
   },
   {
    "k": "summit",
@@ -98,7 +421,13 @@
    "w": "Stockholm and Oslo",
    "a": "2026-12-10",
    "n": "The prizes announced in October are handed over on the anniversary of Alfred Nobel’s death.",
-   "wiki": "Nobel Prize"
+   "wiki": "Nobel Prize",
+   "icon": {
+    "wiki": "Nobel Prize"
+   },
+   "keys": [
+    "nobel"
+   ]
   },
   {
    "k": "economy",
@@ -106,7 +435,15 @@
    "w": "United States",
    "a": "2026-12-09",
    "n": "The year’s last FOMC meeting (8–9 December): what happens to interest rates moves mortgages, loans and markets worldwide.",
-   "wiki": "Federal Open Market Committee"
+   "wiki": "Federal Open Market Committee",
+   "icon": {
+    "wiki": "Federal Reserve"
+   },
+   "keys": [
+    "federal reserve",
+    "interest rate",
+    "fed "
+   ]
   },
   {
    "k": "summit",
@@ -116,7 +453,14 @@
    "b": "2027-01-22",
    "n": "Leaders from business, politics and civil society meet in the Swiss Alps.",
    "wiki": "World Economic Forum",
-   "when": "January 2027"
+   "when": "January 2027",
+   "icon": {
+    "wiki": "World Economic Forum"
+   },
+   "keys": [
+    "davos",
+    "world economic forum"
+   ]
   },
   {
    "k": "summit",
@@ -125,7 +469,13 @@
    "a": "2027-11-08",
    "n": "The next UN climate talks, in Africa.",
    "wiki": "2027 United Nations Climate Change Conference",
-   "when": "November 2027"
+   "when": "November 2027",
+   "icon": {
+    "cc": "et"
+   },
+   "keys": [
+    "cop32"
+   ]
   },
   {
    "k": "sport",
@@ -134,7 +484,21 @@
    "a": "2026-12-04",
    "b": "2026-12-06",
    "n": "The last race decides the final places in the championship.",
-   "wiki": "2026 Formula One World Championship"
+   "wiki": "2026 Formula One World Championship",
+   "icon": {
+    "wiki": "Formula One"
+   },
+   "live": {
+    "sport": "f1",
+    "league": 4370,
+    "season": "year"
+   },
+   "keys": [
+    "formula 1",
+    "grand prix",
+    "verstappen",
+    "norris"
+   ]
   },
   {
    "k": "sport",
@@ -144,7 +508,18 @@
    "b": "2027-05-23",
    "n": "Matches every weekend, with a break for the winter holidays being the busiest stretch of the year.",
    "wiki": "2026–27 Premier League",
-   "when": "August–May"
+   "when": "August–May",
+   "icon": {
+    "wiki": "Premier League"
+   },
+   "live": {
+    "sport": "football",
+    "league": 4328,
+    "season": "split"
+   },
+   "keys": [
+    "premier league"
+   ]
   },
   {
    "k": "sport",
@@ -154,7 +529,36 @@
    "b": "2027-05-23",
    "n": "Barcelona and Real Madrid meet twice in the league (dates are set by LaLiga): the match the football world stops for.",
    "wiki": "El Clásico",
-   "when": "August–May"
+   "when": "August–May",
+   "icon": {
+    "wiki": "La Liga"
+   },
+   "sides": [
+    {
+     "n": "FC Barcelona",
+     "wiki": "FC Barcelona"
+    },
+    {
+     "n": "Real Madrid",
+     "wiki": "Real Madrid CF"
+    }
+   ],
+   "live": {
+    "sport": "football",
+    "league": 4335,
+    "season": "split",
+    "h2h": [
+     "Barcelona",
+     "Real Madrid"
+    ]
+   },
+   "keys": [
+    "la liga",
+    "barcelona",
+    "real madrid",
+    "clasico",
+    "clásico"
+   ]
   },
   {
    "k": "sport",
@@ -163,7 +567,55 @@
    "a": "2026-09-15",
    "b": "2027-06-05",
    "n": "League phase through January, knockouts from February; the final is played in Madrid on 5 June.",
-   "wiki": "2026–27 UEFA Champions League"
+   "wiki": "2026–27 UEFA Champions League",
+   "icon": {
+    "wiki": "UEFA Champions League"
+   },
+   "live": {
+    "sport": "football",
+    "league": 4480,
+    "season": "split"
+   },
+   "phases": [
+    {
+     "n": "League phase",
+     "a": "2026-09-15",
+     "b": "2027-01-28"
+    },
+    {
+     "n": "Play-offs",
+     "a": "2027-02-16",
+     "b": "2027-02-25",
+     "t": "approximate dates"
+    },
+    {
+     "n": "Round of 16",
+     "a": "2027-03-09",
+     "b": "2027-03-18",
+     "t": "approximate dates"
+    },
+    {
+     "n": "Quarter-finals",
+     "a": "2027-04-06",
+     "b": "2027-04-15",
+     "t": "approximate dates"
+    },
+    {
+     "n": "Semi-finals",
+     "a": "2027-04-27",
+     "b": "2027-05-06",
+     "t": "approximate dates"
+    },
+    {
+     "n": "Final",
+     "a": "2027-06-05",
+     "b": "2027-06-05",
+     "t": "Madrid"
+    }
+   ],
+   "keys": [
+    "champions league"
+   ]
   },
   {
    "k": "sport",
@@ -173,7 +625,43 @@
    "b": "2027-06-20",
    "n": "Regular season to April, playoffs and the Finals in June.",
    "wiki": "2026–27 NBA season",
-   "when": "October–June"
+   "when": "October–June",
+   "icon": {
+    "wiki": "National Basketball Association"
+   },
+   "live": {
+    "sport": "nba",
+    "league": 4387,
+    "season": "split"
+   },
+   "phases": [
+    {
+     "n": "Regular season",
+     "a": "2026-10-20",
+     "b": "2027-04-12"
+    },
+    {
+     "n": "Play-in",
+     "a": "2027-04-14",
+     "b": "2027-04-17",
+     "t": "approximate dates"
+    },
+    {
+     "n": "Playoffs",
+     "a": "2027-04-18",
+     "b": "2027-06-07",
+     "t": "approximate dates"
+    },
+    {
+     "n": "Finals",
+     "a": "2027-06-10",
+     "b": "2027-06-20",
+     "t": "approximate dates"
+    }
+   ],
+   "keys": [
+    "nba"
+   ]
   },
   {
    "k": "sport",
@@ -183,7 +671,38 @@
    "b": "2027-02-14",
    "n": "Regular season to January, playoffs to Super Bowl LXI at SoFi Stadium, Los Angeles, on 14 February.",
    "wiki": "2026 NFL season",
-   "when": "September–February"
+   "when": "September–February",
+   "icon": {
+    "wiki": "National Football League"
+   },
+   "live": {
+    "sport": "nfl",
+    "league": 4391,
+    "season": "year"
+   },
+   "phases": [
+    {
+     "n": "Regular season",
+     "a": "2026-09-10",
+     "b": "2027-01-10"
+    },
+    {
+     "n": "Playoffs",
+     "a": "2027-01-16",
+     "b": "2027-02-07",
+     "t": "approximate dates"
+    },
+    {
+     "n": "Super Bowl LXI",
+     "a": "2027-02-14",
+     "b": "2027-02-14",
+     "t": "SoFi Stadium, Los Angeles"
+    }
+   ],
+   "keys": [
+    "nfl",
+    "super bowl"
+   ]
   },
   {
    "k": "sport",
@@ -193,7 +712,13 @@
    "b": "2027-01-31",
    "n": "The first tennis Grand Slam of the year.",
    "wiki": "2027 Australian Open",
-   "when": "January 2027"
+   "when": "January 2027",
+   "icon": {
+    "cc": "au"
+   },
+   "keys": [
+    "australian open"
+   ]
   },
   {
    "k": "sport",
@@ -203,7 +728,13 @@
    "b": "2027-07-25",
    "n": "The first one held in South America.",
    "wiki": "2027 FIFA Women's World Cup",
-   "when": "June–July 2027"
+   "when": "June–July 2027",
+   "icon": {
+    "cc": "br"
+   },
+   "keys": [
+    "women's world cup"
+   ]
   },
   {
    "k": "sport",
@@ -213,7 +744,13 @@
    "b": "2027-07-25",
    "n": "Three weeks of cycling’s biggest race.",
    "wiki": "2027 Tour de France",
-   "when": "July 2027"
+   "when": "July 2027",
+   "icon": {
+    "wiki": "Tour de France"
+   },
+   "keys": [
+    "tour de france"
+   ]
   },
   {
    "k": "sport",
@@ -223,7 +760,13 @@
    "b": "2027-11-13",
    "n": "Held in Australia for the first time since 2003.",
    "wiki": "2027 Rugby World Cup",
-   "when": "October–November 2027"
+   "when": "October–November 2027",
+   "icon": {
+    "cc": "au"
+   },
+   "keys": [
+    "rugby world cup"
+   ]
   },
   {
    "k": "sport",
@@ -233,7 +776,27 @@
    "b": "2027-11-30",
    "n": "The 50-over World Cup comes back to southern Africa.",
    "wiki": "2027 Cricket World Cup",
-   "when": "October–November 2027"
+   "when": "October–November 2027",
+   "icon": {
+    "cc": "za"
+   },
+   "sides": [
+    {
+     "n": "South Africa",
+     "cc": "za"
+    },
+    {
+     "n": "Zimbabwe",
+     "cc": "zw"
+    },
+    {
+     "n": "Namibia",
+     "cc": "na"
+    }
+   ],
+   "keys": [
+    "cricket world cup"
+   ]
   },
   {
    "k": "sport",
@@ -243,7 +806,35 @@
    "b": "2028-07-09",
    "n": "The European football championship.",
    "wiki": "UEFA Euro 2028",
-   "when": "June–July 2028"
+   "when": "June–July 2028",
+   "icon": {
+    "wiki": "UEFA Euro 2028"
+   },
+   "sides": [
+    {
+     "n": "England",
+     "cc": "gb-eng"
+    },
+    {
+     "n": "Scotland",
+     "cc": "gb-sct"
+    },
+    {
+     "n": "Wales",
+     "cc": "gb-wls"
+    },
+    {
+     "n": "Northern Ireland",
+     "cc": "gb-nir"
+    },
+    {
+     "n": "Ireland",
+     "cc": "ie"
+    }
+   ],
+   "keys": [
+    "euro 2028"
+   ]
   },
   {
    "k": "sport",
@@ -252,7 +843,19 @@
    "a": "2028-07-14",
    "b": "2028-07-30",
    "n": "LA hosts for the third time; cricket and flag football join the programme.",
-   "wiki": "2028 Summer Olympics"
+   "wiki": "2028 Summer Olympics",
+   "icon": {
+    "wiki": "2028 Summer Olympics"
+   },
+   "sides": [
+    {
+     "n": "United States (host)",
+     "cc": "us"
+    }
+   ],
+   "keys": [
+    "olympic"
+   ]
   },
   {
    "k": "sky",
@@ -261,7 +864,19 @@
    "a": "2026-11-17",
    "b": "2026-11-18",
    "n": "Fast meteors, best after midnight away from city lights.",
-   "wiki": "Leonids"
+   "wiki": "Leonids",
+   "chart": {
+    "type": "curve",
+    "peak": "2026-11-17",
+    "width": 1.7,
+    "max": 15,
+    "unit": "meteors an hour (under a dark sky)",
+    "note": "Leonids are the dust of comet Tempel–Tuttle. The curve is the expected rate across the nights around the peak; the Moon, clouds and city lights lower what you actually see."
+   },
+   "keys": [
+    "meteor",
+    "leonid"
+   ]
   },
   {
    "k": "sky",
@@ -270,7 +885,19 @@
    "a": "2026-12-13",
    "b": "2026-12-14",
    "n": "Usually the best meteor shower of the year, up to 100 an hour in a dark sky.",
-   "wiki": "Geminids"
+   "wiki": "Geminids",
+   "chart": {
+    "type": "curve",
+    "peak": "2026-12-14",
+    "width": 2.0,
+    "max": 120,
+    "unit": "meteors an hour (under a dark sky)",
+    "note": "The Geminids come from the asteroid 3200 Phaethon. They are bright and slow, and the shower is long: good from 22:00 onward."
+   },
+   "keys": [
+    "meteor",
+    "geminid"
+   ]
   },
   {
    "k": "sky",
@@ -278,7 +905,27 @@
    "w": "Egypt, Saudi Arabia and Yemen",
    "a": "2027-08-02",
    "n": "A rare long total eclipse, up to six minutes over Luxor.",
-   "wiki": "Solar eclipse of August 2, 2027"
+   "wiki": "Solar eclipse of August 2, 2027",
+   "icon": {
+    "cc": "eg"
+   },
+   "sides": [
+    {
+     "n": "Egypt",
+     "cc": "eg"
+    },
+    {
+     "n": "Saudi Arabia",
+     "cc": "sa"
+    },
+    {
+     "n": "Yemen",
+     "cc": "ye"
+    }
+   ],
+   "keys": [
+    "eclipse"
+   ]
   },
   {
    "k": "culture",
@@ -286,7 +933,13 @@
    "w": "India and worldwide",
    "a": "2026-11-08",
    "n": "The festival of lights.",
-   "wiki": "Diwali"
+   "wiki": "Diwali",
+   "icon": {
+    "cc": "in"
+   },
+   "keys": [
+    "diwali"
+   ]
   },
   {
    "k": "culture",
@@ -294,14 +947,23 @@
    "w": "United States",
    "a": "2026-11-26",
    "n": "Fourth Thursday of November.",
-   "wiki": "Thanksgiving (United States)"
+   "wiki": "Thanksgiving (United States)",
+   "icon": {
+    "cc": "us"
+   },
+   "keys": [
+    "thanksgiving"
+   ]
   },
   {
    "k": "culture",
    "t": "Christmas",
    "w": "Worldwide",
    "a": "2026-12-25",
-   "wiki": "Christmas"
+   "wiki": "Christmas",
+   "keys": [
+    "christmas"
+   ]
   },
   {
    "k": "culture",
@@ -309,7 +971,14 @@
    "w": "China and worldwide",
    "a": "2027-02-06",
    "n": "The biggest travel week of the year.",
-   "wiki": "Chinese New Year"
+   "wiki": "Chinese New Year",
+   "icon": {
+    "cc": "cn"
+   },
+   "keys": [
+    "chinese new year",
+    "lunar new year"
+   ]
   },
   {
    "k": "culture",
@@ -318,7 +987,10 @@
    "a": "2027-02-08",
    "n": "The exact day depends on the sighting of the moon.",
    "wiki": "Ramadan",
-   "when": "around 8 February 2027"
+   "when": "around 8 February 2027",
+   "keys": [
+    "ramadan"
+   ]
   },
   {
    "k": "culture",
@@ -327,7 +999,14 @@
    "a": "2027-03-07",
    "n": "The Oscars.",
    "wiki": "99th Academy Awards",
-   "when": "March 2027"
+   "when": "March 2027",
+   "icon": {
+    "wiki": "Academy Awards"
+   },
+   "keys": [
+    "oscar",
+    "academy award"
+   ]
   }
  ]
 }

@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { countdown, dateLabel, daysTo, isOn, isOver, loadWorld, type World as WorldData, type WorldEvent, type WorldKind } from '../lib/world';
 import { Froggy } from '../ui/Froggy';
-import { PixelLoader } from '../ui/kit';
+import { PixelLoader, Sheet } from '../ui/kit';
+import { Emblem } from '../ui/WikiIcon';
+import { WorldDetail } from './WorldDetail';
+import type { Daily, Story } from '../lib/interesting';
 import { tap } from '../lib/native';
 
 const KINDS: { id: 'all' | WorldKind; label: string; glyph: string }[] = [
@@ -19,7 +22,8 @@ const GLYPH = Object.fromEntries(KINDS.map((k) => [k.id, k.glyph]));
  * World info: the tally of what the world is following — votes, summits, finals and tournaments, the sky, the year's festivals —
  * sorted by when: on now, then this week, this month, the months after.
  */
-export function WorldInfo({ wiki }: { wiki: (title: string) => void }) {
+export function WorldInfo({ wiki, d, openStory }: { wiki: (title: string) => void; d?: Daily; openStory: (s: Story) => void }) {
+  const [sel, setSel] = useState<WorldEvent | null>(null);
   const [data, setData] = useState<WorldData | null>(null);
   const [err, setErr] = useState('');
   const [kind, setKind] = useState<'all' | WorldKind>('all');
@@ -84,9 +88,9 @@ export function WorldInfo({ wiki }: { wiki: (title: string) => void }) {
           <ul>
             {g.items.map((e) => (
               <li key={e.t + e.a}>
-                <button className="wev" onClick={() => e.wiki && wiki(e.wiki)} disabled={!e.wiki}>
-                  <span className="wev-g mono" aria-hidden>
-                    {GLYPH[e.k]}
+                <button className="wev" onClick={() => (tap('select'), setSel(e))}>
+                  <span className="wev-g" aria-hidden>
+                    <Emblem cc={e.icon?.cc} wiki={e.icon?.wiki} size={34} glyph={GLYPH[e.k]} />
                   </span>
                   <span className="wev-b">
                     <b>{e.t}</b>
@@ -104,6 +108,16 @@ export function WorldInfo({ wiki }: { wiki: (title: string) => void }) {
       ))}
       {!total && <p className="int-foot mono">nothing in this list right now</p>}
       <p className="int-foot mono">· · ·{'\n'}{data.note}</p>
+      <Sheet open={!!sel} onClose={() => setSel(null)} className="int-sheet">
+        {sel && (
+          <WorldDetail
+            e={sel}
+            d={d}
+            wiki={(t) => (setSel(null), setTimeout(() => wiki(t), 160))}
+            openStory={(st) => (setSel(null), setTimeout(() => openStory(st), 160))}
+          />
+        )}
+      </Sheet>
     </div>
   );
 }

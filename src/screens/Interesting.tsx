@@ -249,7 +249,7 @@ export function Interesting({ docs, onSwitch, onFindBooks }: { docs: DocMeta[]; 
 
       {daily && tab === 'today' && <Today d={daily.data} offline={daily.offline} mood={mood} setDetail={setDetail} wiki={wiki} onRefresh={() => load(true)} />}
       {daily && tab === 'news' && newsView === 'news' && <News d={daily.data} setDetail={setDetail} onWorld={() => setNewsView('world')} />}
-      {tab === 'news' && newsView === 'world' && <WorldInfo wiki={wiki} />}
+      {tab === 'news' && newsView === 'world' && <WorldInfo wiki={wiki} d={daily?.data} openStory={(story) => setDetail({ kind: 'story', story })} />}
       {tab === 'play' && <Play />}
       {tab === 'you' && <ForYou book={book} d={daily?.data} setDetail={setDetail} wiki={wiki} />}
 

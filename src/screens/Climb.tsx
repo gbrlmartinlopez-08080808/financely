@@ -38,10 +38,11 @@ const mono = (px: number, w = 700) => `${w} ${px}px "JetBrains Mono", ui-monospa
 type Pose = 'sit' | 'air' | 'swing' | 'none';
 const FEET: Record<Exclude<Pose, 'none'>, string> = { sit: '_/|_ _|\\_', air: ' /_/ \\_\\ ', swing: ' //   \\\\ ' };
 /** Froggy, as in the rest of the app: the ASCII face (three lines) and a line of legs, centred on x, with its feet at y */
-function frog(c: CanvasRenderingContext2D, k: Ink, x: number, y: number, mood: Mood, mouth?: string, squash = 1, pose: Pose = 'sit') {
+function frog(c: CanvasRenderingContext2D, k: Ink, x: number, y: number, mood: Mood, mouth?: string, squash = 1, pose: Pose = 'sit', rot = 0) {
   const lines = froggyFace(mood, { mouth }).split('\n');
   c.save();
   c.translate(x, y - 6);
+  if (rot) c.rotate(rot);
   c.scale(1 / squash, squash);
   lines.forEach((l, i) => text(c, l, 0, -38 + i * 15, k.ink, mono(16)));
   if (pose !== 'none') text(c, FEET[pose], 0, 7, k.ink2, mono(16));
@@ -249,14 +250,20 @@ function fly(c: CanvasRenderingContext2D, k: Ink, x: number, y: number, ph: numb
   }
   c.globalAlpha = 1;
 }
-function tongueLine(c: CanvasRenderingContext2D, k: Ink, x0: number, y0: number, x1: number, y1: number, tip = true, w = 7) {
+function tongueLine(c: CanvasRenderingContext2D, k: Ink, x0: number, y0: number, x1: number, y1: number, tip = true, w = 7, bend = 0, sag = 0) {
+  // a curve, not a ruler line: `bend` pushes the middle sideways (a wobble on the tongue, or a rope that sags)
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const d = Math.hypot(dx, dy) || 1;
+  const cx = (x0 + x1) / 2 - (dy / d) * bend;
+  const cy = (y0 + y1) / 2 + (dx / d) * bend + sag;
   c.save();
   c.lineCap = 'round';
   c.strokeStyle = CO.coral;
   c.lineWidth = w;
   c.beginPath();
   c.moveTo(x0, y0);
-  c.lineTo(x1, y1);
+  c.quadraticCurveTo(cx, cy, x1, y1);
   c.stroke();
   c.strokeStyle = k.paper;
   c.globalAlpha = 0.45;
@@ -417,6 +424,8 @@ export function Sling({ level, onEnd }: { level: number; onEnd: (win: boolean, t
         const max = 170 + 330 * power + (s.mode === 'free' ? 50 : 0);
         const dir = assist(s, vx / d, -vy / d, max);
         s.tongue = { dx: dir.dx, dy: dir.dy, len: 0, max, out: true };
+        s.recoil = s.t;
+        burst(s, s.frog.x, s.frog.y + 4, 5, '.:°', ['#9a9a95'], 90, { g: 120, life: 0.5, size: 12 });
         tap('medium');
       },
     },
@@ -490,6 +499,13 @@ export function initSling(cfg: ReturnType<typeof slingLevel>, level: number) {
     shock: 0,
     saves: 1,
     saved: 0,
+    fx: [] as FX[],
+    shake: 0,
+    trail: [] as { x: number; y: number }[],
+    recoil: -9,
+    twang: -9,
+    land: -9,
+    wasMode: 'rest' as string,
     leaf: null as null | { x: number; t0: number },
     pops: [] as { x: number; y: number; t0: number; s: string; col: string }[],
   };
@@ -520,6 +536,38 @@ function assist(s: SlingState, dx: number, dy: number, max: number) {
 }
 export const aimTarget = (s: SlingState, dx: number, dy: number, max: number) => assist(s, dx, dy, max).fly;
 
+/** specks that fly off when something happens: a puff, a splash, sparks (world coordinates, y up) */
+interface FX {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  t0: number;
+  life: number;
+  g: number;
+  ch: string;
+  col: string;
+  size: number;
+}
+function burst(s: { t: number; fx: FX[] }, x: number, y: number, n: number, glyphs: string, cols: string[], speed: number, o: { up?: number; g?: number; life?: number; size?: number; spread?: number } = {}) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const v = speed * (0.35 + Math.random() * 0.65);
+    s.fx.push({
+      x,
+      y,
+      vx: Math.cos(a) * v * (o.spread ?? 1),
+      vy: Math.sin(a) * v + (o.up ?? 0),
+      t0: s.t,
+      life: (o.life ?? 0.8) * (0.7 + Math.random() * 0.6),
+      g: o.g ?? 500,
+      ch: glyphs[Math.floor(Math.random() * glyphs.length)],
+      col: cols[Math.floor(Math.random() * cols.length)],
+      size: o.size ?? 13,
+    });
+  }
+  if (s.fx.length > 260) s.fx.splice(0, s.fx.length - 260);
+}
 const G = 1750;
 /** wind: every so often a band of sky (about 190 px high) has a steady wind, one way or the other; 0 outside it */
 export const gust = (s: { t: number }, y: number) => {
@@ -562,6 +610,13 @@ export function stepSling(s: SlingState, cfg: ReturnType<typeof slingLevel>, dtR
     fl.y = fl.y0 + Math.cos(s.t * fl.sp * 0.8 + fl.ph) * fl.amp * 0.45;
   }
   for (const lf of s.leaves) lf.ph += dt;
+  for (const p of s.fx) {
+    p.vy -= p.g * dtRaw;
+    p.x += p.vx * dtRaw;
+    p.y += p.vy * dtRaw;
+  }
+  s.fx = s.fx.filter((p) => s.t - p.t0 < p.life);
+  s.shake *= Math.pow(0.002, dtRaw);
   if (s.moodT && s.t > s.moodT) (s.mood = 'neutral'), (s.moodT = 0);
   const face = (m: Mood, secs = 0.8) => ((s.mood = m), (s.moodT = secs ? s.t + secs : 0));
   if (s.mode === 'won') return;
@@ -594,6 +649,8 @@ export function stepSling(s: SlingState, cfg: ReturnType<typeof slingLevel>, dtR
           f.vx *= 0.3;
           hit.gone = 0.01;
           s.pops.push({ x: hit.x, y: hit.y, t0: s.t, s: 'bzz!', col: CO.coral });
+          s.shake = 14;
+          burst(s, hit.x, hit.y, 14, '*+!', [CO.coral, CO.gold], 320, { life: 0.7 });
         } else {
           if (s.anchor && s.anchor !== hit) release(s.anchor); // the old fly wriggles off
           const wasFalling = s.mode === 'free' && f.vy < -300;
@@ -619,6 +676,8 @@ export function stepSling(s: SlingState, cfg: ReturnType<typeof slingLevel>, dtR
             s.saved++;
             s.pops.push({ x: hit.x, y: hit.y + 16, t0: s.t, s: 'saved!', col: CO.green });
           }
+          s.twang = s.t;
+          burst(s, hit.x, hit.y, hit.gold ? 18 : 9, hit.gold ? '*+.' : '.+°', hit.gold ? [CO.gold] : [CO.blue, '#9a9a95'], hit.gold ? 340 : 220, { g: 300, life: 0.6 });
           face(wasFalling || hit.gold ? 'smug' : 'happy', 1);
         }
         return;
@@ -661,6 +720,10 @@ export function stepSling(s: SlingState, cfg: ReturnType<typeof slingLevel>, dtR
   // gusts: bands of wind that push Froggy sideways while it is in the air
   const g = gust(s, f.y);
   if (g) f.vx += g * 300 * dt;
+  if (s.mode === 'free') {
+    f.vx *= 1 - 0.12 * dt; // a little air
+    f.vy = Math.max(f.vy, -1500);
+  }
   const py = f.y;
   f.x += f.vx * dt;
   f.y += f.vy * dt;
@@ -677,6 +740,7 @@ export function stepSling(s: SlingState, cfg: ReturnType<typeof slingLevel>, dtR
         s.saved++;
         s.pops.push({ x: lx, y: lf.y + 20, t0: s.t, s: 'boing!', col: CO.green });
         tap('light');
+        burst(s, lx, lf.y + 6, 10, '^o.', [CO.green], 260, { life: 0.7, up: 160 });
         break;
       }
     }
@@ -693,11 +757,22 @@ export function stepSling(s: SlingState, cfg: ReturnType<typeof slingLevel>, dtR
       f.y = a.y + ny * s.L;
       const vn = f.vx * nx + f.vy * ny;
       if (vn > 0) {
-        f.vx -= nx * vn;
-        f.vy -= ny * vn;
+        // the line turns the fall into a swing: the speed is kept (a little is lost), only its direction bends around the fly
+        const sp = Math.hypot(f.vx, f.vy);
+        const tx = -ny;
+        const ty = nx;
+        const vt = f.vx * tx + f.vy * ty;
+        const dir = vt >= 0 ? 1 : -1;
+        const keep = Math.min(sp * 0.9, Math.abs(vt) * 1.08 + 10);
+        f.vx = tx * dir * keep;
+        f.vy = ty * dir * keep;
       }
     }
   }
+  if (Math.hypot(f.vx, f.vy) > 380) {
+    s.trail.push({ x: f.x, y: f.y });
+    if (s.trail.length > 14) s.trail.shift();
+  } else if (s.trail.length) s.trail.shift();
   f.x = clamp(f.x, 16, W - 16);
   if (f.x === 16 || f.x === W - 16) f.vx *= -0.3;
   s.best = Math.max(s.best, f.y);
@@ -711,6 +786,8 @@ export function stepSling(s: SlingState, cfg: ReturnType<typeof slingLevel>, dtR
     f.vx *= 0.4;
     face('surprised', 1);
     s.pops.push({ x: f.x, y: 70, t0: s.t, s: 'a lily saves it!', col: CO.green });
+    burst(s, f.x, 40, 14, 'o.~', [CO.blue, CO.green], 300, { life: 0.8, up: 200 });
+    s.shake = 6;
     tap('medium');
   }
   if (f.y >= cfg.goal - 14) {
@@ -727,13 +804,55 @@ export function stepSling(s: SlingState, cfg: ReturnType<typeof slingLevel>, dtR
     s.endAt = s.t;
     s.anchor = null;
     face('dizzy', 0);
+    burst(s, f.x, 4, 26, 'o.O°', [CO.blue, '#9a9a95'], 380, { life: 1.0, up: 380, g: 900, spread: 0.7 });
+    s.shake = 8;
   }
   // the camera follows, and never leaves the water or the blossom
-  const target = clamp(f.y - s.H * 0.42, -110, cfg.goal - s.H * 0.55);
+  const target = clamp(f.y - s.H * 0.42 + clamp(f.vy * 0.1, -90, 110), -110, cfg.goal - s.H * 0.55);
   s.cam += (target - s.cam) * Math.min(1, dtRaw * 5);
 }
 
+/** the whole picture: clouds behind, a trail behind Froggy, specks in front, a shake when something hits, a slow-motion tint while aiming in the air */
 function drawSling(c: CanvasRenderingContext2D, k: Ink, s: SlingState, cfg: ReturnType<typeof slingLevel>, W: number, H: number) {
+  const Y = (y: number) => H - (y - s.cam);
+  c.save();
+  if (s.shake > 0.4) c.translate((Math.random() - 0.5) * s.shake, (Math.random() - 0.5) * s.shake);
+  // clouds drifting slowly, far behind
+  c.globalAlpha = 0.5;
+  for (let j = Math.floor((s.cam * 0.25) / 380) - 1; j < Math.floor((s.cam * 0.25 + H) / 380) + 2; j++) {
+    const h1 = Math.abs(Math.sin(j * 31.7) * 9301.3) % 1;
+    const h2 = Math.abs(Math.sin(j * 17.3 + 4) * 4781.9) % 1;
+    const x = ((h1 * (W + 120) + s.t * (6 + h2 * 8)) % (W + 120)) - 60;
+    text(c, h2 > 0.5 ? '.-~~-.' : '(~~~~)', x, H - (j * 380 + h2 * 140 - s.cam * 0.25), k.muted, mono(13, 500));
+  }
+  c.globalAlpha = 1;
+  // where Froggy has just been
+  s.trail.forEach((t, i) => {
+    c.globalAlpha = (i / s.trail.length) * 0.5;
+    text(c, i % 3 ? '.' : 'o', t.x, Y(t.y), CO.blue, mono(12 + (i / s.trail.length) * 6));
+  });
+  c.globalAlpha = 1;
+  drawSlingScene(c, k, s, cfg, W, H);
+  for (const p of s.fx) {
+    const a = 1 - (s.t - p.t0) / p.life;
+    c.globalAlpha = clamp(a * 1.4, 0, 1);
+    text(c, p.ch, p.x, Y(p.y), p.col, mono(p.size, 700));
+  }
+  c.globalAlpha = 1;
+  // slow motion while aiming in the air: the edges darken a little and the world is said to be slow
+  if (s.aim && (s.mode === 'free' || s.mode === 'rope')) {
+    const g = c.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(60,70,100,0.16)');
+    c.fillStyle = g;
+    c.fillRect(0, 0, W, H);
+    c.globalAlpha = 0.6;
+    text(c, 's l o w', W / 2, 30, k.muted, mono(11, 600));
+    c.globalAlpha = 1;
+  }
+  c.restore();
+}
+function drawSlingScene(c: CanvasRenderingContext2D, k: Ink, s: SlingState, cfg: ReturnType<typeof slingLevel>, W: number, H: number) {
   const Y = (y: number) => H - (y - s.cam);
   dust(c, k, W, H, s.cam);
   ruler(c, k, H, s.cam, 10, Math.ceil((s.cam + H) / 10) + 10);
@@ -819,7 +938,10 @@ function drawSling(c: CanvasRenderingContext2D, k: Ink, s: SlingState, cfg: Retu
   // the line to the fly that holds it (with the little ring that shows how long it will hold)
   if (s.anchor && s.mode === 'rope') {
     const a = s.anchor;
-    tongueLine(c, k, fx, fy - 6, a.x, Y(a.y), false, 5);
+    const rd = Math.hypot(a.x - fx, Y(a.y) - fy);
+    const tw = s.t - s.twang;
+    const wob = tw < 0.9 ? Math.sin(tw * 34) * 16 * Math.exp(-tw * 5) : 0; // the line twangs when it sticks
+    tongueLine(c, k, fx, fy - 6, a.x, Y(a.y), false, 5, wob, clamp((s.L - rd) * 0.45, 0, 36));
     const left = 1 - clamp(s.grab / (cfg.hold * (a.twig ? 1.8 : 1)), 0, 1);
     c.save();
     c.strokeStyle = left < 0.35 ? CO.coral : k.ink;
@@ -831,7 +953,8 @@ function drawSling(c: CanvasRenderingContext2D, k: Ink, s: SlingState, cfg: Retu
   }
   if (s.tongue) {
     const tg = s.tongue;
-    tongueLine(c, k, fx, fy - 4, fx + tg.dx * tg.len, fy - 4 - tg.dy * tg.len);
+    const wob = Math.sin(tg.len * 0.05 - s.t * 48) * 9 * (tg.out ? 1 - tg.len / tg.max : 1);
+    tongueLine(c, k, fx, fy - 4, fx + tg.dx * tg.len, fy - 4 - tg.dy * tg.len, true, 7, wob);
   }
   // Froggy
   if (s.mode === 'dead') {
@@ -862,7 +985,12 @@ function drawSling(c: CanvasRenderingContext2D, k: Ink, s: SlingState, cfg: Retu
     const speed = Math.hypot(f.vx, f.vy);
     const air = s.mode === 'free' || (s.mode === 'rope' && speed > 160);
     const face: Mood = s.mood === 'neutral' && s.mode === 'free' && f.vy < -250 ? 'worried' : s.mood === 'neutral' && speed > 700 ? 'surprised' : s.mood;
-    frog(c, k, fx, fy + 4, face, s.tongue ? 'O' : undefined, 1, s.mode === 'rest' ? 'sit' : s.mode === 'rope' ? 'swing' : air ? 'air' : 'sit');
+    // squash and stretch: crouched as the tongue fires, long when it is moving fast, leaning into the swing
+    const re = s.t - s.recoil;
+    let sq = 1 + Math.min(0.2, speed / 4800);
+    if (re >= 0 && re < 0.22) sq *= 1 - 0.2 * Math.sin((re / 0.22) * Math.PI);
+    const lean = s.mode === 'rest' ? 0 : clamp(f.vx / 1500, -0.42, 0.42);
+    frog(c, k, fx, fy + 4, face, s.tongue ? 'O' : undefined, sq, s.mode === 'rest' ? 'sit' : s.mode === 'rope' ? 'swing' : air ? 'air' : 'sit', lean);
     // a falling Froggy near the water gets a warning above the surface
     if (s.mode === 'free' && f.y < 220 && f.vy < -200 && s.started) {
       c.globalAlpha = 0.5 + 0.5 * Math.sin(s.t * 14);
