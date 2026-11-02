@@ -137,7 +137,7 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
     const sr = scroller.getBoundingClientRect();
     if (scroller.classList.contains('paged')) {
       // flipping pages: turn to the page the sentence is on
-      if (r.left < sr.left - 2 || r.right > sr.right + 2) goPage(scroller, Math.round((scroller.scrollLeft + r.left - sr.left) / Math.max(1, scroller.clientWidth)));
+      if (r.left < sr.left - 2 || r.right > sr.right + 2) goPage(scroller, Math.round((scroller.scrollLeft + r.left - sr.left) / Math.max(1, scroller.getBoundingClientRect().width)));
       return;
     }
     if (r.top < sr.top + 90 || r.bottom > sr.bottom - 260) {

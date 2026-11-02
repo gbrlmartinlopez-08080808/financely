@@ -32,7 +32,7 @@ export function Play() {
   const freeze = useStore((s) => s.freeze);
   const fz = freezeStatus(freeze);
   const [levels, setLv] = useState({ sling: 1, deep: 1 });
-  const [run, setRun] = useState(false);
+  const [run, setRun] = useState<Variant | null>(null);
   useEffect(() => {
     getLevels().then(setLv);
   }, [run]);
@@ -60,41 +60,29 @@ export function Play() {
         </div>
       </div>
 
-      <div className="tcard climb-card">
-        <pre className="game-art" aria-hidden>{`       \\ | /\n       -(*)-\n   x       (_____)\n  \\x/\n     (@) (@)\n     (  v  )  ~~~`}</pre>
+      <div className="tcard pick-card">
         <span className="tag mono">the climb · try as often as you like</span>
         <h3>Froggy has to get up</h3>
-        <p>It waits on a lily pad, looking up at two ways to climb: sling its tongue from fly to fly, or name rare things and let the tongue soar. It can fall either way, and only the top counts.</p>
-        <button className="pill" onClick={() => setRun(true)}>
-          Start the climb
-        </button>
-        <small className="mono climb-lv">
-          sling level {levels.sling} · deep cuts level {levels.deep}
-        </small>
+        <p>It waits on its lily pad. Tap the way up it should take — it can fall either way, and only the top counts.</p>
+        <Pick key={run ? 1 : 0} inline levels={levels} onPick={setRun} />
       </div>
       <p className="int-foot mono">· · ·{'\n'}unlimited tries · the top is the only way to a block, one a day</p>
-      {run && <Run onClose={() => setRun(false)} />}
+      {run && <Run variant={run} onClose={() => setRun(null)} />}
     </div>
   );
 }
 
-function Run({ onClose }: { onClose: () => void }) {
-  const [variant, setVariant] = useState<Variant | null>(null);
-  const [all, setAll] = useState({ sling: 1, deep: 1 });
+function Run({ variant, onClose }: { variant: Variant; onClose: () => void }) {
   const [lv, setLv] = useState<number | null>(null);
   const [round, setRound] = useState(0);
   const [result, setResult] = useState<null | { win: boolean; text: string; block?: string; fresh: number; freeze: boolean }>(null);
   useEffect(() => {
-    getLevels().then((l) => {
-      setAll(l);
-      if (variant) setLv(l[variant]);
-    });
+    getLevels().then((l) => setLv(l[variant]));
   }, [variant]);
   useEffect(() => onBack(() => (onClose(), true)), [onClose]);
 
   const finish = useCallback(
     async (win: boolean, text: string) => {
-      if (!variant) return;
       let block: string | undefined;
       let fresh = -1;
       let freeze = false;
@@ -116,11 +104,6 @@ function Run({ onClose }: { onClose: () => void }) {
     },
     [variant],
   );
-  const other = () => {
-    setResult(null);
-    setVariant(null);
-    setLv(null);
-  };
   const again = () => {
     setResult(null);
     setRound((n) => n + 1);
@@ -131,11 +114,10 @@ function Run({ onClose }: { onClose: () => void }) {
         <button className="game-x" onClick={onClose} aria-label="Close the game">
           <Icon name="back" size={22} />
         </button>
-        <b>{variant === 'sling' ? 'Sling' : variant === 'deep' ? 'Deep cuts' : 'The climb'}</b>
-        <span className="mono">{variant ? `level ${lv ?? 1}` : ''}</span>
+        <b>{variant === 'sling' ? 'Sling' : 'Deep cuts'}</b>
+        <span className="mono">level {lv ?? 1}</span>
       </header>
-      {!variant && !result && <Pick levels={all} onPick={setVariant} />}
-      {variant && lv !== null && !result && (variant === 'sling' ? <Sling key={round} level={lv} onEnd={finish} /> : <Deep key={round} level={lv} onEnd={finish} />)}
+      {lv !== null && !result && (variant === 'sling' ? <Sling key={round} level={lv} onEnd={finish} /> : <Deep key={round} level={lv} onEnd={finish} />)}
       {result && (
         <div className="game-end">
           <Froggy mood={result.win ? 'bigSmile' : 'sad'} size="lg" />
@@ -149,12 +131,10 @@ function Run({ onClose }: { onClose: () => void }) {
             <button className="pill" onClick={again}>
               {result.win ? 'Climb again' : 'Try again'}
             </button>
-            <button className="pill ghost" onClick={other}>
-              Other way
-            </button>
             <button className="pill ghost" onClick={onClose}>
-              Done
+              Back to the lily
             </button>
+
           </div>
         </div>
       )}

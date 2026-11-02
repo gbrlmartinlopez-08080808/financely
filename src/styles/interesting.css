@@ -2262,3 +2262,32 @@ button.tcard:active {
   font: 400 13.5px/1.35 var(--serif);
   color: var(--ink-2);
 }
+
+/* the Play tab: Froggy already on its lily, with the two ways above it */
+.pick-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px 14px 14px;
+}
+.pick-card h3 {
+  margin: 0;
+  font: 600 22px/1.15 var(--serif);
+}
+.pick-card p {
+  margin: 0;
+  font: 400 15px/1.4 var(--serif);
+  color: var(--ink-2);
+}
+.stagebox.inline {
+  flex: none;
+  padding: 0;
+  margin-top: 4px;
+}
+.stagebox.inline .stage {
+  flex: none;
+  height: 440px;
+  margin: 0;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--bg) 60%, var(--surface));
+  box-shadow: inset 0 0 0 1px var(--line);
+}

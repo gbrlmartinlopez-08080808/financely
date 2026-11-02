@@ -2,6 +2,7 @@
 // what people read and write. Each list below runs from the most familiar answer to the rarest one; the position in the list is
 // the rank, and the score follows Zipf's law (the common answers are crowded at the top, the rare ones trail off in a long tail).
 // Variants of a name are given after "|".
+import { MORE } from './deepcuts2';
 export interface Prompt {
   id: string;
   q: string;
@@ -10,7 +11,7 @@ export interface Prompt {
 }
 const L = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
 
-export const PROMPTS: Prompt[] = [
+const BASE: Prompt[] = [
   {
     id: 'africa',
     q: 'Name a country in Africa',
@@ -92,6 +93,32 @@ export const PROMPTS: Prompt[] = [
     a: L('Chess, Monopoly, Scrabble, Poker, Checkers|Draughts, Backgammon, Bridge, Go, Clue|Cluedo, Risk, Uno, Trivial Pursuit, Battleship, Jenga, Blackjack, Dominoes, Mahjong, Othello|Reversi, Connect Four, Snakes and Ladders, Ludo, Pictionary, Catan|Settlers of Catan, Carcassonne, Ticket to Ride, Pandemic, Cribbage, Whist, Hearts, Rummy, Canasta, Solitaire|Patience, Snap, Go Fish, Shogi, Xiangqi, Nine men\'s morris, Mancala, Senet, Hnefatafl, Pachisi, Chinese checkers, Stratego, Diplomacy, Agricola, Dominion, Azul, Splendor, Codenames, Dixit, 7 Wonders|Seven Wonders, Puerto Rico, Terraforming Mars, Gloomhaven, Twilight Struggle, Brass, Caylus, Tigris and Euphrates, Hanabi, Patchwork, Hive, Onitama, Santorini, Quoridor, Abalone, Tak, Yinsh, Gipf'),
   },
 ];
+
+export const PROMPTS: Prompt[] = [...BASE, ...MORE];
+
+const firstLetter = (e: string) => fold(e.split('|')[0]).replace(/[^a-z]/g, '')[0] ?? '';
+/**
+ * A prompt that has not come up lately: a random one from the whole set, and often a "starting with …" version of it, which turns
+ * the same list into a different question. `avoid` holds the ids seen recently (this run and the runs before).
+ */
+export function pickPrompt(rand: () => number, avoid: string[] = []): Prompt {
+  for (let tries = 0; tries < 40; tries++) {
+    const base = PROMPTS[Math.floor(rand() * PROMPTS.length)];
+    if (rand() < 0.45 && base.a.length >= 30) {
+      const count: Record<string, number> = {};
+      for (const e of base.a) count[firstLetter(e)] = (count[firstLetter(e)] ?? 0) + 1;
+      const letters = Object.keys(count).filter((c) => c && count[c] >= 6);
+      if (letters.length) {
+        const c = letters[Math.floor(rand() * letters.length)];
+        const id = `${base.id}:${c}`;
+        if (avoid.includes(id)) continue;
+        return { id, q: `${base.q} that starts with ${c.toUpperCase()}`, a: base.a.filter((e) => firstLetter(e) === c) };
+      }
+    }
+    if (!avoid.includes(base.id)) return base;
+  }
+  return PROMPTS[Math.floor(rand() * PROMPTS.length)];
+}
 
 const fold = (s: string) =>
   s

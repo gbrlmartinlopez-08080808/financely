@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { deepLevel, rng, slingLevel } from '../lib/games';
-import { deepestOf, PROMPTS, scoreAnswer, type Prompt } from '../data/deepcuts';
+import { deepestOf, pickPrompt, scoreAnswer, type Prompt } from '../data/deepcuts';
 import { froggyFace, type Mood } from '../lib/froggy';
 import { tap } from '../lib/native';
 import { Icon } from '../ui/Icon';
@@ -342,6 +342,8 @@ interface Fly {
   amp: number;
   bee: boolean;
   gold: boolean;
+  twig?: boolean; // a branch: it does not move, does not wriggle, and holds longer
+  dragon?: boolean; // a dragonfly: quick and wide, a big swing
   gone: number; // seconds since it flew off (0 = still there)
 }
 export function Sling({ level, onEnd }: { level: number; onEnd: (win: boolean, text: string) => void }) {
@@ -393,8 +395,26 @@ export function Sling({ level, onEnd }: { level: number; onEnd: (win: boolean, t
         const vy = a.sy - a.cy;
         const d = Math.hypot(vx, vy);
         const power = clamp(d / 120, 0, 1);
-        if (power < 0.14) return;
-        const max = 170 + 330 * power;
+        if (power < 0.14) {
+          // a quick tap while falling is a grab: the tongue goes for the nearest thing to hold
+          if (s.mode === 'free' && s.started && !s.tongue) {
+            const f = s.frog;
+            let near: Fly | null = null;
+            let nd = 560;
+            for (const fl of s.flies) {
+              if (fl.gone || fl.bee || fl === s.anchor || fl.y < f.y - 30) continue;
+              const d2 = Math.hypot(fl.x - f.x, fl.y - f.y - 8);
+              if (d2 < nd) (nd = d2), (near = fl);
+            }
+            if (near) {
+              const d2 = Math.hypot(near.x - f.x, near.y - f.y - 8);
+              s.tongue = { dx: (near.x - f.x) / d2, dy: (near.y - f.y - 8) / d2, len: 0, max: d2 + 60, out: true };
+              tap('medium');
+            }
+          }
+          return;
+        }
+        const max = 170 + 330 * power + (s.mode === 'free' ? 80 : 0);
         const dir = assist(s, vx / d, -vy / d, max);
         s.tongue = { dx: dir.dx, dy: dir.dy, len: 0, max, out: true };
         tap('medium');
@@ -416,7 +436,7 @@ export function Sling({ level, onEnd }: { level: number; onEnd: (win: boolean, t
       </div>
       <div className="stage">
         <canvas ref={cv} aria-label="Froggy on a lily pad, slinging its tongue at flies" />
-        {hud.hint && <p className="stage-hint mono">pull back anywhere with your thumb, aim at a fly, let go{'\n'}falling? shoot another fly — time slows down while you aim</p>}
+        {hud.hint && <p className="stage-hint mono">pull back anywhere with your thumb, aim at a fly, let go{'\n'}falling? just tap: the tongue grabs the nearest thing</p>}
       </div>
     </div>
   );
@@ -425,6 +445,7 @@ export function Sling({ level, onEnd }: { level: number; onEnd: (win: boolean, t
 export function initSling(cfg: ReturnType<typeof slingLevel>, level: number) {
   const r = rng(level * 911 + dayNo());
   const flies: Fly[] = [];
+  const leaves: { x0: number; y: number; ph: number; used: number }[] = [];
   let y = 190;
   while (y < cfg.goal + 240) {
     const n = r() < 0.3 + cfg.bees ? 2 : 1; // bees only ever come as the second fly of a pair: there is always a safe one to catch
@@ -433,6 +454,16 @@ export function initSling(cfg: ReturnType<typeof slingLevel>, level: number) {
       const gold = !bee && i === 0 && r() < 0.1;
       flies.push({ x0: 0.12 + r() * 0.76, y0: y + i * 40, x: 0, y: y + i * 40, ph: r() * 6, sp: 0.6 + r() * 0.9, amp: cfg.drift * (0.6 + r() * 0.8), bee, gold, gone: 0 });
     }
+    // other things to grab or land on: a twig that holds, a dragonfly that sweeps across, a leaf that bounces a fall
+    if (r() < 0.34) {
+      const ty = y + cfg.gap * (0.35 + r() * 0.3);
+      flies.push({ x0: 0.1 + r() * 0.8, y0: ty, x: 0, y: ty, ph: 0, sp: 0, amp: 0, bee: false, gold: false, twig: true, gone: 0 });
+    }
+    if (r() < 0.22) {
+      const dy = y + cfg.gap * (0.2 + r() * 0.6);
+      flies.push({ x0: 0.5, y0: dy, x: 0, y: dy, ph: r() * 6, sp: 0.55 + r() * 0.5, amp: 150 + r() * 40, bee: false, gold: false, dragon: true, gone: 0 });
+    }
+    if (r() < 0.2) leaves.push({ x0: 0.15 + r() * 0.7, y: y + cfg.gap * (0.5 + r() * 0.3) - 60, ph: r() * 6, used: 0 });
     y += cfg.gap * (0.8 + r() * 0.5);
   }
   return {
@@ -447,6 +478,7 @@ export function initSling(cfg: ReturnType<typeof slingLevel>, level: number) {
     Lt: 0,
     grab: 0,
     flies,
+    leaves,
     tongue: null as null | { dx: number; dy: number; len: number; max: number; out: boolean },
     aim: null as null | { sx: number; sy: number; cx: number; cy: number },
     cam: -110,
@@ -470,13 +502,13 @@ function assist(s: SlingState, dx: number, dy: number, max: number) {
   const ox = f.x;
   const oy = f.y + 8;
   let best: Fly | null = null;
-  let bestA = s.mode === 'free' ? 0.34 : 0.22; // radians
+  let bestA = s.mode === 'free' ? 0.62 : 0.24; // radians
   for (const fl of s.flies) {
-    if (fl.gone || fl.bee) continue;
+    if (fl.gone || fl.bee || fl === s.anchor) continue;
     const vx = fl.x - ox;
     const vy = fl.y - oy;
     const d = Math.hypot(vx, vy);
-    if (d > max + 30 || d < 20) continue;
+    if (d > max + 40 || d < 20) continue;
     const ang = Math.acos(clamp((vx * dx + vy * dy) / d, -1, 1));
     if (ang < bestA) (bestA = ang), (best = fl);
   }
@@ -489,6 +521,10 @@ function assist(s: SlingState, dx: number, dy: number, max: number) {
 export const aimTarget = (s: SlingState, dx: number, dy: number, max: number) => assist(s, dx, dy, max).fly;
 
 const G = 1750;
+/** what the tongue lets go of: a fly wriggles off, a twig just stays where it is */
+const release = (a: Fly) => {
+  if (!a.twig) a.gone = 0.01;
+};
 export function stepSling(s: SlingState, cfg: ReturnType<typeof slingLevel>, dtRaw: number, W: number) {
   // the world slows to a crawl while a shot is being aimed, so there is time to aim in mid-air
   const slow = s.aim && (s.mode === 'free' || s.mode === 'rope') ? 0.2 : 1;
@@ -502,10 +538,21 @@ export function stepSling(s: SlingState, cfg: ReturnType<typeof slingLevel>, dtR
       fl.y += 380 * dtRaw;
       continue;
     }
-    fl.ph += dt * 5;
+    if (fl.twig) {
+      fl.x = fl.x0 * W;
+      fl.y = fl.y0;
+      continue;
+    }
+    fl.ph += dt * (fl.dragon ? 9 : 5);
+    if (fl.dragon) {
+      fl.x = W / 2 + Math.sin(s.t * fl.sp + fl.ph * 0.2) * Math.min(fl.amp, W * 0.4);
+      fl.y = fl.y0 + Math.sin(s.t * fl.sp * 1.7 + fl.ph * 0.2) * 22;
+      continue;
+    }
     fl.x = fl.x0 * W + Math.sin(s.t * fl.sp + fl.ph) * fl.amp;
     fl.y = fl.y0 + Math.cos(s.t * fl.sp * 0.8 + fl.ph) * fl.amp * 0.45;
   }
+  for (const lf of s.leaves) lf.ph += dt;
   if (s.moodT && s.t > s.moodT) (s.mood = 'neutral'), (s.moodT = 0);
   const face = (m: Mood, secs = 0.8) => ((s.mood = m), (s.moodT = secs ? s.t + secs : 0));
   if (s.mode === 'won') return;
@@ -522,15 +569,16 @@ export function stepSling(s: SlingState, cfg: ReturnType<typeof slingLevel>, dtR
       const tx = o.x + tg.dx * tg.len;
       const ty = o.y + tg.dy * tg.len;
       // while Froggy is falling, the tongue is much easier to land
-      const r = s.mode === 'free' ? 1.35 : 1;
-      const hit = s.flies.find((fl) => fl.gone === 0 && Math.hypot(fl.x - tx, fl.y - ty) < (fl.bee ? 20 : 32 * r));
+      const r = s.mode === 'free' ? 1.9 : 1;
+      // the fly Froggy already hangs from is never in the way of the next shot
+      const hit = s.flies.find((fl) => fl.gone === 0 && fl !== s.anchor && Math.hypot(fl.x - tx, fl.y - ty) < (fl.bee ? 20 : (fl.twig ? 30 : 32) * r));
       if (hit) {
         s.tongue = null;
         if (hit.bee) {
           // a bee: a sting, and the grip is gone
           face('surprised', 1);
           s.shock = s.t;
-          if (s.anchor) s.anchor.gone = 0.01;
+          if (s.anchor) release(s.anchor);
           s.anchor = null;
           s.mode = 'free';
           f.vy = Math.min(f.vy, -120);
@@ -538,7 +586,7 @@ export function stepSling(s: SlingState, cfg: ReturnType<typeof slingLevel>, dtR
           hit.gone = 0.01;
           s.pops.push({ x: hit.x, y: hit.y, t0: s.t, s: 'bzz!', col: CO.coral });
         } else {
-          if (s.anchor && s.anchor !== hit) s.anchor.gone = 0.01; // the old fly wriggles off
+          if (s.anchor && s.anchor !== hit) release(s.anchor); // the old fly wriggles off
           const wasFalling = s.mode === 'free' && f.vy < -300;
           s.anchor = hit;
           s.grab = 0;
@@ -548,6 +596,11 @@ export function stepSling(s: SlingState, cfg: ReturnType<typeof slingLevel>, dtR
           s.Lt = Math.max(56, d * 0.38);
           s.mode = 'rope';
           if (d < 90) f.vy += 300; // a short grab still throws it up
+          if (hit.dragon) {
+            f.vy += 360;
+            f.vx += (hit.x < f.x ? -1 : 1) * 160;
+            s.pops.push({ x: hit.x, y: hit.y + 16, t0: s.t, s: 'whoosh', col: CO.violet });
+          }
           if (hit.gold) {
             // a golden fly: a big kick upward, and a lily in reserve
             f.vy += 520;
@@ -572,13 +625,13 @@ export function stepSling(s: SlingState, cfg: ReturnType<typeof slingLevel>, dtR
     return;
   }
   // physics
-  f.vy -= G * dt;
+  f.vy -= G * (s.mode === 'free' ? 0.8 : 1) * dt;
   if (s.mode === 'rope' && s.anchor) {
     const a = s.anchor;
     s.grab += dt;
-    if (s.grab > cfg.hold) {
+    if (s.grab > cfg.hold * (a.twig ? 1.8 : 1)) {
       // the fly wriggles free
-      a.gone = 0.01;
+      release(a);
       s.anchor = null;
       s.mode = 'free';
       face('worried', 1);
@@ -596,8 +649,26 @@ export function stepSling(s: SlingState, cfg: ReturnType<typeof slingLevel>, dtR
       f.vy *= 1 - 0.3 * dt;
     }
   }
+  const py = f.y;
   f.x += f.vx * dt;
   f.y += f.vy * dt;
+  // a leaf in the air: land on it from above and it throws Froggy back up (once)
+  if (s.mode === 'free' && f.vy < 0) {
+    for (const lf of s.leaves) {
+      const lx = lf.x0 * W + Math.sin(lf.ph) * 20;
+      if (lf.used < 1 && py >= lf.y + 6 && f.y <= lf.y + 6 && Math.abs(f.x - lx) < 52) {
+        lf.used = s.t;
+        f.y = lf.y + 8;
+        f.vy = 1050;
+        f.vx *= 0.5;
+        face('happy', 0.9);
+        s.saved++;
+        s.pops.push({ x: lx, y: lf.y + 20, t0: s.t, s: 'boing!', col: CO.green });
+        tap('light');
+        break;
+      }
+    }
+  }
   if (s.mode === 'rope' && s.anchor) {
     const a = s.anchor;
     const dx = f.x - a.x;
@@ -668,6 +739,19 @@ function drawSling(c: CanvasRenderingContext2D, k: Ink, s: SlingState, cfg: Retu
       c.globalAlpha = 1;
     }
   }
+  // leaves floating in the air: a safety net
+  for (const lf of s.leaves) {
+    const y = Y(lf.y);
+    if (y < -30 || y > H + 30) continue;
+    const used = lf.used > 0 ? s.t - lf.used : -1;
+    if (used > 1.2) continue;
+    const lx = lf.x0 * W + Math.sin(lf.ph) * 20;
+    const sq = used >= 0 && used < 0.25 ? 0.7 : 1;
+    c.globalAlpha = used > 0.3 ? clamp(1.2 - used, 0, 1) : 1;
+    pad(c, k, lx, y - 8, 78, 1, undefined, sq);
+    text(c, used >= 0 && used < 0.5 ? '^ ^ ^' : '^  ^', lx, y - 16 - (used >= 0 ? used * 30 : 0), CO.green, mono(12, 600));
+    c.globalAlpha = 1;
+  }
   // where the next shot would land: flies within reach glow while aiming
   let target: Fly | null = null;
   if (s.aim) {
@@ -681,7 +765,16 @@ function drawSling(c: CanvasRenderingContext2D, k: Ink, s: SlingState, cfg: Retu
   for (const fl of s.flies) {
     const y = Y(fl.y);
     if (y < -30 || y > H + 30 || fl.gone > 1.2) continue;
-    fly(c, k, fl.x, y, fl.ph, fl.bee, fl.gone ? 1 - fl.gone : 1, fl.gold);
+    if (fl.twig) {
+      text(c, '-{Y}-', fl.x, y, CO.green, mono(15));
+      text(c, '\\|/', fl.x, y + 12, k.ink2, mono(11, 600));
+    } else if (fl.dragon) {
+      const up = Math.sin(fl.ph) > 0;
+      text(c, up ? '=\\' : '=/', fl.x - 22, y, CO.violet, mono(15));
+      text(c, '<@>', fl.x, y, CO.violet, mono(15));
+      text(c, up ? '/=' : '\\=', fl.x + 22, y, CO.violet, mono(15));
+      text(c, '~~~', fl.x + 44 * (Math.cos(s.t * 3) > 0 ? 1 : -1), y + 2, k.muted, mono(10, 500));
+    } else fly(c, k, fl.x, y, fl.ph, fl.bee, fl.gone ? 1 - fl.gone : 1, fl.gold);
     if (fl === target) {
       c.save();
       c.strokeStyle = fl.gold ? CO.gold : CO.blue;
@@ -699,7 +792,7 @@ function drawSling(c: CanvasRenderingContext2D, k: Ink, s: SlingState, cfg: Retu
   if (s.anchor && s.mode === 'rope') {
     const a = s.anchor;
     tongueLine(c, k, fx, fy - 6, a.x, Y(a.y), false, 5);
-    const left = 1 - clamp(s.grab / cfg.hold, 0, 1);
+    const left = 1 - clamp(s.grab / (cfg.hold * (a.twig ? 1.8 : 1)), 0, 1);
     c.save();
     c.strokeStyle = left < 0.35 ? CO.coral : k.ink;
     c.lineWidth = 2.4;
@@ -842,7 +935,6 @@ function RankCard({ n }: { n: Extract<Note, { kind: 'rank' }> }) {
 const PPM = 5; // pixels per metre
 export function Deep({ level, onEnd }: { level: number; onEnd: (win: boolean, text: string) => void }) {
   const cfg = useRef(deepLevel(level)).current;
-  const seed = useRef(rng(level * 313 + dayNo())).current;
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [answer, setAnswer] = useState('');
   const [note, setNote] = useState<null | Note>(null);
@@ -864,9 +956,20 @@ export function Deep({ level, onEnd }: { level: number; onEnd: (win: boolean, te
     endAt: 0,
   }).current;
   const ask = () => {
-    const left = PROMPTS.filter((p) => !used.current.includes(p.id));
-    const p = left.length ? left[Math.floor(seed() * left.length)] : PROMPTS[Math.floor(seed() * PROMPTS.length)];
+    // a different question every time: never one from this climb, and not one from the last few climbs either
+    let recent: string[] = [];
+    try {
+      recent = JSON.parse(localStorage.getItem('deep:recent') || '[]');
+    } catch {
+      /* private mode */
+    }
+    const p = pickPrompt(Math.random, [...used.current, ...recent]);
     used.current.push(p.id);
+    try {
+      localStorage.setItem('deep:recent', JSON.stringify([...recent, p.id].slice(-70)));
+    } catch {
+      /* private mode */
+    }
     setPrompt(p);
     setAnswer('');
     setNote(null);
@@ -904,7 +1007,7 @@ export function Deep({ level, onEnd }: { level: number; onEnd: (win: boolean, te
     S.mood = 'bigSmile';
     setPrompt(null);
     tap('medium');
-    setNote({ kind: 'rank', name: r.name ?? answer.trim(), tier: r.tier, rank: r.rank ?? 0, of: r.of, points: r.points, gain, rare: deepestOf(PROMPTS.find((p) => p.id === prompt.id)!, 3) });
+    setNote({ kind: 'rank', name: r.name ?? answer.trim(), tier: r.tier, rank: r.rank ?? 0, of: r.of, points: r.points, gain, rare: deepestOf(prompt, 3) });
   };
 
   const cv = useStage((c, W, H, dt, k) => {
@@ -1086,7 +1189,7 @@ export function Deep({ level, onEnd }: { level: number; onEnd: (win: boolean, te
 }
 
 // ------------------------------------------------------------------------------------------------ the start: Froggy on the first lily, looking up at the two ways
-export function Pick({ onPick, levels }: { onPick: (v: 'sling' | 'deep') => void; levels: { sling: number; deep: number } }) {
+export function Pick({ onPick, levels, inline = false }: { onPick: (v: 'sling' | 'deep') => void; levels: { sling: number; deep: number }; inline?: boolean }) {
   const box = useRef<HTMLDivElement>(null);
   const cards = useRef<Record<string, HTMLButtonElement | null>>({});
   const S = useRef({ t: 0, shot: null as null | { v: 'sling' | 'deep'; x: number; y: number; t0: number } }).current;
@@ -1100,8 +1203,8 @@ export function Pick({ onPick, levels }: { onPick: (v: 'sling' | 'deep') => void
   };
   const cv = useStage((c, W, H, dt, k) => {
     S.t += dt;
-    const Y = (y: number) => H - (y + 110); // the same picture as the start of the sling game
-    dust(c, k, W, H, -110);
+    const Y = (y: number) => H - (y + (inline ? 60 : 110)); // the same picture as the start of the sling game
+    dust(c, k, W, H, inline ? -60 : -110);
     water(c, k, W, Y(0), H, S.t);
     reeds(c, k, W, Y(0), H, S.t);
     pad(c, k, W / 2, Y(18), 120);
@@ -1131,12 +1234,14 @@ export function Pick({ onPick, levels }: { onPick: (v: 'sling' | 'deep') => void
     { id: 'deep', title: 'Deep cuts', sub: 'name something rare — rarer is higher', art: '  .--.\n ( ?? )\n  `--´' },
   ];
   return (
-    <div className="stagebox">
-      <div className="game-hud mono">
-        <span>Froggy has to get up</span>
-        <span />
-        <span>pick a way</span>
-      </div>
+    <div className={inline ? 'stagebox inline' : 'stagebox'}>
+      {!inline && (
+        <div className="game-hud mono">
+          <span>Froggy has to get up</span>
+          <span />
+          <span>pick a way</span>
+        </div>
+      )}
       <div className="stage" ref={box}>
         <canvas ref={cv} aria-label="Froggy on a lily pad, looking up at two cards" />
         <div className="pickcards">

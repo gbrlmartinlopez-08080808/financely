@@ -13,11 +13,12 @@ import { useEffect } from 'react';
 import { tap } from '../lib/native';
 
 const flowOf = (sc: HTMLElement) => sc.querySelector<HTMLElement>('.flow.paged');
-const width = (sc: HTMLElement) => Math.max(1, sc.clientWidth);
+/** the page width, fractions included: on a phone the screen is rarely a whole number of CSS pixels, and the columns are laid out at the true width */
+const width = (sc: HTMLElement) => Math.max(1, sc.getBoundingClientRect().width);
 /** the page width in whole pixels, written where the text and its copy can both read it (so page k is never k fractions of a pixel off) */
 function fitWidth(sc: HTMLElement) {
   const root = sc.parentElement;
-  const w = `${width(sc)}px`;
+  const w = `${width(sc).toFixed(3)}px`;
   if (root && root.style.getPropertyValue('--pw') !== w) root.style.setProperty('--pw', w);
 }
 
@@ -186,7 +187,7 @@ const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').ma
  * text, the fold is a narrow rolled strip that sweeps across, and the page beneath is the real reader.
  */
 function drawCurl(sc: HTMLElement, c: Curl, t: number, _y0: number) {
-  const W = sc.clientWidth;
+  const W = width(sc);
   t = Math.max(0, Math.min(1, t));
   const e = t * t * (3 - 2 * t) * 0.35 + t * 0.65;
   const strip = Math.min(44, W * 0.11) * Math.min(1, t * 8, (1 - t) * 8 + 0.2); // the visible back of the page
