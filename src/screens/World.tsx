@@ -1,57 +1,79 @@
-import { useEffect, useMemo, useState } from 'react';
-import { countdown, dateLabel, daysTo, isOn, isOver, loadWorld, type World as WorldData, type WorldEvent, type WorldKind } from '../lib/world';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { countdown, daysTo, dateLabel, isOn, isOver, loadWorld, type World as WorldData, type WorldEvent } from '../lib/world';
+import { COUNTRIES, SECTIONS, TOP, concerns, country, countryOrder, holidays, isRecent, relevant, sectionOf, useHome, type Holiday, type Section } from '../lib/worldx';
 import { Froggy } from '../ui/Froggy';
 import { PixelLoader, Sheet } from '../ui/kit';
-import { Emblem } from '../ui/WikiIcon';
+import { Emblem, Flag } from '../ui/WikiIcon';
 import { WorldDetail } from './WorldDetail';
+import { UsHub } from './UsHub';
+import { SportsHub } from './SportsHub';
+import { EconomyCard } from './Economy';
 import type { Daily, Story } from '../lib/interesting';
 import { tap } from '../lib/native';
+import { Icon } from '../ui/Icon';
 
-const KINDS: { id: 'all' | WorldKind; label: string; glyph: string }[] = [
-  { id: 'all', label: 'All', glyph: '·' },
-  { id: 'election', label: 'Votes', glyph: '[x]' },
-  { id: 'summit', label: 'Summits', glyph: '/|\\' },
-  { id: 'sport', label: 'Sport', glyph: '(o)' },
-  { id: 'economy', label: 'Money', glyph: '$' },
-  { id: 'sky', label: 'Sky', glyph: '*' },
-  { id: 'culture', label: 'Culture', glyph: '~' },
-];
-const GLYPH = Object.fromEntries(KINDS.map((k) => [k.id, k.glyph]));
+const GLYPH: Record<string, string> = { election: '[x]', summit: '/|\\', sport: '(o)', economy: '$', sky: '*', culture: '~' };
+const isMidterms = (e: WorldEvent) => e.t === 'US midterm elections';
 
-/**
- * World info: the tally of what the world is following — votes, summits, finals and tournaments, the sky, the year's festivals —
- * sorted by when: on now, then this week, this month, the months after.
- */
+function EventRow({ e, onOpen, flag }: { e: WorldEvent; onOpen: (e: WorldEvent) => void; flag?: string }) {
+  const over = isOver(e) && !isOn(e);
+  return (
+    <button className={`wev${over ? ' past' : ''}`} onClick={() => (tap('select'), onOpen(e))}>
+      <span className="wev-g" aria-hidden>
+        <Emblem cc={e.icon?.cc} wiki={e.icon?.wiki} size={36} glyph={GLYPH[e.k]} />
+      </span>
+      <span className="wev-b">
+        <b>{e.t}</b>
+        <small className="mono">
+          {flag && <Flag cc={flag} size={14} />} {e.w} · {dateLabel(e)}
+        </small>
+        <span className="wev-tags">
+          <span className={`wev-c mono${!over && (isOn(e) || daysTo(e) <= 7) ? ' hot' : ''}`}>{over ? `ended ${Math.abs(daysTo(e))} days ago` : countdown(e)}</span>
+          {e.level && <span className="chip mono">{e.level}</span>}
+          {isMidterms(e) && <span className="chip mono live">interactive</span>}
+        </span>
+      </span>
+      <Icon name="right" size={16} />
+    </button>
+  );
+}
+
+/** one country's block: a flag header that folds open and shut */
+function CountryGroup({ cc, count, open: init, children, note }: { cc: string; count: number; open: boolean; children: ReactNode; note?: string }) {
+  const [open, setOpen] = useState(init);
+  const c = country(cc);
+  return (
+    <section className={`cg${open ? ' open' : ''}`}>
+      <button className="cg-h" onClick={() => (tap('select'), setOpen(!open))} aria-expanded={open}>
+        {cc === 'world' ? <span className="ico ph mono" style={{ width: 28, height: 20 }}>●</span> : <Flag cc={cc} size={28} />}
+        <b>{cc === 'world' ? 'Elsewhere and everywhere' : c?.name ?? cc.toUpperCase()}</b>
+        <small className="mono">{count}</small>
+        <Icon name={open ? 'up' : 'down'} size={16} />
+      </button>
+      {open && <div className="cg-b">{note && <p className="cg-note mono">{note}</p>}{children}</div>}
+    </section>
+  );
+}
+
 export function WorldInfo({ wiki, d, openStory }: { wiki: (title: string) => void; d?: Daily; openStory: (s: Story) => void }) {
+  const [home, setHome] = useHome();
+  const [section, setSection] = useState<Section>('general');
+  const [picker, setPicker] = useState(false);
   const [sel, setSel] = useState<WorldEvent | null>(null);
+  const [us, setUs] = useState(false);
   const [data, setData] = useState<WorldData | null>(null);
   const [err, setErr] = useState('');
-  const [kind, setKind] = useState<'all' | WorldKind>('all');
   useEffect(() => {
     loadWorld().then(setData, (e) => setErr((e as Error).message));
   }, []);
-  const groups = useMemo(() => {
-    if (!data) return [];
-    const list = data.events.filter((e) => !isOver(e) && (kind === 'all' || e.k === kind));
-    const g: { title: string; items: WorldEvent[] }[] = [
-      { title: 'On now', items: [] },
-      { title: 'This week', items: [] },
-      { title: 'This month', items: [] },
-      { title: 'In the next months', items: [] },
-      { title: 'Further ahead', items: [] },
-      { title: 'Seasons under way', items: [] },
-    ];
-    const season = (e: WorldEvent) => isOn(e) && (new Date(e.b ?? e.a).getTime() - new Date(e.a).getTime()) / 864e5 > 60;
-    for (const e of list.sort((x, y) => x.a.localeCompare(y.a))) {
-      const n = daysTo(e);
-      // a long season that is already on is listed once, under "on now"
-      g[season(e) ? 5 : isOn(e) ? 0 : n <= 7 ? 1 : n <= 31 ? 2 : n <= 200 ? 3 : 4].items.push(e);
-    }
-    return g.filter((x) => x.items.length);
-  }, [data, kind]);
-  const total = groups.reduce((n, g) => n + g.items.length, 0);
-  const soon = data ? data.events.filter((e) => !isOver(e) && !isOn(e) && daysTo(e) <= 31).length : 0;
-  const now = data ? data.events.filter((e) => isOn(e) && (new Date(e.b ?? e.a).getTime() - new Date(e.a).getTime()) / 864e5 <= 60).length : 0;
+  const hc = country(home) ?? TOP[0];
+  const order = useMemo(() => countryOrder(home), [home]);
+  const open = (e: WorldEvent) => (isMidterms(e) ? setUs(true) : setSel(e));
+
+  const events = useMemo(() => (data?.events ?? []).filter(relevant).sort((a, b) => a.a.localeCompare(b.a)), [data]);
+  const forCountry = (cc: string, sec: Section) => events.filter((e) => sectionOf(e) === sec && e.cc?.includes(cc));
+  // events with no country, or in a country that is not listed here, go in the last group
+  const global = (sec: Section) => events.filter((e) => sectionOf(e) === sec && (!e.cc?.length || !e.cc.some((c) => order.some((o) => o.cc === c))));
 
   if (err)
     return (
@@ -67,47 +89,130 @@ export function WorldInfo({ wiki, d, openStory }: { wiki: (title: string) => voi
         <PixelLoader size={4} gap={2} label="looking at the world" />
       </div>
     );
+
+  const list = (items: WorldEvent[], flag?: boolean) => items.map((e) => <EventRow key={e.t + e.a} e={e} onOpen={open} flag={flag ? e.cc?.[0] : undefined} />);
+  const groups = (sec: Section, skip: string[] = [], emptyNote?: (cc: string) => string | undefined) => (
+    <>
+      {order
+        .filter((c) => !skip.includes(c.cc))
+        .map((c, i) => {
+          const items = forCountry(c.cc, sec);
+          if (!items.length && c.cc !== home) return null;
+          return (
+            <CountryGroup key={c.cc} cc={c.cc} count={items.length} open={i === 0} note={emptyNote?.(c.cc)}>
+              {items.length ? list(items) : <p className="cg-note mono">nothing listed for {c.name} yet</p>}
+            </CountryGroup>
+          );
+        })}
+      {!!global(sec).length && (
+        <CountryGroup cc="world" count={global(sec).length} open={false}>
+          {list(global(sec))}
+        </CountryGroup>
+      )}
+    </>
+  );
+
+  // "coming closest": the next things for the home country, then for the other big ones
+  const soon = (cc: string, n: number) =>
+    events
+      .filter((e) => sectionOf(e) !== 'sports' && !isRecent(e) && concerns(e, cc) && (e.cc?.includes(cc) || !e.cc?.length))
+      .slice(0, n);
+
   return (
     <div className="int-scroll world">
-      <div className="world-head">
-        <b>World info</b>
-        <span className="mono">
-          {now} on now · {soon} in the next month
-        </span>
+      <div className="world-top">
+        <button className="home-chip" onClick={() => (tap('select'), setPicker(true))} aria-label="Choose your country">
+          <Flag cc={hc.cc} size={26} />
+          <span>
+            <small className="mono">your country</small>
+            <b>{hc.name}</b>
+          </span>
+          <Icon name="down" size={15} />
+        </button>
       </div>
-      <div className="topics" role="tablist">
-        {KINDS.map((k) => (
-          <button key={k.id} role="tab" aria-selected={kind === k.id} className={kind === k.id ? 'on' : ''} onClick={() => (tap('select'), setKind(k.id))}>
-            {k.label}
+      <div className="wsec" role="tablist">
+        {SECTIONS.map((s) => (
+          <button key={s.id} role="tab" aria-selected={section === s.id} className={section === s.id ? 'on' : ''} onClick={() => (tap('select'), setSection(s.id))}>
+            {s.label}
           </button>
         ))}
       </div>
-      {groups.map((g) => (
-        <section key={g.title} className="world-grp">
-          <h4 className="mono">{g.title}</h4>
-          <ul>
-            {g.items.map((e) => (
-              <li key={e.t + e.a}>
-                <button className="wev" onClick={() => (tap('select'), setSel(e))}>
-                  <span className="wev-g" aria-hidden>
-                    <Emblem cc={e.icon?.cc} wiki={e.icon?.wiki} size={34} glyph={GLYPH[e.k]} />
-                  </span>
-                  <span className="wev-b">
-                    <b>{e.t}</b>
-                    <small className="mono">
-                      {e.w} · {dateLabel(e)}
-                    </small>
-                    <span className={`wev-c mono${isOn(e) || daysTo(e) <= 7 ? ' hot' : ''}`}>{countdown(e)}</span>
-                    {e.n && <em>{e.n}</em>}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
-      {!total && <p className="int-foot mono">nothing in this list right now</p>}
+
+      {section === 'general' && (
+        <>
+          <section className="wblock">
+            <h4 className="mono">Closest for {hc.name}</h4>
+            <div className="wlist">
+              <NextHolidays cc={hc.cc} n={2} />
+              {list(soon(hc.cc, 6))}
+            </div>
+          </section>
+          {order.slice(1, 5).map((c) => {
+            const items = soon(c.cc, 3).filter((e) => e.cc?.includes(c.cc));
+            return items.length ? (
+              <CountryGroup key={c.cc} cc={c.cc} count={items.length} open={false}>
+                {list(items)}
+              </CountryGroup>
+            ) : null;
+          })}
+          <p className="int-foot mono">· · ·{'\n'}use the tabs for politics, the economy, sports, events and holidays</p>
+        </>
+      )}
+      {section === 'politics' && groups('politics', [], (cc) => (cc === 'cn' ? 'No national elections in China: these are the political dates that matter.' : undefined))}
+      {section === 'economy' && (
+        <>
+          {order.map((c, i) => (
+            <CountryGroup key={c.cc} cc={c.cc} count={forCountry(c.cc, 'economy').length} open={i === 0}>
+              <EconomyCard c={c} />
+              {list(forCountry(c.cc, 'economy'))}
+            </CountryGroup>
+          ))}
+          {!!global('economy').length && (
+            <CountryGroup cc="world" count={global('economy').length} open={false}>
+              {list(global('economy'))}
+            </CountryGroup>
+          )}
+        </>
+      )}
+      {section === 'sports' && (
+        <>
+          <SportsHub home={hc.cc} d={d} wiki={wiki} openStory={openStory} />
+          <section className="wblock">
+            <h4 className="mono">On the calendar</h4>
+            <div className="wlist">
+              {list([...events.filter((e) => sectionOf(e) === 'sports' && e.cc?.includes(hc.cc)), ...events.filter((e) => sectionOf(e) === 'sports' && !e.cc?.includes(hc.cc))].slice(0, 12), true)}
+            </div>
+          </section>
+        </>
+      )}
+      {section === 'events' && groups('events')}
+      {section === 'holidays' && (
+        <>
+          {order.map((c, i) => (
+            <CountryGroup key={c.cc} cc={c.cc} count={0} open={i === 0}>
+              <NextHolidays cc={c.cc} n={12} />
+            </CountryGroup>
+          ))}
+          {!!(forCountry('', 'holidays').length + global('holidays').length) && (
+            <CountryGroup cc="world" count={global('holidays').length} open={false}>
+              {list(global('holidays'))}
+            </CountryGroup>
+          )}
+        </>
+      )}
+
       <p className="int-foot mono">· · ·{'\n'}{data.note}</p>
+
+      <Sheet open={picker} onClose={() => setPicker(false)} title="Your country">
+        <div className="cpick">
+          {COUNTRIES.map((c) => (
+            <button key={c.cc} className={c.cc === home ? 'on' : ''} onClick={() => (tap('select'), setHome(c.cc), setPicker(false))}>
+              <Flag cc={c.cc} size={26} />
+              <span>{c.name}</span>
+            </button>
+          ))}
+        </div>
+      </Sheet>
       <Sheet open={!!sel} onClose={() => setSel(null)} className="int-sheet">
         {sel && (
           <WorldDetail
@@ -118,6 +223,48 @@ export function WorldInfo({ wiki, d, openStory }: { wiki: (title: string) => voi
           />
         )}
       </Sheet>
+      <Sheet open={us} onClose={() => setUs(false)} className="int-sheet tall">
+        {us && <UsHub d={d} wiki={(t) => (setUs(false), setTimeout(() => wiki(t), 160))} openStory={(st) => (setUs(false), setTimeout(() => openStory(st), 160))} />}
+      </Sheet>
     </div>
+  );
+}
+
+/** the public holidays of a country, read live */
+function NextHolidays({ cc, n }: { cc: string; n: number }) {
+  const [h, setH] = useState<Holiday[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    holidays(cc).then((r) => live && setH(r), () => live && setH([]));
+    return () => {
+      live = false;
+    };
+  }, [cc]);
+  if (!h) return <p className="cg-note mono">loading holidays…</p>;
+  if (!h.length) return <p className="cg-note mono">holidays need a connection</p>;
+  return (
+    <>
+      {h.slice(0, n).map((x) => {
+        const days = Math.round((new Date(`${x.date}T12:00:00`).getTime() - Date.now()) / 864e5);
+        const dt = new Date(`${x.date}T12:00:00`);
+        return (
+          <div key={x.date + x.name} className="hol">
+            <span className="hol-d mono">
+              <b>{dt.getDate()}</b>
+              {dt.toLocaleDateString(undefined, { month: 'short' })}
+            </span>
+            <span className="hol-n">
+              <b>{x.local !== x.name ? x.local : x.name}</b>
+              <small className="mono">
+                {x.local !== x.name ? `${x.name} · ` : ''}
+                {dt.toLocaleDateString(undefined, { weekday: 'long' })}
+                {!x.global ? ' · some regions' : ''}
+              </small>
+            </span>
+            <span className={`wev-c mono${days <= 7 ? ' hot' : ''}`}>{days <= 0 ? 'today' : days === 1 ? 'tomorrow' : days < 14 ? `in ${days} days` : `in ${Math.round(days / 7)} weeks`}</span>
+          </div>
+        );
+      })}
+    </>
   );
 }

@@ -10,7 +10,7 @@ const DAY = 864e5;
 const at = (s: string) => new Date(`${s}T12:00:00`).getTime();
 
 /** the clock: days, hours, minutes and seconds to the start (or to the end, once it is on) */
-function Clock({ e }: { e: WorldEvent }) {
+export function Clock({ e }: { e: WorldEvent }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -92,8 +92,15 @@ function Timeline({ e }: { e: WorldEvent }) {
 }
 
 const fmtTime = (ms: number) => new Date(ms).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-function MatchRow({ m }: { m: Match }) {
+export function MatchRow({ m }: { m: Match }) {
   const played = m.hs !== null && m.as !== null;
+  if (!m.home && !m.away)
+    return (
+      <li className="mrow solo">
+        <b className="mt">{m.name}</b>
+        <small className="mono md">{fmtTime(m.at)}</small>
+      </li>
+    );
   return (
     <li className="mrow">
       <span className="mt home">
@@ -111,7 +118,7 @@ function MatchRow({ m }: { m: Match }) {
 }
 
 /** standings and fixtures that are read live from an open sports database */
-function LivePanel({ e }: { e: WorldEvent }) {
+export function LivePanel({ e }: { e: WorldEvent }) {
   const [d, setD] = useState<Live | null>(null);
   const [err, setErr] = useState(false);
   const [tick, setTick] = useState(0);
@@ -212,7 +219,7 @@ function LivePanel({ e }: { e: WorldEvent }) {
 }
 
 /** a half-circle of seats; tap a seat to hand it to the next party and watch the majority line */
-function Seats({ chart }: { chart: SeatsChart }) {
+export function Seats({ chart }: { chart: SeatsChart }) {
   const [ci, setCi] = useState(0);
   const ch = chart.chambers[ci];
   const base = useMemo(() => {
@@ -338,7 +345,7 @@ function Curve({ chart }: { chart: CurveChart }) {
 }
 
 /** how many of today's stories are about it, and which */
-function InTheNews({ e, d, open }: { e: WorldEvent; d?: Daily; open: (s: Story) => void }) {
+export function InTheNews({ e, d, open }: { e: WorldEvent; d?: Daily; open: (s: Story) => void }) {
   const hits = useMemo(() => {
     if (!d || !e.keys?.length) return [];
     return d.news.filter((s) => {

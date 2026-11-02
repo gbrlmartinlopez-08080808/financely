@@ -29,6 +29,12 @@ export interface WorldEvent {
   chart?: SeatsChart | CurveChart;
   /** words that find the stories about it in today's news */
   keys?: string[];
+  /** the countries it concerns (none: everyone) */
+  cc?: string[];
+  /** which section it is shown in, when the kind alone does not say */
+  sec?: string;
+  /** national or regional (for elections) */
+  level?: 'national' | 'regional';
 }
 export interface SeatsChart {
   type: 'seats';

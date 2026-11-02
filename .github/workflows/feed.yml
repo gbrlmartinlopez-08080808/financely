@@ -20,10 +20,11 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/build-feed.mjs
+      - run: node scripts/build-economy.mjs
       - name: Publish
         run: |
-          mkdir -p public/feed && cp docs/feed/daily.json public/feed/daily.json && cp docs/feed/world.json public/feed/world.json
+          mkdir -p public/feed && cp docs/feed/daily.json public/feed/daily.json && cp docs/feed/world.json public/feed/world.json && cp docs/feed/economy.json public/feed/economy.json
           git config user.name "frogity-feed"
           git config user.email "feed@users.noreply.github.com"
-          git add docs/feed/daily.json public/feed/daily.json docs/feed/world.json public/feed/world.json
+          git add docs/feed public/feed
           git diff --cached --quiet || (git commit -m "Daily feed" && git push)

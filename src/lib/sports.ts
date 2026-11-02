@@ -48,7 +48,7 @@ export interface Live {
 
 type Raw = Record<string, string | null>;
 const num = (v: string | null | undefined) => (v === null || v === undefined || v === '' ? null : Number(v));
-const badge = (u: string | null | undefined) => (u ? `${u}/tiny` : '');
+const badge = (u: string | null | undefined) => (u ? (/\/(tiny|small|medium)$/.test(u) ? u : `${u}/tiny`) : '');
 const match = (e: Raw): Match => ({
   id: String(e.idEvent),
   at: e.strTimestamp ? Date.parse(`${e.strTimestamp}Z`) : e.dateEvent ? Date.parse(`${e.dateEvent}T12:00:00Z`) : 0,
@@ -78,8 +78,11 @@ export async function loadLive(e: WorldEvent): Promise<Live> {
     get<{ events?: Raw[] }>(`eventsnextleague.php?id=${l.league}`, 2 * 60e3).catch(() => ({ events: [] })),
     get<{ events?: Raw[] }>(`eventspastleague.php?id=${l.league}`, 2 * 60e3).catch(() => ({ events: [] })),
   ]);
-  const table: Row[] = (t.table ?? []).map((r) => ({
-    rank: Number(r.intRank),
+  const rows0 = t.table ?? [];
+  // several groups (conferences) in one table: order them by points so "the top" means something
+  const dup = new Set(rows0.map((r) => r.intRank)).size < rows0.length;
+  const table: Row[] = (dup ? [...rows0].sort((a, b) => Number(b.intPoints) - Number(a.intPoints)) : rows0).map((r, i) => ({
+    rank: dup ? i + 1 : Number(r.intRank),
     team: r.strTeam ?? '',
     badge: badge(r.strBadge),
     played: Number(r.intPlayed),
@@ -99,4 +102,14 @@ export async function loadLive(e: WorldEvent): Promise<Live> {
     clasico = [...(r1.event ?? []), ...(r2.event ?? [])].filter((x) => x.idLeague === String(l.league) || /spanish|supercopa|copa/i.test(x.strLeague ?? '')).map(match).sort((x, y) => x.at - y.at);
   }
   return { table, next: (n.events ?? []).map(match).slice(0, 6), last: (p.events ?? []).map(match).reverse().slice(0, 6), clasico };
+}
+
+export interface LeagueInfo {
+  badge: string;
+  name: string;
+}
+export async function leagueInfo(id: number): Promise<LeagueInfo> {
+  const r = await get<{ leagues?: Raw[] }>(`lookupleague.php?id=${id}`, 24 * 3600e3);
+  const l = r.leagues?.[0];
+  return { badge: l?.strBadge ? `${l.strBadge}/small` : '', name: l?.strLeague ?? '' };
 }
