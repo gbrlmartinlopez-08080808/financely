@@ -1,0 +1,1868 @@
+{
+ "v": 3,
+ "note": "Curated by Frogity. Dates can move: check the organisers for the latest.",
+ "events": [
+  {
+   "k": "election",
+   "t": "US midterm elections",
+   "w": "United States",
+   "a": "2026-11-03",
+   "n": "All 435 House seats, 35 Senate seats and 36 governorships are up: the vote that decides who controls Congress for the second half of the presidential term.",
+   "wiki": "2026 United States elections",
+   "icon": {
+    "cc": "us"
+   },
+   "sides": [
+    {
+     "n": "Democratic Party",
+     "wiki": "Democratic Party (United States)"
+    },
+    {
+     "n": "Republican Party",
+     "wiki": "Republican Party (United States)"
+    }
+   ],
+   "chart": {
+    "type": "seats",
+    "note": "As elected in 2024; vacancies and special elections not counted. Tap a seat to hand it to the next party and see what the majority would be.",
+    "chambers": [
+     {
+      "name": "House of Representatives",
+      "total": 435,
+      "majority": 218,
+      "parties": [
+       {
+        "n": "Republican",
+        "c": "#d95a4f",
+        "s": 220
+       },
+       {
+        "n": "Democratic",
+        "c": "#4b7fbf",
+        "s": 215
+       }
+      ]
+     },
+     {
+      "name": "Senate",
+      "total": 100,
+      "majority": 51,
+      "parties": [
+       {
+        "n": "Republican",
+        "c": "#d95a4f",
+        "s": 53
+       },
+       {
+        "n": "Democratic (and allies)",
+        "c": "#4b7fbf",
+        "s": 47
+       }
+      ]
+     }
+    ]
+   },
+   "keys": [
+    "midterm",
+    "congress",
+    "senate",
+    "house of representatives",
+    "republican",
+    "democrat"
+   ],
+   "cc": [
+    "us"
+   ]
+  },
+  {
+   "k": "election",
+   "t": "Taiwan local elections",
+   "w": "Taiwan",
+   "a": "2026-11-28",
+   "n": "Mayors, county magistrates and councils across Taiwan, a test of the parties before the 2028 presidential vote.",
+   "wiki": "2026 Taiwanese local elections",
+   "icon": {
+    "cc": "tw"
+   },
+   "sides": [
+    {
+     "n": "Kuomintang",
+     "wiki": "Kuomintang"
+    },
+    {
+     "n": "Democratic Progressive Party",
+     "wiki": "Democratic Progressive Party"
+    },
+    {
+     "n": "Taiwan People's Party",
+     "wiki": "Taiwan People's Party"
+    }
+   ],
+   "keys": [
+    "taiwan"
+   ],
+   "cc": [
+    "tw"
+   ]
+  },
+  {
+   "k": "election",
+   "t": "Nigeria general election",
+   "w": "Nigeria",
+   "a": "2027-02-20",
+   "n": "Africa’s most populous country chooses a president and National Assembly.",
+   "wiki": "2027 Nigerian general election",
+   "when": "February 2027",
+   "icon": {
+    "cc": "ng"
+   },
+   "sides": [
+    {
+     "n": "All Progressives Congress",
+     "wiki": "All Progressives Congress"
+    },
+    {
+     "n": "Peoples Democratic Party",
+     "wiki": "Peoples Democratic Party (Nigeria)"
+    },
+    {
+     "n": "Labour Party",
+     "wiki": "Labour Party (Nigeria)"
+    }
+   ],
+   "keys": [
+    "nigeria",
+    "tinubu"
+   ],
+   "cc": [
+    "ng"
+   ]
+  },
+  {
+   "k": "election",
+   "t": "India: state elections in Uttar Pradesh and Punjab",
+   "w": "India",
+   "a": "2027-02-10",
+   "b": "2027-03-10",
+   "n": "Uttar Pradesh, India’s most populous state, votes with Punjab, Uttarakhand, Goa and Manipur: a read on national politics ahead of 2029.",
+   "wiki": "2027 Uttar Pradesh Legislative Assembly election",
+   "when": "February–March 2027",
+   "icon": {
+    "cc": "in"
+   },
+   "sides": [
+    {
+     "n": "BJP",
+     "wiki": "Bharatiya Janata Party"
+    },
+    {
+     "n": "Indian National Congress",
+     "wiki": "Indian National Congress"
+    },
+    {
+     "n": "Samajwadi Party",
+     "wiki": "Samajwadi Party"
+    },
+    {
+     "n": "Aam Aadmi Party",
+     "wiki": "Aam Aadmi Party"
+    }
+   ],
+   "chart": {
+    "type": "seats",
+    "note": "Uttar Pradesh’s Legislative Assembly has 403 seats. Tap seats to give them to a party and see who would reach the 202 needed.",
+    "chambers": [
+     {
+      "name": "Uttar Pradesh Legislative Assembly",
+      "total": 403,
+      "majority": 202,
+      "parties": [
+       {
+        "n": "BJP and allies",
+        "c": "#e8873a",
+        "s": 0
+       },
+       {
+        "n": "Samajwadi Party and allies",
+        "c": "#d95a4f",
+        "s": 0
+       },
+       {
+        "n": "Others",
+        "c": "#8a8a86",
+        "s": 0
+       }
+      ]
+     }
+    ]
+   },
+   "keys": [
+    "uttar pradesh",
+    "punjab",
+    "india"
+   ],
+   "cc": [
+    "in"
+   ]
+  },
+  {
+   "k": "election",
+   "t": "French presidential election",
+   "w": "France",
+   "a": "2027-04-10",
+   "b": "2027-04-24",
+   "n": "Two rounds, the first in April: the race to succeed Emmanuel Macron.",
+   "wiki": "2027 French presidential election",
+   "when": "April 2027",
+   "icon": {
+    "cc": "fr"
+   },
+   "sides": [
+    {
+     "n": "National Rally",
+     "wiki": "National Rally"
+    },
+    {
+     "n": "Renaissance",
+     "wiki": "Renaissance (French political party)"
+    },
+    {
+     "n": "The Republicans",
+     "wiki": "The Republicans (France)"
+    },
+    {
+     "n": "La France Insoumise",
+     "wiki": "La France Insoumise"
+    },
+    {
+     "n": "Socialist Party",
+     "wiki": "Socialist Party (France)"
+    },
+    {
+     "n": "The Ecologists",
+     "wiki": "Europe Ecology – The Greens"
+    }
+   ],
+   "keys": [
+    "france",
+    "macron",
+    "le pen"
+   ],
+   "cc": [
+    "fr"
+   ],
+   "level": "national"
+  },
+  {
+   "k": "election",
+   "t": "Kenya general election",
+   "w": "Kenya",
+   "a": "2027-08-10",
+   "n": "President, parliament and county governors.",
+   "wiki": "2027 Kenyan general election",
+   "when": "August 2027",
+   "icon": {
+    "cc": "ke"
+   },
+   "sides": [
+    {
+     "n": "United Democratic Alliance",
+     "wiki": "United Democratic Alliance"
+    },
+    {
+     "n": "Orange Democratic Movement",
+     "wiki": "Orange Democratic Movement"
+    }
+   ],
+   "keys": [
+    "kenya",
+    "ruto"
+   ],
+   "cc": [
+    "ke"
+   ]
+  },
+  {
+   "k": "election",
+   "t": "Argentina general election",
+   "w": "Argentina",
+   "a": "2027-10-24",
+   "n": "President and Congress.",
+   "wiki": "2027 Argentine general election",
+   "when": "October 2027",
+   "icon": {
+    "cc": "ar"
+   },
+   "sides": [
+    {
+     "n": "La Libertad Avanza",
+     "wiki": "La Libertad Avanza"
+    },
+    {
+     "n": "Justicialist Party",
+     "wiki": "Justicialist Party"
+    }
+   ],
+   "keys": [
+    "argentina",
+    "milei"
+   ],
+   "cc": [
+    "ar"
+   ]
+  },
+  {
+   "k": "election",
+   "t": "US presidential election",
+   "w": "United States",
+   "a": "2028-11-07",
+   "n": "The next presidential election; party primaries run through the first half of 2028.",
+   "wiki": "2028 United States presidential election",
+   "icon": {
+    "cc": "us"
+   },
+   "sides": [
+    {
+     "n": "Democratic Party",
+     "wiki": "Democratic Party (United States)"
+    },
+    {
+     "n": "Republican Party",
+     "wiki": "Republican Party (United States)"
+    }
+   ],
+   "chart": {
+    "type": "seats",
+    "note": "538 electoral votes, 270 to win. Tap to hand votes to a party and build a map of your own.",
+    "chambers": [
+     {
+      "name": "Electoral College",
+      "total": 538,
+      "majority": 270,
+      "parties": [
+       {
+        "n": "Republican",
+        "c": "#d95a4f",
+        "s": 0
+       },
+       {
+        "n": "Democratic",
+        "c": "#4b7fbf",
+        "s": 0
+       }
+      ]
+     }
+    ]
+   },
+   "keys": [
+    "2028",
+    "presidential"
+   ],
+   "cc": [
+    "us"
+   ]
+  },
+  {
+   "k": "summit",
+   "t": "COP31 climate conference",
+   "w": "Antalya, Türkiye",
+   "a": "2026-11-09",
+   "b": "2026-11-20",
+   "n": "The UN climate talks: countries report on cutting emissions and agree finance for the ones hit hardest. Türkiye hosts, Australia leads the negotiations.",
+   "wiki": "2026 United Nations Climate Change Conference",
+   "icon": {
+    "cc": "tr"
+   },
+   "sides": [
+    {
+     "n": "Türkiye (host)",
+     "cc": "tr"
+    },
+    {
+     "n": "Australia (negotiations)",
+     "cc": "au"
+    },
+    {
+     "n": "United Nations",
+     "wiki": "United Nations"
+    }
+   ],
+   "keys": [
+    "cop31",
+    "climate",
+    "emissions",
+    "antalya"
+   ],
+   "cc": [
+    "tr",
+    "au"
+   ]
+  },
+  {
+   "k": "summit",
+   "t": "G20 leaders’ summit",
+   "w": "Miami, United States",
+   "a": "2026-12-14",
+   "b": "2026-12-15",
+   "n": "The 20 largest economies meet under the US presidency.",
+   "wiki": "2026 G20 Miami summit",
+   "when": "mid December 2026",
+   "icon": {
+    "cc": "us"
+   },
+   "sides": [
+    {
+     "n": "United States (host)",
+     "cc": "us"
+    },
+    {
+     "n": "China",
+     "cc": "cn"
+    },
+    {
+     "n": "India",
+     "cc": "in"
+    },
+    {
+     "n": "Brazil",
+     "cc": "br"
+    },
+    {
+     "n": "Germany",
+     "cc": "de"
+    },
+    {
+     "n": "Japan",
+     "cc": "jp"
+    },
+    {
+     "n": "United Kingdom",
+     "cc": "gb"
+    },
+    {
+     "n": "France",
+     "cc": "fr"
+    }
+   ],
+   "keys": [
+    "g20"
+   ],
+   "cc": [
+    "us"
+   ]
+  },
+  {
+   "k": "summit",
+   "t": "Nobel Prize ceremonies",
+   "w": "Stockholm and Oslo",
+   "a": "2026-12-10",
+   "n": "The prizes announced in October are handed over on the anniversary of Alfred Nobel’s death.",
+   "wiki": "Nobel Prize",
+   "icon": {
+    "wiki": "Nobel Prize"
+   },
+   "keys": [
+    "nobel"
+   ],
+   "cc": [
+    "se"
+   ]
+  },
+  {
+   "k": "economy",
+   "t": "US Federal Reserve rate decision",
+   "w": "United States",
+   "a": "2026-12-09",
+   "n": "The year’s last FOMC meeting (8–9 December): what happens to interest rates moves mortgages, loans and markets worldwide.",
+   "wiki": "Federal Open Market Committee",
+   "icon": {
+    "wiki": "Federal Reserve"
+   },
+   "keys": [
+    "federal reserve",
+    "interest rate",
+    "fed "
+   ],
+   "cc": [
+    "us"
+   ]
+  },
+  {
+   "k": "summit",
+   "t": "World Economic Forum",
+   "w": "Davos, Switzerland",
+   "a": "2027-01-18",
+   "b": "2027-01-22",
+   "n": "Leaders from business, politics and civil society meet in the Swiss Alps.",
+   "wiki": "World Economic Forum",
+   "when": "January 2027",
+   "icon": {
+    "wiki": "World Economic Forum"
+   },
+   "keys": [
+    "davos",
+    "world economic forum"
+   ],
+   "cc": [
+    "ch"
+   ]
+  },
+  {
+   "k": "summit",
+   "t": "COP32 climate conference",
+   "w": "Addis Ababa, Ethiopia",
+   "a": "2027-11-08",
+   "n": "The next UN climate talks, in Africa.",
+   "wiki": "2027 United Nations Climate Change Conference",
+   "when": "November 2027",
+   "icon": {
+    "cc": "et"
+   },
+   "keys": [
+    "cop32"
+   ],
+   "cc": [
+    "et"
+   ]
+  },
+  {
+   "k": "sport",
+   "t": "Formula 1: season finale",
+   "w": "Abu Dhabi",
+   "a": "2026-12-04",
+   "b": "2026-12-06",
+   "n": "The last race decides the final places in the championship.",
+   "wiki": "2026 Formula One World Championship",
+   "icon": {
+    "wiki": "Formula One"
+   },
+   "live": {
+    "sport": "f1",
+    "league": 4370,
+    "season": "year"
+   },
+   "keys": [
+    "formula 1",
+    "grand prix",
+    "verstappen",
+    "norris"
+   ],
+   "cc": [
+    "ae"
+   ]
+  },
+  {
+   "k": "sport",
+   "t": "Premier League, 2026–27 season",
+   "w": "England",
+   "a": "2026-08-22",
+   "b": "2027-05-23",
+   "n": "Matches every weekend, with a break for the winter holidays being the busiest stretch of the year.",
+   "wiki": "2026–27 Premier League",
+   "when": "August–May",
+   "icon": {
+    "wiki": "Premier League"
+   },
+   "live": {
+    "sport": "football",
+    "league": 4328,
+    "season": "split"
+   },
+   "keys": [
+    "premier league"
+   ],
+   "cc": [
+    "gb"
+   ]
+  },
+  {
+   "k": "sport",
+   "t": "La Liga, 2026–27 season — including El Clásico",
+   "w": "Spain",
+   "a": "2026-08-15",
+   "b": "2027-05-23",
+   "n": "Barcelona and Real Madrid meet twice in the league (dates are set by LaLiga): the match the football world stops for.",
+   "wiki": "El Clásico",
+   "when": "August–May",
+   "icon": {
+    "wiki": "La Liga"
+   },
+   "sides": [
+    {
+     "n": "FC Barcelona",
+     "wiki": "FC Barcelona"
+    },
+    {
+     "n": "Real Madrid",
+     "wiki": "Real Madrid CF"
+    }
+   ],
+   "live": {
+    "sport": "football",
+    "league": 4335,
+    "season": "split",
+    "h2h": [
+     "Barcelona",
+     "Real Madrid"
+    ]
+   },
+   "keys": [
+    "la liga",
+    "barcelona",
+    "real madrid",
+    "clasico",
+    "clásico"
+   ],
+   "cc": [
+    "es"
+   ]
+  },
+  {
+   "k": "sport",
+   "t": "UEFA Champions League, 2026–27",
+   "w": "Europe",
+   "a": "2026-09-15",
+   "b": "2027-06-05",
+   "n": "League phase through January, knockouts from February; the final is played in Madrid on 5 June.",
+   "wiki": "2026–27 UEFA Champions League",
+   "icon": {
+    "wiki": "UEFA Champions League"
+   },
+   "live": {
+    "sport": "football",
+    "league": 4480,
+    "season": "split"
+   },
+   "phases": [
+    {
+     "n": "League phase",
+     "a": "2026-09-15",
+     "b": "2027-01-28"
+    },
+    {
+     "n": "Play-offs",
+     "a": "2027-02-16",
+     "b": "2027-02-25",
+     "t": "approximate dates"
+    },
+    {
+     "n": "Round of 16",
+     "a": "2027-03-09",
+     "b": "2027-03-18",
+     "t": "approximate dates"
+    },
+    {
+     "n": "Quarter-finals",
+     "a": "2027-04-06",
+     "b": "2027-04-15",
+     "t": "approximate dates"
+    },
+    {
+     "n": "Semi-finals",
+     "a": "2027-04-27",
+     "b": "2027-05-06",
+     "t": "approximate dates"
+    },
+    {
+     "n": "Final",
+     "a": "2027-06-05",
+     "b": "2027-06-05",
+     "t": "Madrid"
+    }
+   ],
+   "keys": [
+    "champions league"
+   ],
+   "cc": []
+  },
+  {
+   "k": "sport",
+   "t": "NBA, 2026–27 season",
+   "w": "United States and Canada",
+   "a": "2026-10-20",
+   "b": "2027-06-20",
+   "n": "Regular season to April, playoffs and the Finals in June.",
+   "wiki": "2026–27 NBA season",
+   "when": "October–June",
+   "icon": {
+    "wiki": "National Basketball Association"
+   },
+   "live": {
+    "sport": "nba",
+    "league": 4387,
+    "season": "split"
+   },
+   "phases": [
+    {
+     "n": "Regular season",
+     "a": "2026-10-20",
+     "b": "2027-04-12"
+    },
+    {
+     "n": "Play-in",
+     "a": "2027-04-14",
+     "b": "2027-04-17",
+     "t": "approximate dates"
+    },
+    {
+     "n": "Playoffs",
+     "a": "2027-04-18",
+     "b": "2027-06-07",
+     "t": "approximate dates"
+    },
+    {
+     "n": "Finals",
+     "a": "2027-06-10",
+     "b": "2027-06-20",
+     "t": "approximate dates"
+    }
+   ],
+   "keys": [
+    "nba"
+   ],
+   "cc": [
+    "us"
+   ]
+  },
+  {
+   "k": "sport",
+   "t": "NFL, 2026 season",
+   "w": "United States",
+   "a": "2026-09-10",
+   "b": "2027-02-14",
+   "n": "Regular season to January, playoffs to Super Bowl LXI at SoFi Stadium, Los Angeles, on 14 February.",
+   "wiki": "2026 NFL season",
+   "when": "September–February",
+   "icon": {
+    "wiki": "National Football League"
+   },
+   "live": {
+    "sport": "nfl",
+    "league": 4391,
+    "season": "year"
+   },
+   "phases": [
+    {
+     "n": "Regular season",
+     "a": "2026-09-10",
+     "b": "2027-01-10"
+    },
+    {
+     "n": "Playoffs",
+     "a": "2027-01-16",
+     "b": "2027-02-07",
+     "t": "approximate dates"
+    },
+    {
+     "n": "Super Bowl LXI",
+     "a": "2027-02-14",
+     "b": "2027-02-14",
+     "t": "SoFi Stadium, Los Angeles"
+    }
+   ],
+   "keys": [
+    "nfl",
+    "super bowl"
+   ],
+   "cc": [
+    "us"
+   ]
+  },
+  {
+   "k": "sport",
+   "t": "Australian Open",
+   "w": "Melbourne, Australia",
+   "a": "2027-01-18",
+   "b": "2027-01-31",
+   "n": "The first tennis Grand Slam of the year.",
+   "wiki": "2027 Australian Open",
+   "when": "January 2027",
+   "icon": {
+    "cc": "au"
+   },
+   "keys": [
+    "australian open"
+   ],
+   "cc": [
+    "au"
+   ]
+  },
+  {
+   "k": "sport",
+   "t": "Women’s World Cup",
+   "w": "Brazil",
+   "a": "2027-06-24",
+   "b": "2027-07-25",
+   "n": "The first one held in South America.",
+   "wiki": "2027 FIFA Women's World Cup",
+   "when": "June–July 2027",
+   "icon": {
+    "cc": "br"
+   },
+   "keys": [
+    "women's world cup"
+   ],
+   "cc": [
+    "br"
+   ]
+  },
+  {
+   "k": "sport",
+   "t": "Tour de France",
+   "w": "France",
+   "a": "2027-07-03",
+   "b": "2027-07-25",
+   "n": "Three weeks of cycling’s biggest race.",
+   "wiki": "2027 Tour de France",
+   "when": "July 2027",
+   "icon": {
+    "wiki": "Tour de France"
+   },
+   "keys": [
+    "tour de france"
+   ],
+   "cc": [
+    "fr"
+   ]
+  },
+  {
+   "k": "sport",
+   "t": "Rugby World Cup",
+   "w": "Australia",
+   "a": "2027-10-01",
+   "b": "2027-11-13",
+   "n": "Held in Australia for the first time since 2003.",
+   "wiki": "2027 Rugby World Cup",
+   "when": "October–November 2027",
+   "icon": {
+    "cc": "au"
+   },
+   "keys": [
+    "rugby world cup"
+   ],
+   "cc": [
+    "au"
+   ]
+  },
+  {
+   "k": "sport",
+   "t": "Cricket World Cup",
+   "w": "South Africa, Zimbabwe and Namibia",
+   "a": "2027-10-01",
+   "b": "2027-11-30",
+   "n": "The 50-over World Cup comes back to southern Africa.",
+   "wiki": "2027 Cricket World Cup",
+   "when": "October–November 2027",
+   "icon": {
+    "cc": "za"
+   },
+   "sides": [
+    {
+     "n": "South Africa",
+     "cc": "za"
+    },
+    {
+     "n": "Zimbabwe",
+     "cc": "zw"
+    },
+    {
+     "n": "Namibia",
+     "cc": "na"
+    }
+   ],
+   "keys": [
+    "cricket world cup"
+   ],
+   "cc": [
+    "za"
+   ]
+  },
+  {
+   "k": "sport",
+   "t": "Euro 2028",
+   "w": "United Kingdom and Ireland",
+   "a": "2028-06-09",
+   "b": "2028-07-09",
+   "n": "The European football championship.",
+   "wiki": "UEFA Euro 2028",
+   "when": "June–July 2028",
+   "icon": {
+    "wiki": "UEFA Euro 2028"
+   },
+   "sides": [
+    {
+     "n": "England",
+     "cc": "gb-eng"
+    },
+    {
+     "n": "Scotland",
+     "cc": "gb-sct"
+    },
+    {
+     "n": "Wales",
+     "cc": "gb-wls"
+    },
+    {
+     "n": "Northern Ireland",
+     "cc": "gb-nir"
+    },
+    {
+     "n": "Ireland",
+     "cc": "ie"
+    }
+   ],
+   "keys": [
+    "euro 2028"
+   ],
+   "cc": [
+    "gb",
+    "ie"
+   ]
+  },
+  {
+   "k": "sport",
+   "t": "Summer Olympics",
+   "w": "Los Angeles, United States",
+   "a": "2028-07-14",
+   "b": "2028-07-30",
+   "n": "LA hosts for the third time; cricket and flag football join the programme.",
+   "wiki": "2028 Summer Olympics",
+   "icon": {
+    "wiki": "2028 Summer Olympics"
+   },
+   "sides": [
+    {
+     "n": "United States (host)",
+     "cc": "us"
+    }
+   ],
+   "keys": [
+    "olympic"
+   ],
+   "cc": [
+    "us"
+   ]
+  },
+  {
+   "k": "sky",
+   "t": "Leonid meteor shower",
+   "w": "Night sky",
+   "a": "2026-11-17",
+   "b": "2026-11-18",
+   "n": "Fast meteors, best after midnight away from city lights.",
+   "wiki": "Leonids",
+   "chart": {
+    "type": "curve",
+    "peak": "2026-11-17",
+    "width": 1.7,
+    "max": 15,
+    "unit": "meteors an hour (under a dark sky)",
+    "note": "Leonids are the dust of comet Tempel–Tuttle. The curve is the expected rate across the nights around the peak; the Moon, clouds and city lights lower what you actually see."
+   },
+   "keys": [
+    "meteor",
+    "leonid"
+   ],
+   "cc": []
+  },
+  {
+   "k": "sky",
+   "t": "Geminid meteor shower",
+   "w": "Night sky",
+   "a": "2026-12-13",
+   "b": "2026-12-14",
+   "n": "Usually the best meteor shower of the year, up to 100 an hour in a dark sky.",
+   "wiki": "Geminids",
+   "chart": {
+    "type": "curve",
+    "peak": "2026-12-14",
+    "width": 2.0,
+    "max": 120,
+    "unit": "meteors an hour (under a dark sky)",
+    "note": "The Geminids come from the asteroid 3200 Phaethon. They are bright and slow, and the shower is long: good from 22:00 onward."
+   },
+   "keys": [
+    "meteor",
+    "geminid"
+   ],
+   "cc": []
+  },
+  {
+   "k": "sky",
+   "t": "Total solar eclipse",
+   "w": "Egypt, Saudi Arabia and Yemen",
+   "a": "2027-08-02",
+   "n": "A rare long total eclipse, up to six minutes over Luxor.",
+   "wiki": "Solar eclipse of August 2, 2027",
+   "icon": {
+    "cc": "eg"
+   },
+   "sides": [
+    {
+     "n": "Egypt",
+     "cc": "eg"
+    },
+    {
+     "n": "Saudi Arabia",
+     "cc": "sa"
+    },
+    {
+     "n": "Yemen",
+     "cc": "ye"
+    }
+   ],
+   "keys": [
+    "eclipse"
+   ],
+   "cc": [
+    "eg",
+    "sa"
+   ]
+  },
+  {
+   "k": "culture",
+   "t": "Diwali",
+   "w": "India and worldwide",
+   "a": "2026-11-08",
+   "n": "The festival of lights.",
+   "wiki": "Diwali",
+   "icon": {
+    "cc": "in"
+   },
+   "keys": [
+    "diwali"
+   ],
+   "cc": [
+    "in"
+   ],
+   "sec": "holidays"
+  },
+  {
+   "k": "culture",
+   "t": "Thanksgiving",
+   "w": "United States",
+   "a": "2026-11-26",
+   "n": "Fourth Thursday of November.",
+   "wiki": "Thanksgiving (United States)",
+   "icon": {
+    "cc": "us"
+   },
+   "keys": [
+    "thanksgiving"
+   ],
+   "cc": [
+    "us"
+   ],
+   "sec": "holidays"
+  },
+  {
+   "k": "culture",
+   "t": "Christmas",
+   "w": "Worldwide",
+   "a": "2026-12-25",
+   "wiki": "Christmas",
+   "keys": [
+    "christmas"
+   ],
+   "cc": [],
+   "sec": "holidays"
+  },
+  {
+   "k": "culture",
+   "t": "Chinese New Year: Year of the Goat",
+   "w": "China and worldwide",
+   "a": "2027-02-06",
+   "n": "The biggest travel week of the year.",
+   "wiki": "Chinese New Year",
+   "icon": {
+    "cc": "cn"
+   },
+   "keys": [
+    "chinese new year",
+    "lunar new year"
+   ],
+   "cc": [
+    "cn"
+   ],
+   "sec": "holidays"
+  },
+  {
+   "k": "culture",
+   "t": "Ramadan begins",
+   "w": "Muslim world",
+   "a": "2027-02-08",
+   "n": "The exact day depends on the sighting of the moon.",
+   "wiki": "Ramadan",
+   "when": "around 8 February 2027",
+   "keys": [
+    "ramadan"
+   ],
+   "cc": [],
+   "sec": "holidays"
+  },
+  {
+   "k": "culture",
+   "t": "Academy Awards",
+   "w": "Los Angeles, United States",
+   "a": "2027-03-07",
+   "n": "The Oscars.",
+   "wiki": "99th Academy Awards",
+   "when": "March 2027",
+   "icon": {
+    "wiki": "Academy Awards"
+   },
+   "keys": [
+    "oscar",
+    "academy award"
+   ],
+   "cc": [
+    "us"
+   ],
+   "sec": "events"
+  },
+  {
+   "k": "election",
+   "t": "Saarland state election",
+   "w": "Germany · Saarland",
+   "a": "2027-03-28",
+   "cc": [
+    "de"
+   ],
+   "n": "Voters in Saarland choose their state parliament.",
+   "wiki": "2027 Saarland state election",
+   "when": "March 2027",
+   "level": "regional",
+   "sides": [
+    {
+     "n": "CDU",
+     "wiki": "Christian Democratic Union of Germany"
+    },
+    {
+     "n": "SPD",
+     "wiki": "Social Democratic Party of Germany"
+    },
+    {
+     "n": "AfD",
+     "wiki": "Alternative for Germany"
+    },
+    {
+     "n": "Greens",
+     "wiki": "Alliance 90/The Greens"
+    },
+    {
+     "n": "FDP",
+     "wiki": "Free Democratic Party (Germany)"
+    },
+    {
+     "n": "Die Linke",
+     "wiki": "The Left (Germany)"
+    }
+   ],
+   "keys": [
+    "saarland",
+    "landtag"
+   ],
+   "icon": {
+    "cc": "de"
+   }
+  },
+  {
+   "k": "election",
+   "t": "Bremen state election",
+   "w": "Germany · Bremen",
+   "a": "2027-05-09",
+   "cc": [
+    "de"
+   ],
+   "n": "Voters in Bremen choose their state parliament.",
+   "wiki": "2027 Bremen state election",
+   "when": "May 2027",
+   "level": "regional",
+   "sides": [
+    {
+     "n": "CDU",
+     "wiki": "Christian Democratic Union of Germany"
+    },
+    {
+     "n": "SPD",
+     "wiki": "Social Democratic Party of Germany"
+    },
+    {
+     "n": "AfD",
+     "wiki": "Alternative for Germany"
+    },
+    {
+     "n": "Greens",
+     "wiki": "Alliance 90/The Greens"
+    },
+    {
+     "n": "FDP",
+     "wiki": "Free Democratic Party (Germany)"
+    },
+    {
+     "n": "Die Linke",
+     "wiki": "The Left (Germany)"
+    }
+   ],
+   "keys": [
+    "bremen",
+    "landtag"
+   ],
+   "icon": {
+    "cc": "de"
+   }
+  },
+  {
+   "k": "election",
+   "t": "Schleswig-Holstein state election",
+   "w": "Germany · Schleswig-Holstein",
+   "a": "2027-05-09",
+   "cc": [
+    "de"
+   ],
+   "n": "Voters in Schleswig-Holstein choose their state parliament.",
+   "wiki": "2027 Schleswig-Holstein state election",
+   "when": "May 2027",
+   "level": "regional",
+   "sides": [
+    {
+     "n": "CDU",
+     "wiki": "Christian Democratic Union of Germany"
+    },
+    {
+     "n": "SPD",
+     "wiki": "Social Democratic Party of Germany"
+    },
+    {
+     "n": "AfD",
+     "wiki": "Alternative for Germany"
+    },
+    {
+     "n": "Greens",
+     "wiki": "Alliance 90/The Greens"
+    },
+    {
+     "n": "FDP",
+     "wiki": "Free Democratic Party (Germany)"
+    },
+    {
+     "n": "Die Linke",
+     "wiki": "The Left (Germany)"
+    }
+   ],
+   "keys": [
+    "schleswig-holstein",
+    "landtag"
+   ],
+   "icon": {
+    "cc": "de"
+   }
+  },
+  {
+   "k": "election",
+   "t": "North Rhine-Westphalia state election",
+   "w": "Germany · North Rhine-Westphalia",
+   "a": "2027-05-09",
+   "cc": [
+    "de"
+   ],
+   "n": "Voters in North Rhine-Westphalia choose their state parliament.",
+   "wiki": "2027 North Rhine-Westphalia state election",
+   "when": "May 2027",
+   "level": "regional",
+   "sides": [
+    {
+     "n": "CDU",
+     "wiki": "Christian Democratic Union of Germany"
+    },
+    {
+     "n": "SPD",
+     "wiki": "Social Democratic Party of Germany"
+    },
+    {
+     "n": "AfD",
+     "wiki": "Alternative for Germany"
+    },
+    {
+     "n": "Greens",
+     "wiki": "Alliance 90/The Greens"
+    },
+    {
+     "n": "FDP",
+     "wiki": "Free Democratic Party (Germany)"
+    },
+    {
+     "n": "Die Linke",
+     "wiki": "The Left (Germany)"
+    }
+   ],
+   "keys": [
+    "north rhine-westphalia",
+    "landtag"
+   ],
+   "icon": {
+    "cc": "de"
+   }
+  },
+  {
+   "k": "election",
+   "t": "Lower Saxony state election",
+   "w": "Germany · Lower Saxony",
+   "a": "2027-10-10",
+   "cc": [
+    "de"
+   ],
+   "n": "Voters in Lower Saxony choose their state parliament.",
+   "wiki": "2027 Lower Saxony state election",
+   "when": "autumn 2027",
+   "level": "regional",
+   "sides": [
+    {
+     "n": "CDU",
+     "wiki": "Christian Democratic Union of Germany"
+    },
+    {
+     "n": "SPD",
+     "wiki": "Social Democratic Party of Germany"
+    },
+    {
+     "n": "AfD",
+     "wiki": "Alternative for Germany"
+    },
+    {
+     "n": "Greens",
+     "wiki": "Alliance 90/The Greens"
+    },
+    {
+     "n": "FDP",
+     "wiki": "Free Democratic Party (Germany)"
+    },
+    {
+     "n": "Die Linke",
+     "wiki": "The Left (Germany)"
+    }
+   ],
+   "keys": [
+    "lower saxony",
+    "landtag"
+   ],
+   "icon": {
+    "cc": "de"
+   }
+  },
+  {
+   "k": "election",
+   "t": "Berlin and Mecklenburg-Vorpommern state elections",
+   "w": "Germany",
+   "a": "2026-09-20",
+   "cc": [
+    "de"
+   ],
+   "n": "Two state elections on one day, a test for the governing coalition and the AfD.",
+   "wiki": "2026 Berlin state election",
+   "when": "20 Sep 2026",
+   "level": "regional",
+   "sides": [
+    {
+     "n": "CDU",
+     "wiki": "Christian Democratic Union of Germany"
+    },
+    {
+     "n": "SPD",
+     "wiki": "Social Democratic Party of Germany"
+    },
+    {
+     "n": "AfD",
+     "wiki": "Alternative for Germany"
+    },
+    {
+     "n": "Greens",
+     "wiki": "Alliance 90/The Greens"
+    },
+    {
+     "n": "FDP",
+     "wiki": "Free Democratic Party (Germany)"
+    },
+    {
+     "n": "Die Linke",
+     "wiki": "The Left (Germany)"
+    }
+   ],
+   "keys": [
+    "berlin",
+    "mecklenburg"
+   ],
+   "icon": {
+    "cc": "de"
+   }
+  },
+  {
+   "k": "election",
+   "t": "Saxony-Anhalt state election",
+   "w": "Germany · Saxony-Anhalt",
+   "a": "2026-09-06",
+   "cc": [
+    "de"
+   ],
+   "wiki": "2026 Saxony-Anhalt state election",
+   "level": "regional",
+   "sides": [
+    {
+     "n": "CDU",
+     "wiki": "Christian Democratic Union of Germany"
+    },
+    {
+     "n": "SPD",
+     "wiki": "Social Democratic Party of Germany"
+    },
+    {
+     "n": "AfD",
+     "wiki": "Alternative for Germany"
+    },
+    {
+     "n": "Greens",
+     "wiki": "Alliance 90/The Greens"
+    },
+    {
+     "n": "FDP",
+     "wiki": "Free Democratic Party (Germany)"
+    },
+    {
+     "n": "Die Linke",
+     "wiki": "The Left (Germany)"
+    }
+   ],
+   "keys": [
+    "saxony-anhalt"
+   ],
+   "icon": {
+    "cc": "de"
+   }
+  },
+  {
+   "k": "election",
+   "t": "Bundestag election (due)",
+   "w": "Germany",
+   "a": "2029-02-25",
+   "cc": [
+    "de"
+   ],
+   "n": "The next federal election is due by early 2029 unless the coalition breaks earlier.",
+   "wiki": "Next German federal election",
+   "when": "due by early 2029",
+   "level": "national",
+   "sides": [
+    {
+     "n": "CDU",
+     "wiki": "Christian Democratic Union of Germany"
+    },
+    {
+     "n": "SPD",
+     "wiki": "Social Democratic Party of Germany"
+    },
+    {
+     "n": "AfD",
+     "wiki": "Alternative for Germany"
+    },
+    {
+     "n": "Greens",
+     "wiki": "Alliance 90/The Greens"
+    },
+    {
+     "n": "FDP",
+     "wiki": "Free Democratic Party (Germany)"
+    },
+    {
+     "n": "Die Linke",
+     "wiki": "The Left (Germany)"
+    }
+   ],
+   "keys": [
+    "bundestag",
+    "merz"
+   ],
+   "icon": {
+    "cc": "de"
+   }
+  },
+  {
+   "k": "election",
+   "t": "French Senate elections",
+   "w": "France",
+   "a": "2026-09-27",
+   "cc": [
+    "fr"
+   ],
+   "n": "Half of the Senate is renewed by an electoral college of local officials.",
+   "wiki": "2026 French Senate election",
+   "when": "late Sep 2026",
+   "level": "national",
+   "sides": [
+    {
+     "n": "National Rally",
+     "wiki": "National Rally"
+    },
+    {
+     "n": "Renaissance",
+     "wiki": "Renaissance (French political party)"
+    },
+    {
+     "n": "The Republicans",
+     "wiki": "The Republicans (France)"
+    },
+    {
+     "n": "La France Insoumise",
+     "wiki": "La France Insoumise"
+    },
+    {
+     "n": "Socialist Party",
+     "wiki": "Socialist Party (France)"
+    },
+    {
+     "n": "The Ecologists",
+     "wiki": "Europe Ecology – The Greens"
+    }
+   ],
+   "keys": [
+    "sénat",
+    "french senate"
+   ],
+   "icon": {
+    "cc": "fr"
+   }
+  },
+  {
+   "k": "election",
+   "t": "French legislative elections (due)",
+   "w": "France",
+   "a": "2029-06-18",
+   "cc": [
+    "fr"
+   ],
+   "wiki": "Next French legislative election",
+   "when": "due by mid-2029, earlier if the Assembly is dissolved",
+   "level": "national",
+   "sides": [
+    {
+     "n": "National Rally",
+     "wiki": "National Rally"
+    },
+    {
+     "n": "Renaissance",
+     "wiki": "Renaissance (French political party)"
+    },
+    {
+     "n": "The Republicans",
+     "wiki": "The Republicans (France)"
+    },
+    {
+     "n": "La France Insoumise",
+     "wiki": "La France Insoumise"
+    },
+    {
+     "n": "Socialist Party",
+     "wiki": "Socialist Party (France)"
+    },
+    {
+     "n": "The Ecologists",
+     "wiki": "Europe Ecology – The Greens"
+    }
+   ],
+   "keys": [
+    "assemblée nationale",
+    "national assembly"
+   ],
+   "icon": {
+    "cc": "fr"
+   }
+  },
+  {
+   "k": "election",
+   "t": "Spanish general election",
+   "w": "Spain",
+   "a": "2026-11-29",
+   "cc": [
+    "es"
+   ],
+   "n": "Spain votes for the Cortes Generales: Congress and Senate decide who forms the next government.",
+   "wiki": "2026 Spanish general election",
+   "level": "national",
+   "sides": [
+    {
+     "n": "PP",
+     "wiki": "People's Party (Spain)"
+    },
+    {
+     "n": "PSOE",
+     "wiki": "Spanish Socialist Workers' Party"
+    },
+    {
+     "n": "Vox",
+     "wiki": "Vox (political party)"
+    },
+    {
+     "n": "Sumar",
+     "wiki": "Sumar"
+    },
+    {
+     "n": "Podemos",
+     "wiki": "Podemos (Spanish political party)"
+    },
+    {
+     "n": "Junts",
+     "wiki": "Junts per Catalunya"
+    }
+   ],
+   "keys": [
+    "spanish election",
+    "elecciones generales",
+    "sánchez",
+    "feijóo",
+    "cortes"
+   ],
+   "icon": {
+    "cc": "es"
+   }
+  },
+  {
+   "k": "election",
+   "t": "Italian general election (due)",
+   "w": "Italy",
+   "a": "2027-09-26",
+   "cc": [
+    "it"
+   ],
+   "n": "The legislature ends in autumn 2027.",
+   "wiki": "Next Italian general election",
+   "when": "autumn 2027",
+   "level": "national",
+   "sides": [
+    {
+     "n": "Brothers of Italy",
+     "wiki": "Brothers of Italy"
+    },
+    {
+     "n": "Democratic Party",
+     "wiki": "Democratic Party (Italy)"
+    },
+    {
+     "n": "Five Star Movement",
+     "wiki": "Five Star Movement"
+    },
+    {
+     "n": "Lega",
+     "wiki": "Lega Nord"
+    },
+    {
+     "n": "Forza Italia",
+     "wiki": "Forza Italia"
+    },
+    {
+     "n": "Greens and Left Alliance",
+     "wiki": "Greens and Left Alliance"
+    }
+   ],
+   "keys": [
+    "meloni",
+    "italian election"
+   ],
+   "icon": {
+    "cc": "it"
+   }
+  },
+  {
+   "k": "election",
+   "t": "Swedish general election",
+   "w": "Sweden",
+   "a": "2026-09-13",
+   "cc": [
+    "se"
+   ],
+   "n": "Riksdag, county and municipal councils, all on one day.",
+   "wiki": "2026 Swedish general election",
+   "level": "national",
+   "sides": [
+    {
+     "n": "Social Democrats",
+     "wiki": "Swedish Social Democratic Party"
+    },
+    {
+     "n": "Moderates",
+     "wiki": "Moderate Party"
+    },
+    {
+     "n": "Sweden Democrats",
+     "wiki": "Sweden Democrats"
+    },
+    {
+     "n": "Left Party",
+     "wiki": "Left Party (Sweden)"
+    },
+    {
+     "n": "Centre Party",
+     "wiki": "Centre Party (Sweden)"
+    },
+    {
+     "n": "Christian Democrats",
+     "wiki": "Christian Democrats (Sweden)"
+    },
+    {
+     "n": "Liberals",
+     "wiki": "Liberals (Sweden)"
+    },
+    {
+     "n": "Green Party",
+     "wiki": "Green Party (Sweden)"
+    }
+   ],
+   "keys": [
+    "swedish election",
+    "sweden election",
+    "kristersson",
+    "andersson"
+   ],
+   "icon": {
+    "cc": "se"
+   }
+  },
+  {
+   "k": "election",
+   "t": "European Parliament election",
+   "w": "European Union",
+   "a": "2029-06-06",
+   "cc": [
+    "fr",
+    "es",
+    "it",
+    "de",
+    "se"
+   ],
+   "wiki": "2029 European Parliament election",
+   "when": "June 2029",
+   "level": "national",
+   "keys": [
+    "european parliament"
+   ],
+   "icon": {
+    "wiki": "European Parliament"
+   }
+  },
+  {
+   "k": "election",
+   "t": "Georgia Senate runoff (if needed)",
+   "w": "United States · Georgia",
+   "a": "2026-12-01",
+   "cc": [
+    "us"
+   ],
+   "n": "Georgia requires a majority; if nobody has one on 3 November, the top two meet again four weeks later.",
+   "wiki": "2026 United States Senate election in Georgia",
+   "level": "regional",
+   "keys": [
+    "georgia",
+    "runoff"
+   ],
+   "icon": {
+    "cc": "us"
+   }
+  },
+  {
+   "k": "summit",
+   "t": "National People’s Congress",
+   "w": "China",
+   "a": "2027-03-05",
+   "cc": [
+    "cn"
+   ],
+   "n": "China’s annual parliamentary session, where the economic growth target and budget are announced.",
+   "wiki": "National People's Congress",
+   "when": "March 2027",
+   "keys": [
+    "national people",
+    "xi jinping"
+   ],
+   "icon": {
+    "cc": "cn"
+   },
+   "sec": "politics"
+  },
+  {
+   "k": "summit",
+   "t": "Communist Party’s 21st National Congress",
+   "w": "China",
+   "a": "2027-10-15",
+   "cc": [
+    "cn"
+   ],
+   "n": "Held every five years: the leadership for the next term is chosen.",
+   "wiki": "National Congress of the Chinese Communist Party",
+   "when": "autumn 2027",
+   "keys": [
+    "communist party",
+    "party congress"
+   ],
+   "icon": {
+    "cc": "cn"
+   },
+   "sec": "politics"
+  },
+  {
+   "k": "economy",
+   "t": "China’s Central Economic Work Conference",
+   "w": "China",
+   "a": "2026-12-10",
+   "cc": [
+    "cn"
+   ],
+   "n": "The meeting that sets the economic priorities for the next year.",
+   "wiki": "Central Economic Work Conference",
+   "when": "usually mid-December",
+   "keys": [
+    "economic work conference",
+    "china economy"
+   ],
+   "icon": {
+    "cc": "cn"
+   }
+  },
+  {
+   "k": "economy",
+   "t": "ECB monetary policy meeting",
+   "w": "Euro area",
+   "a": "2026-12-17",
+   "cc": [
+    "fr",
+    "es",
+    "it",
+    "de"
+   ],
+   "n": "The European Central Bank’s last rate decision of the year.",
+   "wiki": "European Central Bank",
+   "when": "mid December 2026",
+   "keys": [
+    "ecb",
+    "european central bank"
+   ],
+   "icon": {
+    "cc": "fr"
+   }
+  },
+  {
+   "k": "economy",
+   "t": "Riksbank monetary policy decision",
+   "w": "Sweden",
+   "a": "2026-12-18",
+   "cc": [
+    "se"
+   ],
+   "wiki": "Sveriges Riksbank",
+   "when": "December 2026",
+   "keys": [
+    "riksbank"
+   ],
+   "icon": {
+    "cc": "se"
+   }
+  }
+ ]
+}

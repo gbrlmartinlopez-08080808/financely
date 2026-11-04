@@ -3,6 +3,8 @@ import { countdown, dateLabel, daysTo, isOn, isOver, type CurveChart, type Seats
 import { loadLive, type Live, type Match } from '../lib/sports';
 import type { Daily, Story } from '../lib/interesting';
 import { Emblem } from '../ui/WikiIcon';
+import { emojiFor } from '../lib/worldx';
+import { candidates, summary, type Cand, type Wp } from '../lib/wikirace';
 import { PixelLoader } from '../ui/kit';
 import { tap } from '../lib/native';
 
@@ -376,11 +378,56 @@ export function InTheNews({ e, d, open }: { e: WorldEvent; d?: Daily; open: (s: 
   );
 }
 
+/** what Wikipedia says about the event, and for a vote: the candidates and parties listed on its page */
+function About({ e, wiki }: { e: WorldEvent; wiki: (t: string) => void }) {
+  const [sum, setSum] = useState<Wp | null | undefined>(undefined);
+  const [cands, setCands] = useState<Cand[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    summary(e.wiki!).then((r) => live && setSum(r));
+    if (e.k === 'election') candidates(e.wiki!).then((r) => live && setCands(r));
+    return () => {
+      live = false;
+    };
+  }, [e.wiki, e.k]);
+  if (sum === undefined) return <PixelLoader size={4} gap={2} label="loading" />;
+  return (
+    <>
+      {sum?.extract && (
+        <section className="wd-sec">
+          <h5 className="mono">About</h5>
+          <p className="wd-note">{sum.extract}</p>
+        </section>
+      )}
+      {!!cands?.length && (
+        <section className="wd-sec">
+          <h5 className="mono">Candidates and parties</h5>
+          {cands.slice(0, 5).map((g) => (
+            <div key={g.group} className="cand">
+              <h6 className="mono">{g.group}</h6>
+              <ul>
+                {g.items.map((c, ci) => (
+                  <li key={c.text}>
+                    <button disabled={!c.wiki} onClick={() => c.wiki && wiki(c.wiki)}>
+                      {c.wiki && ci < 4 && <Emblem wiki={c.wiki} size={26} glyph={c.text[0]} />}
+                      <span>{c.text}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </section>
+      )}
+    </>
+  );
+}
+
 export function WorldDetail({ e, d, wiki, openStory }: { e: WorldEvent; d?: Daily; wiki: (t: string) => void; openStory: (s: Story) => void }) {
   return (
     <div className="wd">
       <header className="wd-head">
-        <Emblem cc={e.icon?.cc} wiki={e.icon?.wiki} size={56} glyph={e.k === 'sky' ? '*' : '~'} />
+        <Emblem cc={e.icon?.cc} wiki={e.icon?.wiki} size={56} emoji={emojiFor(e.t, e.k)} />
         <div>
           <h3>{e.t}</h3>
           <span className="mono">
@@ -391,6 +438,7 @@ export function WorldDetail({ e, d, wiki, openStory }: { e: WorldEvent; d?: Dail
       </header>
       {e.n && <p className="wd-note">{e.n}</p>}
       <Clock e={e} />
+      {e.wiki && (e.k === 'election' || e.auto) && <About e={e} wiki={wiki} />}
       <Timeline e={e} />
       {!!e.sides?.length && (
         <section className="wd-sec">

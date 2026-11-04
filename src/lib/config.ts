@@ -11,4 +11,6 @@ export const PLAY_URL = 'https://play.google.com/store/apps/details?id=app.frogi
 export const FEED_URLS = [
   'https://gbrlmartinlopez-08080808.github.io/financely/feed/daily.json',
   'https://raw.githubusercontent.com/gbrlmartinlopez-08080808/financely/main/docs/feed/daily.json',
+  // the branch the feed is kept on while the app is developed there (a copy on main is used once it is merged)
+  'https://raw.githubusercontent.com/gbrlmartinlopez-08080808/financely/claude/bold-meitner-fajwuj/docs/feed/daily.json',
 ];

@@ -58,11 +58,15 @@ export function Flag({ cc, size = 30 }: { cc: string; size?: number }) {
     <img className="ico flag" src={`https://flagcdn.com/w80/${cc.toLowerCase()}.png`} alt="" style={{ width: size, height: h }} onError={() => setBad(true)} draggable={false} />
   );
 }
-export function WikiLogo({ title, size = 30, glyph = '·' }: { title?: string; size?: number; glyph?: string }) {
+export function WikiLogo({ title, size = 30, glyph = '·', emoji }: { title?: string; size?: number; glyph?: string; emoji?: string }) {
   const src = useWikiImage(title);
   const [bad, setBad] = useState(false);
   return src && !bad ? (
     <img className="ico logo2" src={src} alt="" style={{ width: size, height: size }} onError={() => setBad(true)} draggable={false} />
+  ) : emoji ? (
+    <span className="ico ph emo" style={{ width: size, height: size, fontSize: size * 0.56 }} aria-hidden>
+      {emoji}
+    </span>
   ) : (
     <span className="ico ph mono" style={{ width: size, height: size, fontSize: size * 0.4 }} aria-hidden>
       {glyph}
@@ -70,9 +74,9 @@ export function WikiLogo({ title, size = 30, glyph = '·' }: { title?: string; s
   );
 }
 /** the picture for a team, party, country or event: a flag, a logo, or a plain mark */
-export function Emblem({ cc, wiki, badge, size = 30, glyph }: { cc?: string; wiki?: string; badge?: string; size?: number; glyph?: string }) {
+export function Emblem({ cc, wiki, badge, size = 30, glyph, emoji }: { cc?: string; wiki?: string; badge?: string; size?: number; glyph?: string; emoji?: string }) {
   const [bad, setBad] = useState(false);
   if (badge && !bad) return <img className="ico logo2" src={badge} alt="" style={{ width: size, height: size }} onError={() => setBad(true)} draggable={false} />;
   if (cc) return <Flag cc={cc} size={size} />;
-  return <WikiLogo title={wiki} size={size} glyph={glyph} />;
+  return <WikiLogo title={wiki} size={size} glyph={glyph} emoji={emoji} />;
 }

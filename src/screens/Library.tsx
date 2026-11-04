@@ -315,7 +315,7 @@ export function Library({
             <span className="mono">shelf · {list.length}</span>
             <span style={{ display: 'flex', gap: 2 }}>
               <button
-                className="chip mono"
+                className="txtbtn mono"
                 onClick={() => {
                   const order = ['recent', 'title', 'type', 'size'] as const;
                   setSort(order[(order.indexOf(sort) + 1) % order.length]);
@@ -326,7 +326,7 @@ export function Library({
                 {sort}
               </button>
               <button
-                className={`chip mono${picked ? ' on' : ''}`}
+                className={`txtbtn mono${picked ? ' on' : ''}`}
                 onClick={() => {
                   tap('select');
                   setPicked((p) => (p ? null : new Set()));

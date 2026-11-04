@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { countdown, daysTo, dateLabel, isOn, isOver, loadWorld, type World as WorldData, type WorldEvent } from '../lib/world';
-import { COUNTRIES, SECTIONS, TOP, concerns, country, countryOrder, holidays, isRecent, relevant, sectionOf, useHome, type Holiday, type Section } from '../lib/worldx';
+import { COUNTRIES, SECTIONS, TOP, concerns, country, countryOrder, holidays, isRecent, relevant, sectionOf, useHome, emojiFor, type Holiday, type Section } from '../lib/worldx';
 import { Froggy } from '../ui/Froggy';
 import { PixelLoader, Sheet } from '../ui/kit';
 import { Emblem, Flag } from '../ui/WikiIcon';
@@ -20,7 +20,7 @@ function EventRow({ e, onOpen, flag }: { e: WorldEvent; onOpen: (e: WorldEvent) 
   return (
     <button className={`wev${over ? ' past' : ''}`} onClick={() => (tap('select'), onOpen(e))}>
       <span className="wev-g" aria-hidden>
-        <Emblem cc={e.icon?.cc} wiki={e.icon?.wiki} size={36} glyph={GLYPH[e.k]} />
+        <Emblem cc={e.icon?.cc} wiki={e.icon?.wiki} size={38} glyph={GLYPH[e.k]} emoji={emojiFor(e.t, e.k)} />
       </span>
       <span className="wev-b">
         <b>{e.t}</b>
@@ -29,8 +29,8 @@ function EventRow({ e, onOpen, flag }: { e: WorldEvent; onOpen: (e: WorldEvent) 
         </small>
         <span className="wev-tags">
           <span className={`wev-c mono${!over && (isOn(e) || daysTo(e) <= 7) ? ' hot' : ''}`}>{over ? `ended ${Math.abs(daysTo(e))} days ago` : countdown(e)}</span>
-          {e.level && <span className="chip mono">{e.level}</span>}
-          {isMidterms(e) && <span className="chip mono live">interactive</span>}
+          {e.level && <span className="wtag mono">{e.level}</span>}
+          {isMidterms(e) && <span className="wtag mono live">interactive</span>}
         </span>
       </span>
       <Icon name="right" size={16} />
@@ -55,7 +55,7 @@ function CountryGroup({ cc, count, open: init, children, note }: { cc: string; c
   );
 }
 
-export function WorldInfo({ wiki, d, openStory }: { wiki: (title: string) => void; d?: Daily; openStory: (s: Story) => void }) {
+export function WorldInfo({ wiki, d, openStory, mode }: { wiki: (title: string) => void; d?: Daily; openStory: (s: Story) => void; mode?: ReactNode }) {
   const [home, setHome] = useHome();
   const [section, setSection] = useState<Section>('general');
   const [picker, setPicker] = useState(false);
@@ -73,44 +73,54 @@ export function WorldInfo({ wiki, d, openStory }: { wiki: (title: string) => voi
   const events = useMemo(() => (data?.events ?? []).filter(relevant).sort((a, b) => a.a.localeCompare(b.a)), [data]);
   const forCountry = (cc: string, sec: Section) => events.filter((e) => sectionOf(e) === sec && e.cc?.includes(cc));
   // events with no country, or in a country that is not listed here, go in the last group
-  const global = (sec: Section) => events.filter((e) => sectionOf(e) === sec && (!e.cc?.length || !e.cc.some((c) => order.some((o) => o.cc === c))));
+  const global = (sec: Section) => events.filter((e) => sectionOf(e) === sec && !e.cc?.length);
 
-  if (err)
+  if (err || !data)
     return (
-      <div className="int-wait">
-        <Froggy mood="worried" size="md" />
-        <p>{err}</p>
-      </div>
-    );
-  if (!data)
-    return (
-      <div className="int-wait">
-        <Froggy mood="sleepy" size="md" />
-        <PixelLoader size={4} gap={2} label="looking at the world" />
+      <div className="int-scroll world">
+        {mode}
+        <div className="int-wait">
+          <Froggy mood={err ? 'worried' : 'sleepy'} size="md" />
+          {err ? <p>{err}</p> : <PixelLoader size={4} gap={2} label="looking at the world" />}
+        </div>
       </div>
     );
 
-  const list = (items: WorldEvent[], flag?: boolean) => items.map((e) => <EventRow key={e.t + e.a} e={e} onOpen={open} flag={flag ? e.cc?.[0] : undefined} />);
-  const groups = (sec: Section, skip: string[] = [], emptyNote?: (cc: string) => string | undefined) => (
-    <>
-      {order
-        .filter((c) => !skip.includes(c.cc))
-        .map((c, i) => {
-          const items = forCountry(c.cc, sec);
-          if (!items.length && c.cc !== home) return null;
-          return (
-            <CountryGroup key={c.cc} cc={c.cc} count={items.length} open={i === 0} note={emptyNote?.(c.cc)}>
-              {items.length ? list(items) : <p className="cg-note mono">nothing listed for {c.name} yet</p>}
-            </CountryGroup>
-          );
-        })}
-      {!!global(sec).length && (
-        <CountryGroup cc="world" count={global(sec).length} open={false}>
-          {list(global(sec))}
-        </CountryGroup>
-      )}
-    </>
-  );
+  const list = (items: WorldEvent[], flag?: boolean) => items.map((e) => <EventRow key={e.t + e.a} e={e} onOpen={open} flag={flag && !e.icon?.cc ? e.cc?.[0] : undefined} />);
+  const groups = (sec: Section, skip: string[] = [], emptyNote?: (cc: string) => string | undefined) => {
+    const listed = new Set(order.map((c) => c.cc));
+    // every other country that has something, soonest first, each folded
+    const others = new Map<string, WorldEvent[]>();
+    for (const e of events) if (sectionOf(e) === sec && e.cc?.length && !e.cc.some((c) => listed.has(c))) (others.get(e.cc[0]) ?? others.set(e.cc[0], []).get(e.cc[0])!).push(e);
+    const rest = [...others.entries()].sort((a, b) => a[1][0].a.localeCompare(b[1][0].a));
+    const globalList = events.filter((e) => sectionOf(e) === sec && !e.cc?.length);
+    return (
+      <>
+        {order
+          .filter((c) => !skip.includes(c.cc))
+          .map((c, i) => {
+            const items = forCountry(c.cc, sec);
+            if (!items.length && c.cc !== home) return null;
+            return (
+              <CountryGroup key={c.cc} cc={c.cc} count={items.length} open={i === 0} note={emptyNote?.(c.cc)}>
+                {items.length ? list(items) : <p className="cg-note mono">nothing listed for {c.name} yet</p>}
+              </CountryGroup>
+            );
+          })}
+        {!!globalList.length && (
+          <CountryGroup cc="world" count={globalList.length} open={false}>
+            {list(globalList)}
+          </CountryGroup>
+        )}
+        {!!rest.length && <h4 className="mono wsub">Other countries · {rest.length}</h4>}
+        {rest.map(([cc, items]) => (
+          <CountryGroup key={cc} cc={cc} count={items.length} open={false}>
+            {list(items)}
+          </CountryGroup>
+        ))}
+      </>
+    );
+  };
 
   // "coming closest": the next things for the home country, then for the other big ones
   const soon = (cc: string, n: number) =>
@@ -120,6 +130,7 @@ export function WorldInfo({ wiki, d, openStory }: { wiki: (title: string) => voi
 
   return (
     <div className="int-scroll world">
+      {mode}
       <div className="world-top">
         <button className="home-chip" onClick={() => (tap('select'), setPicker(true))} aria-label="Choose your country">
           <Flag cc={hc.cc} size={26} />
@@ -157,6 +168,14 @@ export function WorldInfo({ wiki, d, openStory }: { wiki: (title: string) => voi
           })}
           <p className="int-foot mono">· · ·{'\n'}use the tabs for politics, the economy, sports, events and holidays</p>
         </>
+      )}
+      {section === 'politics' && (
+        <section className="wblock">
+          <h4 className="mono">Next votes anywhere</h4>
+          <div className="wlist">
+            {list(events.filter((e) => e.k === 'election' && !isOver(e) && e.level !== 'regional').slice(0, 5), true)}
+          </div>
+        </section>
       )}
       {section === 'politics' && groups('politics', [], (cc) => (cc === 'cn' ? 'No national elections in China: these are the political dates that matter.' : undefined))}
       {section === 'economy' && (
@@ -254,7 +273,7 @@ function NextHolidays({ cc, n }: { cc: string; n: number }) {
               {dt.toLocaleDateString(undefined, { month: 'short' })}
             </span>
             <span className="hol-n">
-              <b>{x.local !== x.name ? x.local : x.name}</b>
+              <b>{emojiFor(x.name)} {x.local !== x.name ? x.local : x.name}</b>
               <small className="mono">
                 {x.local !== x.name ? `${x.name} · ` : ''}
                 {dt.toLocaleDateString(undefined, { weekday: 'long' })}

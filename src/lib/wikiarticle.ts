@@ -90,7 +90,12 @@ export async function wikiArticle(title: string): Promise<WikiDoc> {
     img.removeAttribute('width');
     img.removeAttribute('height');
   });
-  keep.querySelectorAll('table').forEach((t) => ((t.textContent ?? '').length > 1500 ? t.remove() : t.classList.add('wk-table')));
+  keep.querySelectorAll('table').forEach((t) => {
+    if ((t.textContent ?? '').length > 1500) return t.remove();
+    t.classList.add('wk-table');
+    // short cells stay on one line (no "Tota-l"); a long one may wrap inside a sensible width
+    t.querySelectorAll('td, th').forEach((c) => ((c.textContent ?? '').trim().length > 38 ? c.classList.add('long') : null));
+  });
   keep.querySelectorAll('section > h2, section > h3').forEach((h) => h.setAttribute('id', 'h-' + (h.textContent ?? '').trim().toLowerCase().replace(/\W+/g, '-')));
   const html = sanitizeHtml(keep);
   const words = (keep.textContent ?? '').trim().split(/\s+/).length;

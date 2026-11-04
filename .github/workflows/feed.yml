@@ -21,6 +21,7 @@ jobs:
           node-version: 22
       - run: node scripts/build-feed.mjs
       - run: node scripts/build-economy.mjs
+      - run: node scripts/build-world.mjs
       - name: Publish
         run: |
           mkdir -p public/feed && cp docs/feed/daily.json public/feed/daily.json && cp docs/feed/world.json public/feed/world.json && cp docs/feed/economy.json public/feed/economy.json

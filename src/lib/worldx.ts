@@ -1,6 +1,7 @@
 // World info, by country: the countries, the home country, public holidays, and the numbers behind each economy.
 import { useEffect, useState } from 'react';
 import type { WorldEvent } from './world';
+import { FEED_URLS } from './config';
 import { isOn, isOver } from './world';
 
 export interface Country {
@@ -137,9 +138,15 @@ export interface Series {
 /** every indicator for the given countries, years oldest first: the file saved beside the daily feed, then the World Bank itself */
 export async function economy(iso3: string[]): Promise<Record<string, Record<string, Series[]>>> {
   const fromFile = async () => {
+    const net = FEED_URLS.map((u) => u.replace('daily.json', 'economy.json'));
+    const got = await Promise.any(net.map(async (u) => {
+      const r = await fetch(u, { signal: AbortSignal.timeout(7000) });
+      if (!r.ok) throw new Error(String(r.status));
+      return r.json();
+    })).catch(() => null);
     for (const u of ['./feed/economy.json']) {
-      const r = await fetch(u).catch(() => null);
-      const j = r?.ok ? await r.json().catch(() => null) : null;
+      const r = got ? null : await fetch(u).catch(() => null);
+      const j = got ?? (r?.ok ? await r.json().catch(() => null) : null);
       if (j?.data) {
         const out: Record<string, Record<string, Series[]>> = {};
         for (const [c, inds] of Object.entries(j.data as Record<string, Record<string, [number, number][]>>)) for (const [id, ser] of Object.entries(inds)) (out[c] ??= {})[id] = ser.map(([year, v]) => ({ year, v }));
@@ -181,4 +188,21 @@ export async function fx(base: string, quote: string, days = 90): Promise<Fx> {
   const j = await json<{ rates: Record<string, Record<string, number>> }>(`https://api.frankfurter.dev/v1/${d(start)}..${d(end)}?base=${base}&symbols=${quote}`, 3 * 3600e3);
   const series = Object.entries(j.rates).map(([date, r]) => ({ date, v: r[quote] })).sort((a, b) => a.date.localeCompare(b.date));
   return { base, quote, now: series[series.length - 1]?.v ?? 0, series };
+}
+
+// ------------------------------------------------------------------ small clean pictures for events that have no logo or flag
+const EMOJI: [RegExp, string][] = [
+  [/chinese new year|lunar new year/i, '🧧'], [/new year/i, '🎆'], [/christmas|noel|navidad/i, '🎄'], [/easter|pascua|ostern|pâques/i, '🐣'], [/good friday|holy|palm sunday|maundy|viernes santo/i, '✝️'],
+  [/thanksgiving/i, '🦃'], [/halloween/i, '🎃'], [/diwali|holi\b/i, '🪔'], [/ramadan|eid|mawlid|islamic/i, '🌙'], [/epiphany|three kings|reyes/i, '👑'],
+  [/labou?r|may day|workers|primero de mayo/i, '🛠️'], [/veterans|memorial|remembrance|armistice|victory|liberation/i, '🎖️'], [/independence|national day|republic day|constitution|flag day|fête nationale|hispanidad/i, '🎇'],
+  [/assumption|ascension|pentecost|whit|corpus|all saints|immaculate|saint|st\.|epifan|reformation|advent|twelfth/i, '⛪'], [/mother|father|valentine/i, '💐'],
+  [/election|vote|referendum|ballot|elecciones|presidential|parliament|senate|midterm/i, '🗳️'], [/cop\d|climate|environment/i, '🌍'], [/nobel/i, '🏅'], [/oscar|academy award|film festival|cannes|golden globe/i, '🎬'],
+  [/g20|g7|summit|davos|forum|congress|assembly|nato|united nations|european council/i, '🏛️'], [/fed\b|federal reserve|central bank|ecb|riksbank|monetary|interest rate|economic work/i, '🏦'], [/meteor|shower/i, '☄️'], [/eclipse/i, '🌑'],
+  [/formula|grand prix/i, '🏎️'], [/nba|basketball/i, '🏀'], [/nfl|super bowl|american football/i, '🏈'], [/baseball|mlb|world series/i, '⚾'], [/tennis|open\b|wimbledon|roland/i, '🎾'], [/rugby/i, '🏉'], [/cricket/i, '🏏'],
+  [/olympic/i, '🥇'], [/tour de france|cycling|giro|vuelta/i, '🚴'], [/world cup|euro 20|champions league|premier league|la liga|clásico|clasico|serie a|bundesliga|football|soccer|cup final/i, '⚽'],
+];
+const KIND_EMOJI: Record<string, string> = { election: '🗳️', summit: '🏛️', sport: '🏆', economy: '📈', sky: '✨', culture: '🎉' };
+export function emojiFor(text: string, kind?: string): string {
+  for (const [re, e] of EMOJI) if (re.test(text)) return e;
+  return (kind && KIND_EMOJI[kind]) || '📅';
 }

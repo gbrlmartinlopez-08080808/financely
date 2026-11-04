@@ -218,37 +218,28 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
     const eng = sharedEngine;
     const vid = neuralId(sel);
     if (!eng.isReady(vid)) {
-      // never make the reader wait for the voice to load: the phone's own voice starts now, the studio voice joins when ready
+      // The chosen voice is still loading. Wait a few seconds for it (so the voice never changes in the middle of a page);
+      // if it is late, the phone's voice reads this time and the studio voice is ready for the next one.
       setBusy(true);
-      setNote('starting with the phone’s voice · the studio voice is loading');
-      let ready = false;
-      let failed = false;
-      const cut = () => {
-        // the phone's voice is cut short and the studio voice takes over from the sentence being heard
-        if (my === token.current) stopSpeaking();
-      };
-      eng.init(vid).then(
-        () => {
-          ready = true;
-          cut();
-        },
-        (e) => {
-          failed = true;
-          console.warn('studio voice failed to load', e);
-          cut();
-        },
-      );
-      const sys = await runSystem(from, my, n, offset, undefined, () => ready || failed, true);
+      setNote('preparing the voice…');
+      const out = await Promise.race([
+        eng.init(vid).then(
+          () => 'ready' as const,
+          (e) => (console.warn('studio voice failed to load', e), 'failed' as const),
+        ),
+        new Promise<'late'>((res) => setTimeout(() => res('late'), 6500)),
+      ]);
       if (my !== token.current) return;
-      if (failed) {
-        neuralBroken.current = true;
-        setNote('');
-        toast('The studio voice couldn’t start — using the phone’s voice');
-        return void run(sys.at, 0);
-      }
       setNote('');
-      if (sys.done) return;
-      return runNeural(sys.at, my, sel, n, 0);
+      if (out === 'ready') return runNeural(from, my, sel, n, offset);
+      if (out === 'failed') {
+        neuralBroken.current = true;
+        toast('The studio voice couldn’t start — using the phone’s voice');
+        return void run(from, offset);
+      }
+      toast('The studio voice is still loading — the phone’s voice reads this time');
+      await runSystem(from, my, n, offset, undefined);
+      return;
     }
     setNote('');
     // a slow phone: a lighter voice of this language plays smoother
@@ -565,6 +556,8 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
   );
 
   const pause = useCallback(() => {
+    clearTimeout(skipTimer.current);
+    skipTimer.current = 0;
     token.current++;
     stopSpeaking();
     player.current?.stop();
@@ -618,14 +611,27 @@ export function ListenBar({ root, scroller, startAt, onPlaying, docId, title = '
     }
   };
 
+  const skipTimer = useRef(0);
+  /** Taps on skip move the place at once and are quiet; the voice starts again from the new place when the taps stop. */
   const skip = (d: number) => {
     tap();
-    const next = Math.max(0, Math.min(total - 1, idx + d));
+    const next = Math.max(0, Math.min(total - 1, idxRef.current + d));
+    idxRef.current = next;
     setIdx(next);
-    if (playing) {
-      pause();
-      setTimeout(() => run(next), 60);
-    } else if (root) follow(markSaying(root, next));
+    if (root) follow(markSaying(root, next));
+    if (playing || skipTimer.current) {
+      token.current++;
+      stopSpeaking();
+      player.current?.stop();
+      player.current = null;
+      sharedEngine.cancel();
+      setNote('');
+      clearTimeout(skipTimer.current);
+      skipTimer.current = window.setTimeout(() => {
+        skipTimer.current = 0;
+        run(idxRef.current);
+      }, 380);
+    }
   };
 
   handlers.current = {

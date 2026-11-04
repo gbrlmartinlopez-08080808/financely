@@ -1,6 +1,7 @@
 {
- "v": 3,
- "note": "Curated by Frogity. Dates can move: check the organisers for the latest.",
+ "v": 4,
+ "built": "2026-11-04T11:20:59.729Z",
+ "note": "Curated by Frogity; elections from Wikidata, refreshed through the day. Dates can move: check the organisers for the latest.",
  "events": [
   {
    "k": "election",
@@ -209,11 +210,10 @@
    "k": "election",
    "t": "French presidential election",
    "w": "France",
-   "a": "2027-04-10",
-   "b": "2027-04-24",
+   "a": "2027-04-18",
+   "b": "2027-05-02",
    "n": "Two rounds, the first in April: the race to succeed Emmanuel Macron.",
    "wiki": "2027 French presidential election",
-   "when": "April 2027",
    "icon": {
     "cc": "fr"
    },
@@ -976,7 +976,7 @@
    "chart": {
     "type": "curve",
     "peak": "2026-12-14",
-    "width": 2.0,
+    "width": 2,
     "max": 120,
     "unit": "meteors an hour (under a dark sky)",
     "note": "The Geminids come from the asteroid 3200 Phaethon. They are bright and slow, and the shower is long: good from 22:00 onward."
@@ -1124,13 +1124,12 @@
    "k": "election",
    "t": "Saarland state election",
    "w": "Germany · Saarland",
-   "a": "2027-03-28",
+   "a": "2027-05-30",
    "cc": [
     "de"
    ],
    "n": "Voters in Saarland choose their state parliament.",
    "wiki": "2027 Saarland state election",
-   "when": "March 2027",
    "level": "regional",
    "sides": [
     {
@@ -1360,7 +1359,6 @@
    ],
    "n": "Two state elections on one day, a test for the governing coalition and the AfD.",
    "wiki": "2026 Berlin state election",
-   "when": "20 Sep 2026",
    "level": "regional",
    "sides": [
     {
@@ -1578,15 +1576,14 @@
   },
   {
    "k": "election",
-   "t": "Spanish general election (due)",
+   "t": "Spanish general election",
    "w": "Spain",
-   "a": "2027-07-25",
+   "a": "2027-05-23",
    "cc": [
     "es"
    ],
-   "n": "The legislature ends in 2027; the prime minister can call it earlier.",
-   "wiki": "Next Spanish general election",
-   "when": "by summer 2027",
+   "n": "Spain votes for the Cortes Generales: Congress and Senate decide who forms the next government.",
+   "wiki": "2026 Spanish general election",
    "level": "national",
    "sides": [
     {
@@ -1615,55 +1612,11 @@
     }
    ],
    "keys": [
-    "sánchez",
     "spanish election",
+    "elecciones generales",
+    "sánchez",
+    "feijóo",
     "cortes"
-   ],
-   "icon": {
-    "cc": "es"
-   }
-  },
-  {
-   "k": "election",
-   "t": "Municipal and regional elections",
-   "w": "Spain",
-   "a": "2027-05-23",
-   "cc": [
-    "es"
-   ],
-   "n": "All town councils and 12 regional parliaments vote on the same Sunday.",
-   "wiki": "2027 Spanish regional elections",
-   "when": "May 2027",
-   "level": "regional",
-   "sides": [
-    {
-     "n": "PP",
-     "wiki": "People's Party (Spain)"
-    },
-    {
-     "n": "PSOE",
-     "wiki": "Spanish Socialist Workers' Party"
-    },
-    {
-     "n": "Vox",
-     "wiki": "Vox (political party)"
-    },
-    {
-     "n": "Sumar",
-     "wiki": "Sumar"
-    },
-    {
-     "n": "Podemos",
-     "wiki": "Podemos (Spanish political party)"
-    },
-    {
-     "n": "Junts",
-     "wiki": "Junts per Catalunya"
-    }
-   ],
-   "keys": [
-    "municipal",
-    "autonomous communities"
    ],
    "icon": {
     "cc": "es"
@@ -1908,6 +1861,1527 @@
    "icon": {
     "cc": "se"
    }
+  },
+  {
+   "k": "election",
+   "t": "Okinawa gubernatorial election",
+   "w": "Japan",
+   "a": "2026-09-13",
+   "cc": [
+    "jp"
+   ],
+   "icon": {
+    "cc": "jp"
+   },
+   "level": "regional",
+   "wiki": "2026 Okinawa gubernatorial election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Bangsamoro Parliament election",
+   "w": "Philippines",
+   "a": "2026-09-14",
+   "cc": [
+    "ph"
+   ],
+   "icon": {
+    "cc": "ph"
+   },
+   "level": "regional",
+   "wiki": "2026 Bangsamoro Parliament election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Russian legislative election",
+   "w": "Russia",
+   "a": "2026-09-20",
+   "cc": [
+    "ru"
+   ],
+   "icon": {
+    "cc": "ru"
+   },
+   "level": "national",
+   "wiki": "2026 Russian legislative election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Tver Oblast gubernatorial election",
+   "w": "Russia",
+   "a": "2026-09-20",
+   "cc": [
+    "ru"
+   ],
+   "icon": {
+    "cc": "ru"
+   },
+   "level": "regional",
+   "wiki": "2026 Tver Oblast gubernatorial election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Moroccan general election",
+   "w": "Morocco",
+   "a": "2026-09-23",
+   "cc": [
+    "ma"
+   ],
+   "icon": {
+    "cc": "ma"
+   },
+   "level": "national",
+   "wiki": "2026 Moroccan general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Manx general election",
+   "w": "Isle of Man",
+   "a": "2026-09-24",
+   "cc": [
+    "im"
+   ],
+   "icon": {
+    "cc": "im"
+   },
+   "level": "national",
+   "wiki": "2026 Manx general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "São Toméan parliamentary election",
+   "w": "São Tomé and Príncipe",
+   "a": "2026-09-27",
+   "cc": [
+    "st"
+   ],
+   "icon": {
+    "cc": "st"
+   },
+   "level": "national",
+   "wiki": "2026 São Toméan parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Bahamian parliamentary election",
+   "w": "The Bahamas",
+   "a": "2026-09-30",
+   "cc": [
+    "bs"
+   ],
+   "icon": {
+    "cc": "bs"
+   },
+   "level": "national",
+   "wiki": "2026 Bahamian parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Santomean legislative election",
+   "w": "São Tomé and Príncipe",
+   "a": "2026-09-30",
+   "cc": [
+    "st"
+   ],
+   "icon": {
+    "cc": "st"
+   },
+   "level": "national",
+   "wiki": "2026 Santomean legislative election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Czech Senate election",
+   "w": "Czech Republic",
+   "a": "2026-10-01",
+   "cc": [
+    "cz"
+   ],
+   "icon": {
+    "cc": "cz"
+   },
+   "level": "national",
+   "wiki": "2026 Czech Senate election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Cape Verdean presidential election",
+   "w": "Cape Verde",
+   "a": "2026-10-01",
+   "cc": [
+    "cv"
+   ],
+   "icon": {
+    "cc": "cv"
+   },
+   "level": "national",
+   "wiki": "2026 Cape Verdean presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Latvian parliamentary election",
+   "w": "Latvia",
+   "a": "2026-10-03",
+   "cc": [
+    "lv"
+   ],
+   "icon": {
+    "cc": "lv"
+   },
+   "level": "national",
+   "wiki": "2026 Latvian parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Brazilian parliamentary election",
+   "w": "Brazil",
+   "a": "2026-10-04",
+   "cc": [
+    "br"
+   ],
+   "icon": {
+    "cc": "br"
+   },
+   "level": "national",
+   "wiki": "2026 Brazilian parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Bosnian parliamentary election",
+   "w": "Bosnia and Herzegovina",
+   "a": "2026-10-04",
+   "cc": [
+    "ba"
+   ],
+   "icon": {
+    "cc": "ba"
+   },
+   "level": "national",
+   "wiki": "2026 Bosnian parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Brazilian presidential election",
+   "w": "Brazil",
+   "a": "2026-10-04",
+   "b": "2026-10-25",
+   "cc": [
+    "br"
+   ],
+   "icon": {
+    "cc": "br"
+   },
+   "level": "national",
+   "wiki": "2026 Brazilian presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Bosnian presidential election",
+   "w": "Bosnia and Herzegovina",
+   "a": "2026-10-04",
+   "cc": [
+    "ba"
+   ],
+   "icon": {
+    "cc": "ba"
+   },
+   "level": "national",
+   "wiki": "2022 Bosnian presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Republika Srpska general election",
+   "w": "Bosnia and Herzegovina",
+   "a": "2026-10-04",
+   "cc": [
+    "ba"
+   ],
+   "icon": {
+    "cc": "ba"
+   },
+   "level": "national",
+   "wiki": "2026 Republika Srpska general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Federation of Bosnia and Herzegovina general election",
+   "w": "Bosnia and Herzegovina",
+   "a": "2026-10-04",
+   "cc": [
+    "ba"
+   ],
+   "icon": {
+    "cc": "ba"
+   },
+   "level": "national",
+   "wiki": "2026 Federation of Bosnia and Herzegovina general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Brazilian general election",
+   "w": "Brazil",
+   "a": "2026-10-04",
+   "b": "2026-10-25",
+   "cc": [
+    "br"
+   ],
+   "icon": {
+    "cc": "br"
+   },
+   "level": "national",
+   "wiki": "2026 Brazilian general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Bosnian general election",
+   "w": "Bosnia and Herzegovina",
+   "a": "2026-10-04",
+   "cc": [
+    "ba"
+   ],
+   "icon": {
+    "cc": "ba"
+   },
+   "level": "national",
+   "wiki": "2026 Bosnian general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "first round of Brazilian presidential election, 2026",
+   "w": "Brazil",
+   "a": "2026-10-04",
+   "cc": [
+    "br"
+   ],
+   "icon": {
+    "cc": "br"
+   },
+   "level": "national",
+   "wiki": "first round of Brazilian presidential election, 2026",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "São Paulo general election",
+   "w": "Brazil",
+   "a": "2026-10-04",
+   "cc": [
+    "br"
+   ],
+   "icon": {
+    "cc": "br"
+   },
+   "level": "national",
+   "wiki": "2026 São Paulo general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Quebec general election",
+   "w": "Canada",
+   "a": "2026-10-05",
+   "cc": [
+    "ca"
+   ],
+   "icon": {
+    "cc": "ca"
+   },
+   "level": "national",
+   "wiki": "2026 Quebec general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Slovak regional elections",
+   "w": "Slovakia",
+   "a": "2026-10-24",
+   "cc": [
+    "sk"
+   ],
+   "icon": {
+    "cc": "sk"
+   },
+   "level": "regional",
+   "wiki": "2026 Slovak regional elections",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Bulgarian presidential election",
+   "w": "Bulgaria",
+   "a": "2026-10-25",
+   "b": "2026-11-01",
+   "cc": [
+    "bg"
+   ],
+   "icon": {
+    "cc": "bg"
+   },
+   "level": "national",
+   "wiki": "2026 Bulgarian presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "second round of Brazilian presidential election, 2022",
+   "w": "Brazil",
+   "a": "2026-10-25",
+   "cc": [
+    "br"
+   ],
+   "icon": {
+    "cc": "br"
+   },
+   "level": "national",
+   "wiki": "second round of Brazilian presidential election, 2022",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Serbian parliamentary election",
+   "w": "Serbia",
+   "a": "2026-10-25",
+   "cc": [
+    "rs"
+   ],
+   "icon": {
+    "cc": "rs"
+   },
+   "level": "national",
+   "wiki": "2026 Serbian parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Israeli legislative election",
+   "w": "Israel",
+   "a": "2026-10-27",
+   "cc": [
+    "il"
+   ],
+   "icon": {
+    "cc": "il"
+   },
+   "level": "national",
+   "wiki": "2026 Israeli legislative election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Vanuatuan general election",
+   "w": "Vanuatu",
+   "a": "2026-10-31",
+   "cc": [
+    "vu"
+   ],
+   "icon": {
+    "cc": "vu"
+   },
+   "level": "national",
+   "wiki": "2026 Vanuatuan general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "New Zealand general election",
+   "w": "New Zealand",
+   "a": "2026-11-07",
+   "cc": [
+    "nz"
+   ],
+   "icon": {
+    "cc": "nz"
+   },
+   "level": "national",
+   "wiki": "2026 New Zealand general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Malacca state election",
+   "w": "Malaysia",
+   "a": "2026-11-14",
+   "cc": [
+    "my"
+   ],
+   "icon": {
+    "cc": "my"
+   },
+   "level": "regional",
+   "wiki": "2026 Malacca state election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Victorian state election",
+   "w": "Australia",
+   "a": "2026-11-28",
+   "cc": [
+    "au"
+   ],
+   "icon": {
+    "cc": "au"
+   },
+   "level": "regional",
+   "wiki": "2026 Victorian state election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Kazakh Mäslihat elections",
+   "w": "Kazakhstan",
+   "a": "2026-11-29",
+   "cc": [
+    "kz"
+   ],
+   "icon": {
+    "cc": "kz"
+   },
+   "level": "regional",
+   "wiki": "2026 Kazakh Mäslihat elections",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Bahraini general election",
+   "w": "Bahrain",
+   "a": "2026-11-30",
+   "cc": [
+    "bh"
+   ],
+   "icon": {
+    "cc": "bh"
+   },
+   "level": "national",
+   "wiki": "2026 Bahraini general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Gambian presidential election",
+   "w": "The Gambia",
+   "a": "2026-12-05",
+   "cc": [
+    "gm"
+   ],
+   "icon": {
+    "cc": "gm"
+   },
+   "level": "national",
+   "wiki": "2026 Gambian presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Guinea-Bissau general election",
+   "w": "Guinea-Bissau",
+   "a": "2026-12-06",
+   "cc": [
+    "gw"
+   ],
+   "icon": {
+    "cc": "gw"
+   },
+   "level": "national",
+   "wiki": "2026 Guinea-Bissau general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "South Sudanese general election",
+   "w": "South Sudan",
+   "a": "2026-12-22",
+   "cc": [
+    "ss"
+   ],
+   "icon": {
+    "cc": "ss"
+   },
+   "level": "national",
+   "wiki": "2026 South Sudanese general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Fijian general election",
+   "w": "Fiji",
+   "a": "2026-12-31",
+   "cc": [
+    "fj"
+   ],
+   "icon": {
+    "cc": "fj"
+   },
+   "level": "national",
+   "wiki": "Fijian general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Slovenian presidential election",
+   "w": "Slovenia",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "si"
+   ],
+   "icon": {
+    "cc": "si"
+   },
+   "level": "national",
+   "wiki": "2027 Slovenian presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Papua New Guinean general election",
+   "w": "Papua New Guinea",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "pg"
+   ],
+   "icon": {
+    "cc": "pg"
+   },
+   "level": "national",
+   "wiki": "Papua New Guinean general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Serbian presidential election",
+   "w": "Serbia",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "rs"
+   ],
+   "icon": {
+    "cc": "rs"
+   },
+   "level": "national",
+   "wiki": "2027 Serbian presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Gambian parliamentary election",
+   "w": "The Gambia",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "gm"
+   ],
+   "icon": {
+    "cc": "gm"
+   },
+   "level": "national",
+   "wiki": "2027 Gambian parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Albanian presidential election",
+   "w": "Albania",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "al"
+   ],
+   "icon": {
+    "cc": "al"
+   },
+   "level": "national",
+   "wiki": "2027 Albanian presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Kenyan presidential election",
+   "w": "Kenya",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "ke"
+   ],
+   "icon": {
+    "cc": "ke"
+   },
+   "level": "national",
+   "wiki": "2027 Kenyan presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Slovak parliamentary election",
+   "w": "Slovakia",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "sk"
+   ],
+   "icon": {
+    "cc": "sk"
+   },
+   "level": "national",
+   "wiki": "Slovak parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Maltese general election",
+   "w": "Malta",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "mt"
+   ],
+   "icon": {
+    "cc": "mt"
+   },
+   "level": "national",
+   "wiki": "2027 Maltese general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Angolan parliamentary election",
+   "w": "Angola",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "ao"
+   ],
+   "icon": {
+    "cc": "ao"
+   },
+   "level": "national",
+   "wiki": "2027 Angolan parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Andorran parliamentary election",
+   "w": "Andorra",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "ad"
+   ],
+   "icon": {
+    "cc": "ad"
+   },
+   "level": "national",
+   "wiki": "Andorran parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Kyrgyz presidential election",
+   "w": "Kyrgyzstan",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "kg"
+   ],
+   "icon": {
+    "cc": "kg"
+   },
+   "level": "national",
+   "wiki": "2027 Kyrgyz presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Tajik presidential election",
+   "w": "Tajikistan",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "tj"
+   ],
+   "icon": {
+    "cc": "tj"
+   },
+   "level": "national",
+   "wiki": "2027 Tajik presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Nicaraguan presidential election",
+   "w": "Nicaragua",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "ni"
+   ],
+   "icon": {
+    "cc": "ni"
+   },
+   "level": "national",
+   "wiki": "2027 Nicaraguan presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Barbadian parliamentary election",
+   "w": "Barbados",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "bb"
+   ],
+   "icon": {
+    "cc": "bb"
+   },
+   "level": "national",
+   "wiki": "2027 Barbadian parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "East Timorese presidential election",
+   "w": "Timor-Leste",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "tl"
+   ],
+   "icon": {
+    "cc": "tl"
+   },
+   "level": "national",
+   "wiki": "2027 East Timorese presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Mongolian presidential election",
+   "w": "Mongolia",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "mn"
+   ],
+   "icon": {
+    "cc": "mn"
+   },
+   "level": "national",
+   "wiki": "2027 Mongolian presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Papua New Guinean general election",
+   "w": "Papua New Guinea",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "pg"
+   ],
+   "icon": {
+    "cc": "pg"
+   },
+   "level": "national",
+   "wiki": "2027 Papua New Guinean general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Angolan presidential election",
+   "w": "Angola",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "ao"
+   ],
+   "icon": {
+    "cc": "ao"
+   },
+   "level": "national",
+   "wiki": "2027 Angolan presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Vanuatuan presidential election",
+   "w": "Vanuatu",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "vu"
+   ],
+   "icon": {
+    "cc": "vu"
+   },
+   "level": "national",
+   "wiki": "2027 Vanuatuan presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Punjab Legislative Assembly election",
+   "w": "India",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "in"
+   ],
+   "icon": {
+    "cc": "in"
+   },
+   "level": "national",
+   "wiki": "2027 Punjab Legislative Assembly election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Upper Austrian state election",
+   "w": "Austria",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "at"
+   ],
+   "icon": {
+    "cc": "at"
+   },
+   "level": "regional",
+   "wiki": "2027 Upper Austrian state election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Angolan general election",
+   "w": "Angola",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "ao"
+   ],
+   "icon": {
+    "cc": "ao"
+   },
+   "level": "national",
+   "wiki": "2027 Angolan general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Salvadoran presidential election",
+   "w": "El Salvador",
+   "a": "2027-01-01",
+   "when": "2027",
+   "cc": [
+    "sv"
+   ],
+   "icon": {
+    "cc": "sv"
+   },
+   "level": "national",
+   "wiki": "2027 Salvadoran presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "New South Wales state election",
+   "w": "Australia",
+   "a": "2027-01-30",
+   "cc": [
+    "au"
+   ],
+   "icon": {
+    "cc": "au"
+   },
+   "level": "regional",
+   "wiki": "2027 New South Wales state election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "German presidential election",
+   "w": "Germany",
+   "a": "2027-01-30",
+   "cc": [
+    "de"
+   ],
+   "icon": {
+    "cc": "de"
+   },
+   "level": "national",
+   "wiki": "2027 German presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Salvadoran legislative election",
+   "w": "El Salvador",
+   "a": "2027-02-28",
+   "cc": [
+    "sv"
+   ],
+   "icon": {
+    "cc": "sv"
+   },
+   "level": "national",
+   "wiki": "2027 Salvadoran legislative election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Micronesian general election",
+   "w": "Federated States of Micronesia",
+   "a": "2027-03-02",
+   "cc": [
+    "fm"
+   ],
+   "icon": {
+    "cc": "fm"
+   },
+   "level": "national",
+   "wiki": "2027 Micronesian general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Estonian parliamentary election",
+   "w": "Estonia",
+   "a": "2027-03-07",
+   "cc": [
+    "ee"
+   ],
+   "icon": {
+    "cc": "ee"
+   },
+   "level": "national",
+   "wiki": "Estonian parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Finnish parliamentary election",
+   "w": "Finland",
+   "a": "2027-04-18",
+   "cc": [
+    "fi"
+   ],
+   "icon": {
+    "cc": "fi"
+   },
+   "level": "national",
+   "wiki": "2027 Finnish parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Manipur Legislative Assembly election",
+   "w": "India",
+   "a": "2027-05-01",
+   "cc": [
+    "in"
+   ],
+   "icon": {
+    "cc": "in"
+   },
+   "level": "national",
+   "wiki": "Manipur Legislative Assembly election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Sarawak state election",
+   "w": "Malaysia",
+   "a": "2027-06-16",
+   "cc": [
+    "my"
+   ],
+   "icon": {
+    "cc": "my"
+   },
+   "level": "regional",
+   "wiki": "Sarawak state election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Grenadian general election",
+   "w": "Grenada",
+   "a": "2027-06-30",
+   "cc": [
+    "gd"
+   ],
+   "icon": {
+    "cc": "gd"
+   },
+   "level": "national",
+   "wiki": "2026 Grenadian general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Greek parliamentary election",
+   "w": "Greece",
+   "a": "2027-06-30",
+   "cc": [
+    "gr"
+   ],
+   "icon": {
+    "cc": "gr"
+   },
+   "level": "national",
+   "wiki": "2027 Greek parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Senegalese parliamentary election",
+   "w": "Senegal",
+   "a": "2027-07-31",
+   "cc": [
+    "sn"
+   ],
+   "icon": {
+    "cc": "sn"
+   },
+   "level": "national",
+   "wiki": "2027 Senegalese parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Palestinian legislative election",
+   "w": "Palestine",
+   "a": "2027-09-11",
+   "cc": [
+    "ps"
+   ],
+   "icon": {
+    "cc": "ps"
+   },
+   "level": "national",
+   "wiki": "Palestinian legislative election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Palestinian presidential election",
+   "w": "Palestine",
+   "a": "2027-09-11",
+   "cc": [
+    "ps"
+   ],
+   "icon": {
+    "cc": "ps"
+   },
+   "level": "national",
+   "wiki": "Palestinian presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Omani general election",
+   "w": "Oman",
+   "a": "2027-10-01",
+   "cc": [
+    "om"
+   ],
+   "icon": {
+    "cc": "om"
+   },
+   "level": "national",
+   "wiki": "2027 Omani general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Swiss federal election",
+   "w": "Switzerland",
+   "a": "2027-10-24",
+   "cc": [
+    "ch"
+   ],
+   "icon": {
+    "cc": "ch"
+   },
+   "level": "national",
+   "wiki": "2027 Swiss federal election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Lesotho parliamentary election",
+   "w": "Lesotho",
+   "a": "2027-10-31",
+   "cc": [
+    "ls"
+   ],
+   "icon": {
+    "cc": "ls"
+   },
+   "level": "national",
+   "wiki": "2027 Lesotho parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Nicaraguan parliamentary election",
+   "w": "Nicaragua",
+   "a": "2027-11-01",
+   "cc": [
+    "ni"
+   ],
+   "icon": {
+    "cc": "ni"
+   },
+   "level": "national",
+   "wiki": "2027 Nicaraguan parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Nicaraguan general election",
+   "w": "Nicaragua",
+   "a": "2027-11-01",
+   "cc": [
+    "ni"
+   ],
+   "icon": {
+    "cc": "ni"
+   },
+   "level": "national",
+   "wiki": "2027 Nicaraguan general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Malagasy presidential election",
+   "w": "Madagascar",
+   "a": "2027-11-01",
+   "cc": [
+    "mg"
+   ],
+   "icon": {
+    "cc": "mg"
+   },
+   "level": "national",
+   "wiki": "2027 Malagasy presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Equatorial Guinean legislative election",
+   "w": "Equatorial Guinea",
+   "a": "2027-11-30",
+   "cc": [
+    "gq"
+   ],
+   "icon": {
+    "cc": "gq"
+   },
+   "level": "national",
+   "wiki": "2027 Equatorial Guinean legislative election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Nepalese legislative election",
+   "w": "Nepal",
+   "a": "2027-11-30",
+   "cc": [
+    "np"
+   ],
+   "icon": {
+    "cc": "np"
+   },
+   "level": "national",
+   "wiki": "2027 Nepalese legislative election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Malaysian general election",
+   "w": "Malaysia",
+   "a": "2027-11-30",
+   "cc": [
+    "my"
+   ],
+   "icon": {
+    "cc": "my"
+   },
+   "level": "national",
+   "wiki": "2027 Malaysian general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Tunisian parliamentary election",
+   "w": "Tunisia",
+   "a": "2027-12-31",
+   "cc": [
+    "tn"
+   ],
+   "icon": {
+    "cc": "tn"
+   },
+   "level": "national",
+   "wiki": "2027 Tunisian parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Mauritanian parliamentary election",
+   "w": "Mauritania",
+   "a": "2028-01-01",
+   "when": "2028",
+   "cc": [
+    "mr"
+   ],
+   "icon": {
+    "cc": "mr"
+   },
+   "level": "national",
+   "wiki": "Mauritanian parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Hungarian presidential election",
+   "w": "Hungary",
+   "a": "2028-01-01",
+   "when": "2028",
+   "cc": [
+    "hu"
+   ],
+   "icon": {
+    "cc": "hu"
+   },
+   "level": "national",
+   "wiki": "2028 Hungarian presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Israeli presidential election",
+   "w": "Israel",
+   "a": "2028-01-01",
+   "when": "2028",
+   "cc": [
+    "il"
+   ],
+   "icon": {
+    "cc": "il"
+   },
+   "level": "national",
+   "wiki": "2028 Israeli presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Austrian presidential election",
+   "w": "Austria",
+   "a": "2028-01-01",
+   "when": "2028",
+   "cc": [
+    "at"
+   ],
+   "icon": {
+    "cc": "at"
+   },
+   "level": "national",
+   "wiki": "2028 Austrian presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Paraguayan general election",
+   "w": "Paraguay",
+   "a": "2028-01-01",
+   "when": "2028",
+   "cc": [
+    "py"
+   ],
+   "icon": {
+    "cc": "py"
+   },
+   "level": "national",
+   "wiki": "Paraguayan general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Cambodian parliamentary election",
+   "w": "Cambodia",
+   "a": "2028-01-01",
+   "when": "2028",
+   "cc": [
+    "kh"
+   ],
+   "icon": {
+    "cc": "kh"
+   },
+   "level": "national",
+   "wiki": "Cambodian parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Syrian presidential election",
+   "w": "Syria",
+   "a": "2028-01-01",
+   "when": "2028",
+   "cc": [
+    "sy"
+   ],
+   "icon": {
+    "cc": "sy"
+   },
+   "level": "national",
+   "wiki": "2028 Syrian presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Czech presidential election",
+   "w": "Czech Republic",
+   "a": "2028-01-01",
+   "when": "2028",
+   "cc": [
+    "cz"
+   ],
+   "icon": {
+    "cc": "cz"
+   },
+   "level": "national",
+   "wiki": "2028 Czech presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Turkish presidential election",
+   "w": "Turkey",
+   "a": "2028-01-01",
+   "when": "2028",
+   "cc": [
+    "tr"
+   ],
+   "icon": {
+    "cc": "tr"
+   },
+   "level": "national",
+   "wiki": "Turkish presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Lower Austrian state election",
+   "w": "Austria",
+   "a": "2028-01-01",
+   "when": "2028",
+   "cc": [
+    "at"
+   ],
+   "icon": {
+    "cc": "at"
+   },
+   "level": "regional",
+   "wiki": "2028 Lower Austrian state election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Philippine presidential election",
+   "w": "Philippines",
+   "a": "2028-05-08",
+   "cc": [
+    "ph"
+   ],
+   "icon": {
+    "cc": "ph"
+   },
+   "level": "national",
+   "wiki": "2028 Philippine presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Philippine vice presidential election",
+   "w": "Philippines",
+   "a": "2028-05-08",
+   "cc": [
+    "ph"
+   ],
+   "icon": {
+    "cc": "ph"
+   },
+   "level": "national",
+   "wiki": "2028 Philippine vice presidential election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Philippine general election",
+   "w": "Philippines",
+   "a": "2028-05-08",
+   "cc": [
+    "ph"
+   ],
+   "icon": {
+    "cc": "ph"
+   },
+   "level": "national",
+   "wiki": "2028 Philippine general election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Zimbabwean parliamentary election",
+   "w": "Zimbabwe",
+   "a": "2028-08-01",
+   "cc": [
+    "zw"
+   ],
+   "icon": {
+    "cc": "zw"
+   },
+   "level": "national",
+   "wiki": "Zimbabwean parliamentary election",
+   "auto": true
+  },
+  {
+   "k": "election",
+   "t": "Togolese parliamentary election",
+   "w": "Togo",
+   "a": "2028-12-01",
+   "cc": [
+    "tg"
+   ],
+   "icon": {
+    "cc": "tg"
+   },
+   "level": "national",
+   "wiki": "Togolese parliamentary election",
+   "auto": true
   }
  ]
 }

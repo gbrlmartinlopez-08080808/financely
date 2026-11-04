@@ -1196,6 +1196,24 @@ button.tcard:active {
 .wk-body h3 {
   scroll-margin-top: 60px;
 }
+.wk-body h3,
+.wk-body h4 {
+  font: 650 17px/1.25 var(--sans);
+  margin: 1.2em 0 0.35em;
+}
+.wk-body .mw-heading,
+.wk-body section {
+  margin: 0;
+  padding: 0;
+}
+.wk-body p {
+  margin: 0 0 0.9em;
+}
+.wk-body h2 + p,
+.wk-body h3 + p,
+.wk-body .mw-heading + p {
+  margin-top: 0;
+}
 .wk-body section > h2 {
   font: 650 20px/1.2 var(--sans);
   margin: 1.4em 0 0.4em;
@@ -1209,8 +1227,21 @@ button.tcard:active {
 }
 .wk-body table.wk-table td,
 .wk-body table.wk-table th {
-  padding: 4px 8px;
+  padding: 5px 10px;
   border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+}
+.wk-body table.wk-table td.long,
+.wk-body table.wk-table th.long {
+  white-space: normal;
+  min-width: 15em;
+}
+.wk-body table.wk-table th {
+  font-weight: 600;
+  text-align: left;
 }
 .wk-body figure {
   margin: 0.8em 0;
@@ -2500,6 +2531,8 @@ button.tcard:active {
 }
 .wd {
   display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
   gap: 14px;
   padding: 4px 18px 28px;
 }
@@ -2980,7 +3013,7 @@ button.tcard:active {
   align-items: center;
   gap: 5px;
 }
-.chip {
+.wtag {
   font-size: 9.5px;
   padding: 2px 8px;
   border-radius: 99px;
@@ -2989,7 +3022,7 @@ button.tcard:active {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.chip.live {
+.wtag.live {
   background: color-mix(in srgb, #5f9bd0 22%, var(--surface));
   color: var(--ink);
 }
@@ -3164,7 +3197,7 @@ button.tcard:active {
   grid-auto-rows: 1fr;
   gap: 3px;
 }
-.tile {
+.utile {
   aspect-ratio: 1;
   display: grid;
   place-items: center;
@@ -3173,31 +3206,31 @@ button.tcard:active {
   transition: transform 0.15s var(--ease);
   color: var(--ink);
 }
-.tile b {
+.utile b {
   font-size: clamp(8px, 2.6vw, 11px);
   font-weight: 700;
 }
-.tile i {
+.utile i {
   position: absolute;
   top: 1px;
   right: 3px;
   font-size: 8px;
   font-style: normal;
 }
-.tile.open {
+.utile.open {
   outline: 1.5px dashed var(--ink-2);
   outline-offset: -2px;
 }
-.tile.dim {
+.utile.dim {
   color: var(--muted);
 }
-.tile.sel {
+.utile.sel {
   transform: scale(1.18);
   z-index: 2;
   box-shadow: 0 0 0 2px var(--ink);
 }
 .peek {
-  min-height: 74px;
+  min-height: 0;
 }
 .peek button {
   display: grid;
@@ -3476,4 +3509,106 @@ button.tcard:active {
 .mrow.solo .mt {
   font-weight: 600;
   white-space: normal;
+}
+
+/* ---- the News tab's two halves, and shapes */
+.nmode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  margin: 0 0 12px;
+  border-bottom: 1px solid var(--line-2);
+}
+.nmode button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 6px 12px;
+  text-align: left;
+  color: var(--muted);
+  position: relative;
+}
+.nmode button span {
+  display: grid;
+  gap: 1px;
+}
+.nmode b {
+  font-size: 15px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.nmode small {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+.nmode button.on {
+  color: var(--ink);
+}
+.nmode button.on::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 8px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--ink);
+}
+.nmode .new {
+  font-style: normal;
+  font-size: 8.5px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: #e2664a;
+  color: #fff;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.maptoggle {
+  display: flex;
+  gap: 14px;
+  font-size: 11.5px;
+}
+.maptoggle button {
+  padding: 2px 0;
+  color: var(--muted);
+}
+.maptoggle button.on {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.shapemap {
+  width: 100%;
+  height: auto;
+}
+.shapemap path {
+  stroke: var(--bg);
+  stroke-width: 1.4;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.shapemap path.sel {
+  stroke: var(--ink);
+  stroke-width: 3;
+}
+.rl-t svg {
+  display: block;
+}
+.ico.ph.emo {
+  background: color-mix(in srgb, var(--line) 70%, var(--surface));
+  box-shadow: none;
+  line-height: 1;
+}
+.wsub {
+  margin: 10px 4px 2px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
 }

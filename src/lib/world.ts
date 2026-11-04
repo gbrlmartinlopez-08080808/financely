@@ -33,6 +33,8 @@ export interface WorldEvent {
   cc?: string[];
   /** which section it is shown in, when the kind alone does not say */
   sec?: string;
+  /** found automatically (Wikidata) rather than written by hand */
+  auto?: boolean;
   /** national or regional (for elections) */
   level?: 'national' | 'regional';
 }

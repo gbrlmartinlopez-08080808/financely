@@ -34,26 +34,37 @@ export const VOICE_LANGS: { code: string; label: string }[] = [
 ];
 
 export const NEURAL_VOICES: NeuralVoice[] = [
+  // English: a woman and a man in each accent, then the HD ones
   { id: 'en_US-hfc_female-medium', label: 'Ava', note: 'warm, clear · US woman', lang: 'en-US', mb: 63, tier: 'standard', rec: true },
   { id: 'en_US-ryan-medium', label: 'Ryan', note: 'steady narrator · US man', lang: 'en-US', mb: 63, tier: 'standard' },
-  { id: 'en_US-lessac-medium', label: 'Lessac', note: 'audiobook style · US', lang: 'en-US', mb: 63, tier: 'standard' },
-  { id: 'en_GB-alba-medium', label: 'Alba', note: 'gentle · Scottish woman', lang: 'en-GB', mb: 63, tier: 'standard' },
+  { id: 'en_GB-jenny_dioco-medium', label: 'Jenny', note: 'friendly · British woman', lang: 'en-GB', mb: 63, tier: 'standard' },
   { id: 'en_GB-alan-medium', label: 'Alan', note: 'calm · British man', lang: 'en-GB', mb: 63, tier: 'standard' },
-  { id: 'en_US-lessac-high', label: 'Lessac HD', note: 'audiobook · US', lang: 'en-US', mb: 114, tier: 'hd' },
+  { id: 'en_GB-alba-medium', label: 'Alba', note: 'gentle · Scottish woman', lang: 'en-GB', mb: 63, tier: 'standard' },
+  { id: 'en_GB-northern_english_male-medium', label: 'Neil', note: 'warm · northern English man', lang: 'en-GB', mb: 63, tier: 'standard' },
+  { id: 'en_US-lessac-high', label: 'Lessac HD', note: 'audiobook · US woman', lang: 'en-US', mb: 114, tier: 'hd' },
   { id: 'en_US-ryan-high', label: 'Ryan HD', note: 'narrator · US man', lang: 'en-US', mb: 121, tier: 'hd' },
   { id: 'en_GB-cori-high', label: 'Cori HD', note: 'British woman', lang: 'en-GB', mb: 114, tier: 'hd' },
-  { id: 'es_ES-carlfm-x_low', label: 'Carlos', note: 'español · hombre', lang: 'es-ES', mb: 28, tier: 'light' },
-  { id: 'es_ES-davefx-medium', label: 'Dave', note: 'español · hombre', lang: 'es-ES', mb: 63, tier: 'standard', rec: true },
-  { id: 'es_MX-ald-medium', label: 'Ald', note: 'español (México) · hombre', lang: 'es-MX', mb: 63, tier: 'standard' },
-  { id: 'es_MX-claude-high', label: 'Claude', note: 'español (México) · más natural', lang: 'es-MX', mb: 63, tier: 'hd' },
+  // Spanish: Spain and Mexico
+  { id: 'es_ES-carlfm-x_low', label: 'Carlos', note: 'España · hombre', lang: 'es-ES', mb: 28, tier: 'light' },
+  { id: 'es_ES-davefx-medium', label: 'Dave', note: 'España · hombre', lang: 'es-ES', mb: 63, tier: 'standard', rec: true },
+  { id: 'es_MX-claude-high', label: 'Claude', note: 'México · mujer', lang: 'es-MX', mb: 63, tier: 'standard' },
+  { id: 'es_MX-ald-medium', label: 'Ald', note: 'México · hombre', lang: 'es-MX', mb: 63, tier: 'standard' },
+  // French
   { id: 'fr_FR-siwis-low', label: 'Siwis', note: 'français · femme', lang: 'fr-FR', mb: 28, tier: 'light' },
+  { id: 'fr_FR-gilles-low', label: 'Gilles', note: 'français · homme', lang: 'fr-FR', mb: 63, tier: 'light' },
   { id: 'fr_FR-siwis-medium', label: 'Siwis', note: 'français · femme', lang: 'fr-FR', mb: 63, tier: 'standard', rec: true },
+  { id: 'fr_FR-tom-medium', label: 'Tom', note: 'français · homme', lang: 'fr-FR', mb: 63, tier: 'standard' },
+  // German
   { id: 'de_DE-eva_k-x_low', label: 'Eva', note: 'Deutsch · Frau', lang: 'de-DE', mb: 21, tier: 'light' },
+  { id: 'de_DE-kerstin-low', label: 'Kerstin', note: 'Deutsch · Frau', lang: 'de-DE', mb: 63, tier: 'standard' },
   { id: 'de_DE-thorsten-medium', label: 'Thorsten', note: 'Deutsch · Mann', lang: 'de-DE', mb: 63, tier: 'standard', rec: true },
   { id: 'de_DE-thorsten-high', label: 'Thorsten HD', note: 'Deutsch · Mann', lang: 'de-DE', mb: 114, tier: 'hd' },
+  // Italian
   { id: 'it_IT-riccardo-x_low', label: 'Riccardo', note: 'italiano · uomo', lang: 'it-IT', mb: 28, tier: 'light', rec: true },
   { id: 'it_IT-paola-medium', label: 'Paola', note: 'italiano · donna', lang: 'it-IT', mb: 64, tier: 'standard' },
-  { id: 'pt_BR-faber-medium', label: 'Faber', note: 'português · homem', lang: 'pt-BR', mb: 63, tier: 'standard', rec: true },
+  // Portuguese (no woman's voice exists for it yet)
+  { id: 'pt_BR-faber-medium', label: 'Faber', note: 'Brasil · homem', lang: 'pt-BR', mb: 63, tier: 'standard', rec: true },
+  { id: 'pt_PT-tugão-medium', label: 'Tugão', note: 'Portugal · homem', lang: 'pt-PT', mb: 63, tier: 'standard' },
 ];
 
 /** The voice offered first for a language (light on slow phones). */

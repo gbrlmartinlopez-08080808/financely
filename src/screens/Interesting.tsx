@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { readArticle, type Article } from '../lib/article';
 import { wikiArticle, type WikiDoc } from '../lib/wikiarticle';
 import {
@@ -173,7 +173,6 @@ export function Interesting({ docs, onSwitch, onFindBooks }: { docs: DocMeta[]; 
   const [ask, setAsk] = useState<AskCtx | null>(null);
   const [out, setOut] = useState(false);
   const [newsView, setNewsView] = useState<'news' | 'world'>('news');
-  const [menu, setMenu] = useState(false);
 
   const load = useCallback((force = false) => {
     setErr(null);
@@ -221,7 +220,6 @@ export function Interesting({ docs, onSwitch, onFindBooks }: { docs: DocMeta[]; 
             setTab(t);
             if (t === 'news' && tab !== 'news') setNewsView('news');
           }}
-          onHold={(t) => t === 'news' && setMenu(true)}
           options={[
             { value: 'today', label: 'Today' },
             { value: 'news', label: 'News' },
@@ -248,33 +246,11 @@ export function Interesting({ docs, onSwitch, onFindBooks }: { docs: DocMeta[]; 
       )}
 
       {daily && tab === 'today' && <Today d={daily.data} offline={daily.offline} mood={mood} setDetail={setDetail} wiki={wiki} onRefresh={() => load(true)} />}
-      {daily && tab === 'news' && newsView === 'news' && <News d={daily.data} setDetail={setDetail} onWorld={() => setNewsView('world')} />}
-      {tab === 'news' && newsView === 'world' && <WorldInfo wiki={wiki} d={daily?.data} openStory={(story) => setDetail({ kind: 'story', story })} />}
+      {daily && tab === 'news' && newsView === 'news' && <News d={daily.data} setDetail={setDetail} mode={<NewsMode view="news" set={setNewsView} />} />}
+      {tab === 'news' && newsView === 'world' && <WorldInfo mode={<NewsMode view="world" set={setNewsView} />} wiki={wiki} d={daily?.data} openStory={(story) => setDetail({ kind: 'story', story })} />}
       {tab === 'play' && <Play />}
       {tab === 'you' && <ForYou book={book} d={daily?.data} setDetail={setDetail} wiki={wiki} />}
 
-      <Sheet open={menu} onClose={() => setMenu(false)} title="News">
-        <div className="news-menu">
-          {([
-            ['news', 'News', 'The day’s stories, each with the outlets that cover it and where they sit'],
-            ['world', 'World info', 'Votes, summits, finals and tournaments, the sky: what the world is following'],
-          ] as const).map(([v, t, d]) => (
-            <button
-              key={v}
-              className={newsView === v && tab === 'news' ? 'on' : ''}
-              onClick={() => {
-                tap('select');
-                setNewsView(v);
-                setTab('news');
-                setMenu(false);
-              }}
-            >
-              <b>{t}</b>
-              <small>{d}</small>
-            </button>
-          ))}
-        </div>
-      </Sheet>
       <Sheet open={!!detail} onClose={() => setDetail(null)} className="int-sheet">
         {detail && <DetailBody det={detail} d={daily?.data} setDetail={setDetail} onAsk={askAbout} onFindBooks={(q) => (setDetail(null), onFindBooks(q))} />}
       </Sheet>
@@ -284,6 +260,15 @@ export function Interesting({ docs, onSwitch, onFindBooks }: { docs: DocMeta[]; 
 }
 
 // ------------------------------------------------------------------------------------------------------- today
+/** how old the copy on screen is, in words: honest when the feed has not been refreshed */
+function ageLine(generated: string, offline: boolean) {
+  const h = (Date.now() - new Date(generated).getTime()) / 36e5;
+  const when = new Date(generated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (h < 0 || Number.isNaN(h)) return offline ? 'offline · showing the last copy' : 'free for everyone';
+  if (h < 8) return `${offline ? 'offline · ' : ''}updated today ${when}`;
+  if (h < 30) return `${offline ? 'offline · ' : ''}updated ${h < 24 ? 'today' : 'yesterday'} ${when} · refreshes through the day`;
+  return `${offline ? 'offline · ' : ''}from ${Math.round(h / 24)} days ago · waiting for a fresh copy`;
+}
 function Today({ d, offline, mood, setDetail, wiki, onRefresh }: { d: Daily; offline: boolean; mood: Mood; setDetail: (x: Detail) => void; wiki: (t: string, note?: string) => void; onRefresh: () => void }) {
   const fact = factOfDay();
   const date = new Date().toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
@@ -295,7 +280,7 @@ function Today({ d, offline, mood, setDetail, wiki, onRefresh }: { d: Daily; off
         <Froggy mood={mood} size="sm" />
         <div>
           <b>{date}</b>
-          <span className="mono">{offline ? 'offline · showing the last copy' : 'fresh today · free for everyone'}</span>
+          <span className="mono">{ageLine(d.generated, offline)}</span>
         </div>
         <button className="int-refresh" aria-label="Refresh" onClick={onRefresh}>
           <Icon name="undo" size={17} />
@@ -419,12 +404,57 @@ function ReadRow({ r, d, onOpen }: { r: Read; d: Daily; onOpen: () => void }) {
 }
 
 // ------------------------------------------------------------------------------------------------------- news reels
-function News({ d, setDetail, onWorld }: { d: Daily; setDetail: (x: Detail) => void; onWorld: () => void }) {
+/** The two halves of the News tab: today's stories, and World info (votes, sport, money by country). Plain text on a rule, like the rest of the page. */
+function NewsMode({ view, set }: { view: 'news' | 'world'; set: (v: 'news' | 'world') => void }) {
+  const [seen, setSeen] = useState(() => {
+    try {
+      return !!localStorage.getItem('world:seen');
+    } catch {
+      return true;
+    }
+  });
+  const go = (v: 'news' | 'world') => {
+    if (v === view) return;
+    tap('select');
+    if (v === 'world') {
+      try {
+        localStorage.setItem('world:seen', '1');
+      } catch {
+        /* private mode */
+      }
+      setSeen(true);
+    }
+    set(v);
+  };
+  return (
+    <div className="nmode" role="tablist" aria-label="News or World info">
+      <button role="tab" aria-selected={view === 'news'} className={view === 'news' ? 'on' : ''} onClick={() => go('news')}>
+        <Icon name="book" size={18} />
+        <span>
+          <b>Stories</b>
+          <small className="mono">today’s reporting</small>
+        </span>
+      </button>
+      <button role="tab" aria-selected={view === 'world'} className={view === 'world' ? 'on' : ''} onClick={() => go('world')}>
+        <Icon name="globe" size={18} />
+        <span>
+          <b>
+            World info {!seen && <i className="new mono">new</i>}
+          </b>
+          <small className="mono">votes · sport · money</small>
+        </span>
+      </button>
+    </div>
+  );
+}
+
+function News({ d, setDetail, mode }: { d: Daily; setDetail: (x: Detail) => void; mode: ReactNode }) {
   const [topic, setTopic] = useState<'all' | Topic>('all');
   const topics = useMemo(() => [...new Set(d.news.map((s) => s.topic).filter((x): x is Topic => !!x))], [d]);
   const list = topic === 'all' ? d.news : d.news.filter((s) => s.topic === topic);
   return (
     <div className="news">
+      {mode}
       {topics.length > 1 && (
         <div className="topics" role="tablist">
           {(['all', ...topics] as const).map((t) => (
@@ -432,9 +462,6 @@ function News({ d, setDetail, onWorld }: { d: Daily; setDetail: (x: Detail) => v
               {t === 'all' ? 'All' : TOPIC_LABEL[t]}
             </button>
           ))}
-          <button role="tab" aria-selected={false} className="wl" onClick={() => (tap('select'), onWorld())}>
-            World info
-          </button>
         </div>
       )}
       <Reels key={topic} d={d} stories={list} setDetail={setDetail} />
