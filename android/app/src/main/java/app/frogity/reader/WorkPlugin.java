@@ -74,12 +74,12 @@ public class WorkPlugin extends Plugin {
         call.resolve(r);
     }
 
-    /** Asks the phone (with its own dialog) to leave Frogity out of battery saving, so reading goes on with the app closed. */
+    /** Opens the phone's own battery-saving list (no special permission) so the reader can leave Frogity out of it, so reading goes on with the app closed. */
     @PluginMethod
     public void askBattery(PluginCall call) {
         Context ctx = getContext();
         try {
-            Intent i = new Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, android.net.Uri.parse("package:" + ctx.getPackageName()));
+            Intent i = new Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             ctx.startActivity(i);
         } catch (Exception e) {

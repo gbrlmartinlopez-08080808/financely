@@ -16,6 +16,7 @@ import { goPage, pageCount, pageIndex, usePager } from './paged';
 import { Icon, TypeGlyph } from '../ui/Icon';
 import { PixelBar, PixelLoader, Segmented, Sheet, toast } from '../ui/kit';
 import { PdfView, type PdfViewHandle } from './PdfView';
+import { DocxView } from './DocxView';
 import { LookupCard, SelectionMenu, ZoomViewer } from './Lookup';
 import { ListenBar } from './ListenBar';
 import { ContentsSheet, MoreSheet, THEMES, TypeSheet, type MoreAction } from './sheets';
@@ -61,13 +62,17 @@ function prepLine(p: Prep): string {
   return `liquid · ${Math.round(p.progress * 100)}% · ${doing}`;
 }
 
+const READY_PREP = { known: true, ready: true, none: false, progress: 1, busy: false, info: '', eta: 0, error: undefined } as unknown as Prep;
+
 export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; onClose: () => void; onConvert: (doc: DocMeta, root?: HTMLElement | null) => void; onOpenDoc?: (id: string) => void }) {
   const id = doc.id;
   const settings = useStore((s) => s.settings);
   const [content, setContent] = useState<Content | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
-  const [mode, setMode] = useState<'page' | 'liquid'>(doc.position?.mode ?? settings.defaultPdfMode);
+  // pages are the document as its author made it: they open that way unless the reader has chosen otherwise for this one
+  const [mode, setMode] = useState<'page' | 'liquid'>(doc.position?.pick ? doc.position.mode : settings.defaultPdfMode);
+  const pickRef = useRef(!!doc.position?.pick);
   const [listen, setListen] = useState(false);
   const [listening, setListening] = useState(false);
   const [chrome, setChrome] = useState(true);
@@ -108,9 +113,13 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
   const [flowReady, setFlowReady] = useState(0);
 
   const isPdf = doc.kind === 'pdf';
+  /** Word documents have pages too (Liquid is the reflowed text) */
+  const isDocx = doc.kind === 'docx';
+  const [docxFail, setDocxFail] = useState(false);
+  const [docxBlob, setDocxBlob] = useState<Blob | null>(null);
   // Liquid opens the moment it is chosen, whatever the background work is doing: what is ready is shown, the rest
   // arrives as it is finished, and the end of the text says how far it is (or what went wrong).
-  const liquid = !isPdf || mode === 'liquid';
+  const liquid = !(isPdf || isDocx) || mode === 'liquid' || (isDocx && docxFail);
   /** a PDF's Liquid view that is still being made (it grows while you read) */
   const growing = isPdf && liquid && !liq.ready;
   // (until the book's state is known — a few milliseconds — nothing is said, so a finished book never flashes a status)
@@ -160,6 +169,15 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
       alive = false;
     };
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!isDocx) return;
+    let alive = true;
+    getFile(id).then((b) => alive && b && setDocxBlob(b));
+    return () => {
+      alive = false;
+    };
+  }, [id, isDocx]);
 
   // (the PDF stays open in the little cache of recent books: coming back to it is instant)
   useEffect(
@@ -587,7 +605,7 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
     (p: number) => {
       setPage(p);
       clearTimeout(saveT.current);
-      saveT.current = window.setTimeout(() => patchDoc(id, { progress: progRef.current, position: { mode: 'page', value: p } }), 700);
+      saveT.current = window.setTimeout(() => patchDoc(id, { progress: progRef.current, position: { mode: 'page', value: p, pick: pickRef.current } }), 700);
     },
     [id],
   );
@@ -648,7 +666,7 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
         const s2 = live.current;
         patchDoc(id, {
           progress: s2.isPdf ? (doc.pages ? p / doc.pages : prog) : prog,
-          position: s2.isPdf ? { mode: 'liquid', value: p } : { mode: 'liquid', value: prog },
+          position: s2.isPdf ? { mode: 'liquid', value: p, pick: pickRef.current } : { mode: 'liquid', value: prog, pick: pickRef.current },
           // the end of a view that is still growing is not the end of the book
           ...(!s2.growing && prog > 0.985 && !s2.finished ? { finished: true } : {}),
         });
@@ -776,8 +794,9 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
     if (scroller && liquid && !isPdf) {
       const max = scroller.scrollHeight - scroller.clientHeight;
       const prog = max > 0 ? scroller.scrollTop / max : 0;
-      patchDoc(id, { progress: prog, position: { mode: 'liquid', value: prog } });
-    } else if (isPdf) patchDoc(id, { position: { mode, value: page } });
+      patchDoc(id, { progress: prog, position: { mode: 'liquid', value: prog, pick: pickRef.current } });
+    } else if (isPdf) patchDoc(id, { position: { mode, value: page, pick: pickRef.current } });
+    else if (isDocx && !liquid) patchDoc(id, { progress: progRef.current, position: { mode: 'page', value: progRef.current, pick: pickRef.current } });
     onClose();
   };
 
@@ -786,8 +805,8 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
     if (m === mode) return;
     restoredLiquid.current = false;
     setMode(m);
-    updateSettings({ defaultPdfMode: m });
-    patchDoc(id, { position: { mode: m, value: page } });
+    pickRef.current = true; // for this document only: the default for new ones stays what Settings says
+    patchDoc(id, { position: { mode: m, value: isDocx ? progRef.current : page, pick: true } });
     if (m === 'page') setTimeout(() => pdfRef.current?.goTo(page), 100);
   };
 
@@ -1187,7 +1206,7 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
     { id: 'form', label: 'Fill this form', icon: 'edit', right: form ? `${form.fields.length} fields` : undefined, hidden: !form },
     { id: 'ask', label: 'Ask Froggy', icon: 'frog', right: 'free ai' },
     { id: 'bookmark', label: hereMark ? 'Remove bookmark here' : 'Bookmark this spot', icon: 'bookmark' },
-    { id: 'mode', label: liquid ? 'Original pages' : 'Liquid view', icon: liquid ? 'page' : 'liquid', right: !liquid && liq.busy && !liq.ready ? `${Math.round(liq.progress * 100)}%` : undefined, hidden: !isPdf },
+    { id: 'mode', label: liquid ? 'Original pages' : 'Liquid view', icon: liquid ? 'page' : 'liquid', right: !liquid && liq.busy && !liq.ready ? `${Math.round(liq.progress * 100)}%` : undefined, hidden: !(isPdf || isDocx) || (isDocx && docxFail) },
     { id: 'thumbs', label: thumbs ? 'Hide page thumbnails' : 'Page thumbnails', icon: 'sidebar', hidden: !isPdf || liquid },
     { id: 'ocr', label: 'Recognise text (OCR)', pixel: 'scan', hidden: content?.type !== 'image' },
     { id: 'card', label: 'Share as a book card', icon: 'share' },
@@ -1246,6 +1265,14 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
           </div>
         ) : showPdfPages ? (
           <PdfView ref={pdfRef} pdf={pdf} scroller={scroller} initialPage={page} thumbs={thumbs} onPage={onPdfPage} onProgress={setProg} onTap={onContentTap} />
+        ) : isDocx && !liquid ? (
+          docxBlob ? (
+            <DocxView blob={docxBlob} scroller={scroller} initial={doc.position?.mode === 'page' ? doc.position.value : 0} onProgress={setProg} onTap={onContentTap as unknown as () => void} onFail={() => setDocxFail(true)} />
+          ) : (
+            <div style={{ display: 'grid', placeItems: 'center', height: '100%' }}>
+              <PixelLoader grid={4} size={7} label="opening" />
+            </div>
+          )
         ) : isPdf && !liquid ? (
           <div style={{ display: 'grid', placeItems: 'center', height: '100%' }}>
             <PixelLoader grid={4} size={7} label="opening" />
@@ -1333,6 +1360,7 @@ export function Reader({ doc, onClose, onConvert, onOpenDoc }: { doc: DocMeta; o
             <Icon name="frog" />
           </button>
           {isPdf && <ViewButton active={liquid} prep={liq} onClick={() => switchMode(liquid ? 'page' : 'liquid')} />}
+          {isDocx && !docxFail && <ViewButton active={liquid} prep={READY_PREP} onClick={() => switchMode(liquid ? 'page' : 'liquid')} />}
           <button className={`r-ibtn${hereMark ? ' on' : ''}`} onClick={addBookmark} aria-label={hereMark ? 'Remove bookmark' : 'Bookmark this spot'}>
             <Icon name="bookmark" />
           </button>

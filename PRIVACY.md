@@ -1,6 +1,6 @@
 # Privacy Policy — Frogity
 
-*Last updated: 30 October 2026. Fill in the contact line at the bottom, publish `docs/privacy.html` (generated from this file with `npm run privacy`) at a public URL such as GitHub Pages, then put that URL in `src/lib/config.ts` (`PRIVACY_URL`) and in Play Console.*
+*Last updated: 5 November 2026.*
 
 **Summary:** Frogity is a document reader. It has no accounts, no ads and no analytics. Your library stays on your phone. The app only uses the internet when you ask it to, as described below.
 
@@ -13,7 +13,8 @@ Your documents' copies, covers, reading position, bookmarks, highlights, notes, 
 | Look up a word | The selected word or phrase, your IP address | Wikipedia / Wiktionary (Wikimedia Foundation), dictionaryapi.dev |
 | Save a web link | The address you typed or shared; your IP address; requests for the page's images | The website you named |
 | Interesting tab (only when you open it) | Nothing about you: one small shared file of the day’s headlines, a figure, a picture and an article is downloaded; for the weekly article, a search for the title of the book you are reading is sent to Wikipedia | GitHub Pages (the shared file), Wikipedia / Wikimedia (weekly article, pictures), and the news outlets’ image servers (pictures shown on a news card) |
-| Froggy, the reading companion (optional, off by default) | Your question and a few short excerpts of the open document | Pollinations (open AI service) |
+| Froggy, the reading companion (optional, off by default) | Your question and a few short excerpts of the open document. Answers come from an AI language model and can be wrong; do not enter sensitive information | Pollinations (open AI service, third party; its own terms apply) |
+| World and Sports sheets (only when you open them) | The country, league or team you open (as a lookup); your IP address | Wikipedia / Wikidata, World Bank, TheSportsDB, Nager.Date, Frankfurter (exchange rates), flagcdn (flags) |
 | Find free books (only when you open it) | Your search words; the file you pick is downloaded | Project Gutenberg (gutendex.com), Internet Archive, arXiv, Google Books, Open Library |
 | Studio voice (only when you download one) | Nothing about you; the voice file and speech engine are downloaded once | Hugging Face, jsDelivr / cdnjs (CDNs) |
 | Send feedback (optional, after your first streak milestone) | The rating and note you write, plus the app version and streak length, in an email you review before sending | Our support mailbox, via your email app |

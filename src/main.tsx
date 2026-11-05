@@ -6,6 +6,8 @@ import './styles/ui.css';
 import './styles/overlays.css';
 import './styles/interesting.css';
 import App from './App';
+import { ErrorBoundary } from './ui/ErrorBoundary';
+import { startI18n } from './lib/i18n';
 
 /** Lay the interface out ~8% smaller than the device width (everything scales together). */
 const UI_SCALE = 0.92;
@@ -27,4 +29,9 @@ window.addEventListener('resize', () => {
   }, 300);
 });
 
-createRoot(document.getElementById('root')!).render(<App />);
+createRoot(document.getElementById('root')!).render(
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>,
+);
+startI18n();

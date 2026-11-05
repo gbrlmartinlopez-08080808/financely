@@ -60,6 +60,12 @@ export async function init() {
     merged.v = 2;
     db.put('kv', 'settings', merged);
   }
+  if ((merged.v ?? 2) < 3) {
+    // v3: opening a document in Liquid once used to make every document open that way. Pages are the default again.
+    merged.defaultPdfMode = 'page';
+    merged.v = 3;
+    db.put('kv', 'settings', merged);
+  }
   set({
     ready: true,
     docs: sortDocs(docs),

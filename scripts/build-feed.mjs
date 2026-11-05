@@ -389,8 +389,10 @@ async function news() {
     used[lead.src.id] = (used[lead.src.id] ?? 0) + 1;
     take[topic] = (take[topic] ?? 0) + 1;
     if (tone === 'heavy') heavy++;
+    const sid = createHash('sha1').update(lead.link).digest('hex').slice(0, 10);
+    if (out.some((o) => o.id === sid)) continue;
     out.push({
-      id: createHash('sha1').update(lead.link).digest('hex').slice(0, 10),
+      id: sid,
       title: lead.title,
       summary: [...c.items].sort((a, b) => b.summary.length - a.summary.length)[0].summary,
       image: photo.image,

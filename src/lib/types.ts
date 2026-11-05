@@ -27,7 +27,8 @@ export interface DocMeta {
   addedAt: number;
   openedAt: number;
   progress: number; // 0..1
-  position?: { mode: ReadMode; value: number }; // scroll anchor
+  /** scroll anchor; `pick` = the reader chose this way of viewing the document (otherwise the default one is used) */
+  position?: { mode: ReadMode; value: number; pick?: boolean };
   pages?: number;
   author?: string;
   coverId?: string; // key in blobs store

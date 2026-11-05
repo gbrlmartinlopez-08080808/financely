@@ -108,35 +108,53 @@ export async function ask(opts: { title: string; docId?: string; passages: strin
     `You are Froggy, the small, friendly frog who keeps a reader company inside a reading app. You are warm, plain-spoken and a little playful, never gushing, and you never use emoji. The reader is looking at the document “${title}”${lang ? ` (written in ${lang})` : ''}. ` +
     `Answer using the excerpts below. If the excerpts do not contain the answer, say so briefly and offer what you do know, clearly marked as general knowledge. ` +
     `Reply in the language the reader wrote their question in. Be concise (usually under 120 words), plain language, no preamble. Use short lists only when they help. Write every formula in LaTeX: inline between single dollar signs like $x^2$, and displayed equations between double dollar signs on their own line. Never write maths as plain text or in code blocks.\n\nEXCERPTS:\n${context}`;
-  const body = {
+  const mk = (max: number) => ({
     model: 'openai',
     messages: [{ role: 'system', content: system }, ...history.slice(-6), { role: 'user', content: question }],
-    max_tokens: 700,
+    max_tokens: max,
     temperature: 0.3,
-  };
-  let last: Error = new Error('The AI service did not answer.');
+    reasoning_effort: 'low', // the free model "thinks" before it answers; a short think leaves room for the answer
+  });
+  let last: Error = new Error('Froggy could not be reached. Check your connection and try again.');
+  let max = 1600;
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt) await wait(1200 * 2 ** attempt + Math.random() * 800, signal); // busy: 2.4–3.2 s, then 4.8–5.6 s
+    // no answer in 40 seconds is no answer: stop waiting and try again (or say so), instead of leaving the reader hanging
+    const timer = new AbortController();
+    const to = setTimeout(() => timer.abort(), 40_000);
+    const onAbort = () => timer.abort();
+    signal?.addEventListener('abort', onAbort);
     try {
-      const r = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal });
+      const r = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mk(max)), signal: timer.signal });
       if (r.status === 429 || r.status >= 500) {
-        last = new Error(r.status === 429 ? 'The free AI service is busy — Froggy tried a few times. Try again in a moment.' : `The AI service answered ${r.status}.`);
+        last = new Error(r.status === 429 ? 'The free AI service is busy — Froggy tried a few times. Try again in a moment.' : `The AI service had a problem (${r.status}). Try again in a moment.`);
         continue;
       }
       if (!r.ok) throw new Error(`The AI service answered ${r.status}.`);
-      const j = (await r.json()) as { choices?: { message?: { content?: string } }[] };
-      const text = j.choices?.[0]?.message?.content?.trim();
+      const j = (await r.json()) as { choices?: { message?: { content?: string | null }; finish_reason?: string }[]; error?: unknown };
+      const c = j.choices?.[0];
+      const text = c?.message?.content?.trim();
       if (!text) {
-        last = new Error('The AI service sent an empty answer.');
+        // the whole allowance went on thinking: ask again with more room
+        if (c?.finish_reason === 'length') max = Math.min(4000, max * 2);
+        last = new Error('Froggy took too long to think about that one. Try a shorter question, or select a smaller passage.');
         continue;
       }
       await countAsk();
       db.put('kv', key, { t: text, at: Date.now() }).catch(() => {});
       return { text, cached: false };
     } catch (e) {
-      if ((e as Error).name === 'AbortError') throw e;
+      if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
+      if ((e as Error).name === 'AbortError') {
+        last = new Error('Froggy did not answer in time. Try again — the free service is sometimes slow.');
+        continue;
+      }
       last = e as Error;
-      if (!/Failed to fetch|NetworkError|Load failed/i.test(last.message)) throw last;
+      if (!/Failed to fetch|NetworkError|Load failed|network/i.test(last.message)) throw last;
+      last = new Error('No connection to the AI service. Check your internet and try again.');
+    } finally {
+      clearTimeout(to);
+      signal?.removeEventListener('abort', onAbort);
     }
   }
   throw last;

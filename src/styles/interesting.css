@@ -3612,3 +3612,14 @@ button.tcard:active {
   color: var(--muted);
   font-weight: 600;
 }
+
+/* the Stories | World info bar lines up with the tabs above it, in both of its places */
+.news > .nmode {
+  margin: 2px 22px 12px;
+}
+.int-scroll > .nmode {
+  margin: 0 10px 12px;
+}
+.nmode button {
+  min-height: 52px;
+}

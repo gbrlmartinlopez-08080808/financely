@@ -406,7 +406,7 @@ textarea {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: max(96px, calc(var(--safe-b) + 24px));
+  top: max(14px, calc(var(--safe-t, 0px) + 10px)); /* at the top: sheets and the dock live at the bottom */
   transform: translateX(-50%);
   z-index: 90;
   background: var(--pill);
@@ -483,4 +483,18 @@ textarea {
 }
 .txtbtn:active {
   color: var(--ink);
+}
+
+/* every sheet's content scrolls inside the sheet (the grip and title stay put); the wide variant brings its own side padding */
+.sheet {
+  overflow: hidden;
+}
+.sheet > .sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+.sheet-body.wide {
+  padding-left: 0;
+  padding-right: 0;
 }

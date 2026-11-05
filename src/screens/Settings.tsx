@@ -9,6 +9,7 @@ import { getFolders, linkFolder, rescanAll, unlinkFolder, type LinkedFolder } fr
 import { formatSize } from '../lib/library';
 import { FontsSheet } from '../reader/sheets';
 import { About } from './About';
+import { useLang } from '../lib/i18n';
 import { APP_VERSION } from '../lib/config';
 import { fontById } from '../lib/fonts';
 import { detectLang, ensureNaturalVoice } from '../lib/voices';
@@ -17,6 +18,7 @@ import { askWorkFree, workFree } from '../lib/workNotice';
 
 export function Settings({ open, onClose }: { open: boolean; onClose: () => void }) {
   const s = useStore((x) => x.settings);
+  const [, langPref, setLang] = useLang();
   const docs = useStore((x) => x.docs);
   const [usage, setUsage] = useState<string>('');
   const [name, setName] = useState(s.name);
@@ -106,9 +108,23 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
           </div>
           <Icon name="right" size={18} />
         </button>
-        <div className="row" style={{ marginTop: 8 }}>
+        <div className="row" style={{ marginTop: 8, flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+          <div className="row-label">Language</div>
+          <Segmented
+            light
+            value={langPref}
+            onChange={(v) => setLang(v)}
+            options={[
+              { value: 'auto', label: 'Auto' },
+              { value: 'en', label: 'English' },
+              { value: 'es', label: 'Español' },
+              { value: 'fr', label: 'Français' },
+            ]}
+          />
+        </div>
+        <div className="row">
           <div className="grow">
-            <div className="row-label">Open PDFs in</div>
+            <div className="row-label">Open PDFs and Word files in</div>
           </div>
           <Segmented
             light

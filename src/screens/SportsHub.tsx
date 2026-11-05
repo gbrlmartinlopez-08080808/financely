@@ -167,7 +167,7 @@ export function SportsHub({ home }: { home: string; d?: Daily; wiki: (t: string)
       <p className="wd-src mono" style={{ padding: '0 6px' }}>logos and numbers: TheSportsDB · fixtures, results and tables are read live</p>
       <Sheet open={!!sel} onClose={() => setSel(null)} className="int-sheet">
         {sel && (
-          <div className="wd">
+          <div className="wd sheet-body wide">
             <header className="wd-head">
               <Emblem wiki={undefined} size={48} glyph={sel.name[0]} />
               <div>

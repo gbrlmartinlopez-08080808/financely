@@ -267,7 +267,7 @@ function ageLine(generated: string, offline: boolean) {
   if (h < 0 || Number.isNaN(h)) return offline ? 'offline · showing the last copy' : 'free for everyone';
   if (h < 8) return `${offline ? 'offline · ' : ''}updated today ${when}`;
   if (h < 30) return `${offline ? 'offline · ' : ''}updated ${h < 24 ? 'today' : 'yesterday'} ${when} · refreshes through the day`;
-  return `${offline ? 'offline · ' : ''}from ${Math.round(h / 24)} days ago · waiting for a fresh copy`;
+  return `${offline ? 'offline · ' : ''}from ${Math.round(h / 24)} ${Math.round(h / 24) === 1 ? 'day' : 'days'} ago · waiting for a fresh copy`;
 }
 function Today({ d, offline, mood, setDetail, wiki, onRefresh }: { d: Daily; offline: boolean; mood: Mood; setDetail: (x: Detail) => void; wiki: (t: string, note?: string) => void; onRefresh: () => void }) {
   const fact = factOfDay();

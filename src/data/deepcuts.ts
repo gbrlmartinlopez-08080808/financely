@@ -102,13 +102,35 @@ const firstLetter = (e: string) => fold(e.split('|')[0]).replace(/[^a-z]/g, '')[
  * A prompt that has not come up lately: a random one from the whole set, and often a "starting with …" version of it, which turns
  * the same list into a different question. `avoid` holds the ids seen recently (this run and the runs before).
  */
-export function pickPrompt(rand: () => number, avoid: string[] = []): Prompt {
-  for (let tries = 0; tries < 40; tries++) {
-    const base = PROMPTS[Math.floor(rand() * PROMPTS.length)];
-    if (rand() < 0.45 && base.a.length >= 30) {
+/**
+ * Questions in two kinds. EASY ones anybody can answer in two seconds (a fruit, a bird, a country in Europe): the game starts there, and
+ * most of a climb stays there, because the fun is in how rare your answer is, not in finding one. MEDIUM ones (a composer, a river,
+ * a battle) join later. Anything that needs a specialist (units, mathematicians, bones, programming languages…) is not asked at all.
+ */
+const EASY = new Set(
+  'africa mammal instrument capital pasta spice game asia europe americas usstate island language currency fruit vegetable cheese bread dessert drink tree flower bird fish insect dog cat sport cards solar word job uspres europecity asiacity bigcat primate reptile whale sauce soup sandwich cocktail fabric hat tool furniture fairytale animated videogame tennis footballer nba band company carbrand airline animal2 weather landmark canada australia brazil'.split(' '),
+);
+const MEDIUM = new Set(
+  'element painter river shakespeare scientist composer poet mountain dinosaur desert sea lake capital2 olympic genre director novelist monarch explorer volcano range park horse shark amphibian wine beer opera f1 rapper dance movement gods emperor pharaoh battle civilisation gem'.split(' '),
+);
+/** the "…that starts with R" version is only offered for wide, familiar lists, and only for letters with plenty of answers */
+const LETTERS = new Set('mammal fruit vegetable bird fish insect dog cat sport language currency usstate europecity asiacity cheese dessert drink flower tree band footballer tennis animal2 sandwich sauce soup cocktail landmark'.split(' '));
+export const EASY_COUNT = EASY.size;
+
+/**
+ * A question that has not come up lately. `n` is how many have been asked in this climb: the first ones are always easy; later ones are
+ * mostly easy with a medium one now and then. `avoid` holds ids seen recently (this climb and the ones before).
+ */
+export function pickPrompt(rand: () => number, avoid: string[] = [], n = 0): Prompt {
+  const easy = PROMPTS.filter((p) => EASY.has(p.id));
+  const medium = PROMPTS.filter((p) => MEDIUM.has(p.id));
+  for (let tries = 0; tries < 60; tries++) {
+    const pool = n >= 4 && rand() < 0.3 ? medium : easy;
+    const base = pool[Math.floor(rand() * pool.length)];
+    if (LETTERS.has(base.id) && rand() < 0.4) {
       const count: Record<string, number> = {};
       for (const e of base.a) count[firstLetter(e)] = (count[firstLetter(e)] ?? 0) + 1;
-      const letters = Object.keys(count).filter((c) => c && count[c] >= 5);
+      const letters = Object.keys(count).filter((c) => c && count[c] >= 10 && /[abcdfgmpst]/.test(c));
       if (letters.length) {
         const c = letters[Math.floor(rand() * letters.length)];
         const id = `${base.id}:${c}`;
@@ -118,7 +140,7 @@ export function pickPrompt(rand: () => number, avoid: string[] = []): Prompt {
     }
     if (!avoid.includes(base.id)) return base;
   }
-  return PROMPTS[Math.floor(rand() * PROMPTS.length)];
+  return easy[Math.floor(rand() * easy.length)];
 }
 
 const fold = (s: string) =>

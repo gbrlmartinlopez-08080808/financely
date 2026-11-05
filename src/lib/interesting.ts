@@ -86,6 +86,11 @@ export interface Daily {
 }
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** one entry per story id (a feed that repeats one would make the screens repeat a card) */
+function tidy(d: Daily): Daily {
+  const seen = new Set<string>();
+  return { ...d, news: d.news.filter((s) => (seen.has(s.id) ? false : (seen.add(s.id), true))) };
+}
 const timed = async (url: string, ms = 9000) => {
   const c = new AbortController();
   const t = setTimeout(() => c.abort(), ms);
@@ -110,27 +115,40 @@ async function fetchDaily(): Promise<Daily> {
       return d;
     }),
   );
-  await db.put('kv', 'daily', { at: Date.now(), data }).catch(() => {});
-  return data;
+  const clean = tidy(data);
+  await db.put('kv', 'daily', { at: Date.now(), data: clean }).catch(() => {});
+  return clean;
 }
 
 /**
  * The day's feed, without ever making the reader wait: what is saved (or the copy inside the app) is returned at once, and
  * when a newer one arrives from the network `onNewer` is called. A saved copy under three hours old needs no request at all.
  */
+/**
+ * Is the copy on the phone due for a new one? The feed is rebuilt early in the morning (before 08:00 local) and through the day, so a
+ * copy is stale when it is more than 3 hours old, or when the last 08:00 has passed since it was made.
+ */
+export function isStale(savedAt: number, data?: { generated?: string }, now = new Date()): boolean {
+  const made = data?.generated ? new Date(data.generated).getTime() : savedAt;
+  if (now.getTime() - savedAt > 3 * 3600e3) return true;
+  const eight = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 0, 0).getTime();
+  const lastEight = now.getTime() >= eight ? eight : eight - 864e5;
+  return savedAt < lastEight || made < lastEight - 3 * 3600e3;
+}
+
 export async function loadDaily(onNewer: (d: Loaded) => void, force = false): Promise<Loaded> {
   const saved = await db.get<{ at: number; data: Daily }>('kv', 'daily').catch(() => undefined);
   const age = saved ? Date.now() - saved.at : Infinity;
-  if (saved && !force && age < 3 * 3600e3) return { data: saved.data, fresh: true, offline: false };
+  if (saved && !force && !isStale(saved.at, saved.data)) return { data: tidy(saved.data), fresh: true, offline: false };
   const net = fetchDaily().then(
     (data) => ({ data, fresh: true, offline: false }) as Loaded,
     () => null,
   );
-  let first: Loaded | null = saved ? { data: saved.data, fresh: false, offline: true } : null;
+  let first: Loaded | null = saved ? { data: tidy(saved.data), fresh: false, offline: true } : null;
   if (!first) {
     const r = await fetch('./feed/daily.json').catch(() => null);
     const data = r?.ok ? await r.json().catch(() => null) : null;
-    if (valid(data)) first = { data, fresh: false, offline: true };
+    if (valid(data)) first = { data: tidy(data), fresh: false, offline: true };
   }
   if (!first) {
     const n = await net; // nothing at all on the phone: wait for the network

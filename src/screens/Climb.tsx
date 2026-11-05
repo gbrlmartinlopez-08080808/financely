@@ -500,6 +500,7 @@ export function initSling(cfg: ReturnType<typeof slingLevel>, level: number) {
     saves: 1,
     saved: 0,
     fx: [] as FX[],
+    lastHelp: 0,
     shake: 0,
     trail: [] as { x: number; y: number }[],
     recoil: -9,
@@ -593,6 +594,13 @@ export function stepSling(s: SlingState, cfg: ReturnType<typeof slingLevel>, dtR
     if (fl.gone > 0) {
       fl.gone += dtRaw;
       fl.y += 380 * dtRaw;
+      // a fly that has been eaten (or got away) is replaced by another one nearby a moment later: the sky never empties
+      if (fl.gone > 5) {
+        fl.gone = 0;
+        fl.y0 = Math.max(120, fl.y0 + (Math.random() - 0.5) * 140);
+        fl.x0 = 0.12 + Math.random() * 0.76;
+        fl.ph = Math.random() * 6;
+      }
       continue;
     }
     if (fl.twig) {
@@ -617,6 +625,27 @@ export function stepSling(s: SlingState, cfg: ReturnType<typeof slingLevel>, dtR
   }
   s.fx = s.fx.filter((p) => s.t - p.t0 < p.life);
   s.shake *= Math.pow(0.002, dtRaw);
+  // falling with nothing to catch within reach? a fly shows up (so a fall can always be recovered from)
+  if (s.mode === 'free' && s.started && f.vy < -250 && s.t - s.lastHelp > 2.2) {
+    const near = s.flies.some((fl) => fl.gone === 0 && !fl.bee && Math.hypot(fl.x - f.x, fl.y - (f.y + 8)) < 300 && fl.y > f.y - 90);
+    if (!near) {
+      s.lastHelp = s.t;
+      const spare = s.flies.find((fl) => fl.gone > 0 && !fl.twig) ?? s.flies.find((fl) => !fl.twig && !fl.dragon && !fl.bee && Math.abs(fl.y - f.y) > 600);
+      if (spare) {
+        const side = f.x < W / 2 ? 1 : -1;
+        spare.gone = 0;
+        spare.bee = false;
+        spare.gold = false;
+        spare.x0 = clamp((f.x + side * (60 + Math.random() * 80)) / W, 0.1, 0.9);
+        spare.y0 = f.y + 90 + Math.random() * 110;
+        spare.ph = Math.random() * 6;
+        spare.amp = 14;
+        spare.x = spare.x0 * W;
+        spare.y = spare.y0;
+        burst(s, spare.x, spare.y, 5, '.+', [CO.blue], 120, { g: 0, life: 0.5 });
+      }
+    }
+  }
   if (s.moodT && s.t > s.moodT) (s.mood = 'neutral'), (s.moodT = 0);
   const face = (m: Mood, secs = 0.8) => ((s.mood = m), (s.moodT = secs ? s.t + secs : 0));
   if (s.mode === 'won') return;
@@ -1099,6 +1128,7 @@ export function Deep({ level, onEnd }: { level: number; onEnd: (win: boolean, te
   const [slack, setSlack] = useState(cfg.slack);
   const [streak, setStreak] = useState(0);
   const [hints, setHints] = useState(1);
+  const [skips, setSkips] = useState(2);
   const [hint, setHint] = useState('');
   const [m, setM] = useState(0);
   const used = useRef<string[]>([]);
@@ -1124,7 +1154,7 @@ export function Deep({ level, onEnd }: { level: number; onEnd: (win: boolean, te
     } catch {
       /* private mode */
     }
-    const p = pickPrompt(Math.random, [...used.current, ...recent]);
+    const p = pickPrompt(Math.random, [...used.current, ...recent], used.current.length);
     used.current.push(p.id);
     try {
       localStorage.setItem('deep:recent', JSON.stringify([...recent, p.id].slice(-600)));
@@ -1155,7 +1185,7 @@ export function Deep({ level, onEnd }: { level: number; onEnd: (win: boolean, te
     if (r.tier === 'unknown') {
       if (slack > 0) {
         setSlack(slack - 1);
-        setNote({ kind: 'info', tag: `not in Froggy’s list · ${slack - 1} forgiven left`, line: `“${answer.trim()}” fizzled. Froggy only knows names that are written about — try another.` });
+        setNote({ kind: 'info', tag: `not in Froggy’s list · ${slack - 1} ${slack - 1 === 1 ? 'life' : 'lives'} left`, line: `“${answer.trim()}” isn’t on Froggy’s list. Try another, or check the spelling.` });
         setAnswer('');
         return;
       }
@@ -1315,7 +1345,11 @@ export function Deep({ level, onEnd }: { level: number; onEnd: (win: boolean, te
         <span>
           {m} m of {cfg.goal} m
         </span>
-        <span>{streak > 0 ? `streak ×${streak}` : slack < cfg.slack ? `${slack} forgiven left` : ''}</span>
+        <span>
+          <b style={{ color: CO.coral }}>{'♥'.repeat(slack)}</b>
+          <span style={{ opacity: 0.35 }}>{'♥'.repeat(Math.max(0, cfg.slack - slack))}</span>
+          {streak > 0 ? ` · streak ×${streak}` : ''}
+        </span>
         <span>{Math.round((m / cfg.goal) * 100)}%</span>
       </div>
       <div className="stage short">
@@ -1355,7 +1389,16 @@ export function Deep({ level, onEnd }: { level: number; onEnd: (win: boolean, te
                   {hints ? 'a hint (one per climb)' : 'no hints left'}
                 </button>
               )}
-              <span>{used.current.length} questions so far</span>
+              <button
+                type="button"
+                disabled={!skips}
+                onClick={() => {
+                  setSkips(skips - 1);
+                  ask();
+                }}
+              >
+                {skips ? `skip this one (${skips})` : 'no skips left'}
+              </button>
             </div>
           </>
         )}

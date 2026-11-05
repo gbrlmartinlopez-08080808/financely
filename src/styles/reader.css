@@ -1739,3 +1739,36 @@
 .flow.paged * {
   overflow-anchor: none;
 }
+
+/* a Word document as pages (docx-preview): the paper sits on the reader's own background, not on grey */
+.docx-host {
+  padding: calc(var(--safe-t) + 52px) 0 120px;
+  min-height: 100%;
+}
+.docx-host .docx-wrapper {
+  background: transparent !important;
+  padding: 0 !important;
+  align-items: center;
+}
+.docx-host .docx-wrapper > section.docx {
+  background: #fff;
+  color: #111;
+  margin: 0 auto 14px !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 8px 28px rgba(0, 0, 0, 0.12) !important;
+  border-radius: 2px;
+}
+.docx-host img {
+  max-width: 100%;
+}
+.ask-ai,
+.ask-slow {
+  margin: 6px 14px 2px;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--muted);
+  text-align: center;
+}
+.ask-slow {
+  margin: 8px 0 0;
+  text-align: left;
+}

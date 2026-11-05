@@ -234,16 +234,22 @@ export function WorldInfo({ wiki, d, openStory, mode }: { wiki: (title: string) 
       </Sheet>
       <Sheet open={!!sel} onClose={() => setSel(null)} className="int-sheet">
         {sel && (
-          <WorldDetail
-            e={sel}
-            d={d}
-            wiki={(t) => (setSel(null), setTimeout(() => wiki(t), 160))}
-            openStory={(st) => (setSel(null), setTimeout(() => openStory(st), 160))}
-          />
+          <div className="sheet-body wide">
+            <WorldDetail
+              e={sel}
+              d={d}
+              wiki={(t) => (setSel(null), setTimeout(() => wiki(t), 160))}
+              openStory={(st) => (setSel(null), setTimeout(() => openStory(st), 160))}
+            />
+          </div>
         )}
       </Sheet>
       <Sheet open={us} onClose={() => setUs(false)} className="int-sheet tall">
-        {us && <UsHub d={d} wiki={(t) => (setUs(false), setTimeout(() => wiki(t), 160))} openStory={(st) => (setUs(false), setTimeout(() => openStory(st), 160))} />}
+        {us && (
+          <div className="sheet-body wide">
+            <UsHub d={d} wiki={(t) => (setUs(false), setTimeout(() => wiki(t), 160))} openStory={(st) => (setUs(false), setTimeout(() => openStory(st), 160))} />
+          </div>
+        )}
       </Sheet>
     </div>
   );

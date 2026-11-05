@@ -47,4 +47,4 @@ export interface DeepCfg {
   seconds: number; // per prompt
   slack: number; // answers Froggy cannot place that are forgiven
 }
-export const deepLevel = (n: number): DeepCfg => ({ goal: Math.min(900, 420 + (n - 1) * 70), seconds: Math.max(18, 34 - n), slack: 3 });
+export const deepLevel = (n: number): DeepCfg => ({ goal: Math.min(900, 420 + (n - 1) * 70), seconds: Math.max(14, 26 - n), slack: 3 });

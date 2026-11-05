@@ -19,6 +19,7 @@ import { isGuide } from './lib/harvest';
 import { refreshReminder } from './lib/reminders';
 import { importUrl, looksLikeUrl } from './lib/links';
 import { Settings } from './screens/Settings';
+import { About } from './screens/About';
 import { RateSheet } from './screens/RateSheet';
 import { addSamples } from './lib/samples';
 import { Tour } from './screens/Tour';
@@ -59,6 +60,12 @@ export default function App() {
   const [settings, setSettings] = useState(false);
   const [convert, setConvert] = useState<{ doc: DocMeta; root?: HTMLElement | null } | null>(null);
   const [scanFiles, setScanFiles] = useState<File[] | null>(null);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  useEffect(() => {
+    const f = () => setAboutOpen(true);
+    window.addEventListener('frogity:about', f);
+    return () => window.removeEventListener('frogity:about', f);
+  }, []);
   const [importing, setImporting] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [discover, setDiscover] = useState<false | { q?: string }>(false);
@@ -439,6 +446,7 @@ export default function App() {
       <StatsBubble open={stats} onClose={() => (setStats(false), setReward(null))} reward={reward} onRewardDone={() => {}} />
       {openDoc && <Reader key={openDoc.id} doc={openDoc} onClose={() => setOpenId(null)} onConvert={(doc, root) => setConvert({ doc, root })} onOpenDoc={setOpenId} />}
       <Settings open={settings} onClose={() => setSettings(false)} />
+      <About open={aboutOpen} onClose={() => setAboutOpen(false)} />
       {tour && <Tour onDone={() => (setTour(false), db.put('kv', 'tour', 'done'))} />}
       <RateSheet open={rate} onClose={closeRate} streak={streakInfo(getState().days).current} />
       <ConvertSheet doc={convert?.doc ?? null} root={convert?.root} onClose={() => setConvert(null)} onOpenDoc={setOpenId} />

@@ -69,6 +69,12 @@ export function AskSheet({
   const [err, setErr] = useState<string | null>(null);
   const [mood, setMood] = useState<Mood>('neutral');
   const [talk, setTalk] = useState(false);
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!busy) return setSlow(false);
+    const t = setTimeout(() => setSlow(true), 12_000);
+    return () => clearTimeout(t);
+  }, [busy]);
   const passages = useRef<string[] | null>(null);
   const abort = useRef<AbortController | null>(null);
   const end = useRef<HTMLDivElement>(null);
@@ -223,6 +229,14 @@ export function AskSheet({
               {busy && (
                 <div className="ask-msg assistant">
                   <PixelLoader size={4} gap={2} label="Froggy is thinking" />
+                  {slow && (
+                    <p className="ask-slow mono">
+                      still thinking — the free service can be slow.{' '}
+                      <button onClick={() => abort.current?.abort()} style={{ textDecoration: 'underline' }}>
+                        stop
+                      </button>
+                    </p>
+                  )}
                 </div>
               )}
               {err && (
@@ -263,6 +277,12 @@ export function AskSheet({
                 {left.left <= 0 ? 'Froggy is asleep until midnight' : `${left.left} of ${left.cap} free questions left today`}
               </p>
             )}
+            <p className="ask-ai mono">
+              Froggy is an AI and can be wrong. Check anything that matters in the document itself.{' '}
+              <button onClick={() => window.dispatchEvent(new CustomEvent('frogity:about', { detail: 'ai' }))} style={{ textDecoration: 'underline' }}>
+                How it works
+              </button>
+            </p>
           </>
         )}
       </div>
